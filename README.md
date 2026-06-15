@@ -1,5 +1,7 @@
 # Chrome2api
 
+English | [简体中文](README_使用说明.md)
+
 OpenAI-compatible local API wrapper for Chrome Gemini Nano / ChromeML.
 
 This project is an experimental runner and API server around Chrome's on-device

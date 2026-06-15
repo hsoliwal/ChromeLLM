@@ -1,5 +1,7 @@
 # Chrome Gemini Nano BareOnly
 
+[English](README.md) | 简体中文
+
 这是只保留裸 DLL runner 链路的版本，不包含 `chrome.exe`、Chrome Prompt API 测试页、profile 缓存和 CDP runner。
 
 ## 这个版本的意义
