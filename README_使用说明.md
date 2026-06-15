@@ -37,6 +37,45 @@ model\OptGuideOnDeviceModel\2025.8.8.1141\weights.bin
 
 `weights.bin` 是数 GB 的本地模型权重，超过 GitHub 普通仓库单文件限制，因此不提交到仓库。
 
+如果本机还没有这个文件，可以先用 Chrome 触发 Gemini Nano 下载。创建一个本地页面并点击按钮：
+
+```powershell
+$dir = "$env:TEMP\chrome2api-model-trigger"
+New-Item -ItemType Directory -Force $dir | Out-Null
+@'
+<!doctype html>
+<meta charset="utf-8">
+<button id="run">Download Gemini Nano</button>
+<pre id="log"></pre>
+<script>
+const log = (...args) => {
+  document.getElementById("log").textContent += args.join(" ") + "\n";
+};
+document.getElementById("run").onclick = async () => {
+  log("LanguageModel:", "LanguageModel" in self);
+  if (!("LanguageModel" in self)) return;
+  log("availability:", await LanguageModel.availability());
+  await LanguageModel.create({
+    monitor(m) {
+      m.addEventListener("downloadprogress", e => {
+        log("downloadprogress", e.loaded, e.total);
+      });
+    }
+  });
+  log("done");
+};
+</script>
+'@ | Set-Content "$dir\index.html" -Encoding UTF8
+Start-Process "C:\Program Files\Google\Chrome\Application\chrome.exe" "$dir\index.html"
+```
+
+下载完成后，把 Chrome 下载出的模型目录复制到项目目录：
+
+```powershell
+robocopy "$env:LOCALAPPDATA\Google\Chrome\User Data\OptGuideOnDeviceModel\2025.8.8.1141" `
+  ".\model\OptGuideOnDeviceModel\2025.8.8.1141" /E
+```
+
 ## 运行
 
 ```powershell

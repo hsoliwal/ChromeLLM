@@ -61,6 +61,46 @@ component installed may look like:
 %LOCALAPPDATA%\Google\Chrome\User Data\OptGuideOnDeviceModel\2025.8.8.1141\weights.bin
 ```
 
+If the file is not there yet, trigger Chrome's built-in AI model download from a
+local page, then wait until the download reaches 100%.
+
+```powershell
+$dir = "$env:TEMP\chrome2api-model-trigger"
+New-Item -ItemType Directory -Force $dir | Out-Null
+@'
+<!doctype html>
+<meta charset="utf-8">
+<button id="run">Download Gemini Nano</button>
+<pre id="log"></pre>
+<script>
+const log = (...args) => {
+  document.getElementById("log").textContent += args.join(" ") + "\n";
+};
+document.getElementById("run").onclick = async () => {
+  log("LanguageModel:", "LanguageModel" in self);
+  if (!("LanguageModel" in self)) return;
+  log("availability:", await LanguageModel.availability());
+  await LanguageModel.create({
+    monitor(m) {
+      m.addEventListener("downloadprogress", e => {
+        log("downloadprogress", e.loaded, e.total);
+      });
+    }
+  });
+  log("done");
+};
+</script>
+'@ | Set-Content "$dir\index.html" -Encoding UTF8
+Start-Process "C:\Program Files\Google\Chrome\Application\chrome.exe" "$dir\index.html"
+```
+
+After Chrome finishes, copy the downloaded model into this repository:
+
+```powershell
+robocopy "$env:LOCALAPPDATA\Google\Chrome\User Data\OptGuideOnDeviceModel\2025.8.8.1141" `
+  ".\model\OptGuideOnDeviceModel\2025.8.8.1141" /E
+```
+
 ## Expected Layout
 
 After adding the local model file, the folder should look like:
