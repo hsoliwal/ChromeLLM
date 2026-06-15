@@ -3,8 +3,7 @@
 OpenAI-compatible local API wrapper for Chrome Gemini Nano / ChromeML.
 
 This project is an experimental runner and API server around Chrome's on-device
-Gemini Nano runtime. It does not include Google model weights or proprietary
-Chrome runtime binaries.
+Gemini Nano runtime. It does not include Google model weights.
 
 ## What This Is
 
@@ -29,33 +28,26 @@ OpenAI-compatible client
 
 ## What Is Not Included
 
-The following files are intentionally not included:
+The following file is intentionally not included:
 
 ```text
-runtime/ChromeMLBareRunner.exe
-runtime/optimization_guide_internal.dll
-runtime/webgpu_dawn.dll
 model/OptGuideOnDeviceModel/2025.8.8.1141/weights.bin
 ```
 
-These files are not authored by this project. If you use this project locally,
-you must provide them yourself from a compatible local Chrome / Chrome component
+This file is not authored by this project. If you use this project locally,
+you must provide it yourself from a compatible local Chrome / Chrome component
 installation and comply with the relevant licenses and terms.
 
-Do not upload those files to a public GitHub repository or redistribute them as
-part of this project. They may be large, proprietary, and subject to Google /
-Chrome licensing terms. This repository only publishes the project-authored
-wrapper code and BSD-licensed reference headers.
+Do not upload this file to a public GitHub repository or redistribute it as
+part of this project. It is large, proprietary, and subject to Google / Chrome
+licensing terms.
 
-## Add Local Runtime Files
+## Add Local Model File
 
-After cloning, copy your local runtime files into these exact paths:
+After cloning, copy your local model file into this exact path:
 
 ```text
 Chrome2api/
-  runtime/
-    optimization_guide_internal.dll
-    webgpu_dawn.dll
   model/
     OptGuideOnDeviceModel/
       2025.8.8.1141/
@@ -67,22 +59,11 @@ component installed may look like:
 
 ```text
 %LOCALAPPDATA%\Google\Chrome\User Data\OptGuideOnDeviceModel\2025.8.8.1141\weights.bin
-C:\Program Files\Google\Chrome\Application\<chrome-version>\optimization_guide_internal.dll
 ```
-
-`webgpu_dawn.dll` must match the ChromeML runtime you are using. In the original
-local experiment it was copied next to the runner as:
-
-```text
-runtime\webgpu_dawn.dll
-```
-
-The runner source is open, so `runtime/ChromeMLBareRunner.exe` should be built
-locally instead of committed to the repository.
 
 ## Expected Layout
 
-After adding local runtime files, the folder should look like:
+After adding the local model file, the folder should look like:
 
 ```text
 Chrome2api/
@@ -103,7 +84,8 @@ Chrome2api/
 
 ## Build Runner
 
-The runner can be built with Zig's bundled clang on Windows:
+The repository includes a prebuilt Windows runner. To rebuild it from source,
+use Zig's bundled clang on Windows:
 
 ```powershell
 .\scripts\build_runner.ps1
@@ -171,8 +153,7 @@ Origin Trial logic, DOM input objects, or Chrome profile model registration.
 
 Project-authored source is released under the MIT License. Chromium and Dawn
 reference files remain under their original BSD-style licenses. Google model
-weights and proprietary runtime binaries are not included and are not licensed
-by this project.
+weights are not included and are not licensed by this project.
 
 ## 友情链接
 

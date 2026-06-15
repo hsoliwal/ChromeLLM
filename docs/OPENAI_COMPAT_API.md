@@ -23,16 +23,13 @@ cd path\to\Chrome2api
 
 ## Authentication
 
-## Required Local Runtime Files
+## Required Local Model File
 
 This API server calls the local bare runner. The repository intentionally does
-not include Google model/runtime files. Before starting the service, place these
-files locally:
+not include Google model weights. Before starting the service, place this file
+locally:
 
 ```text
-runtime\ChromeMLBareRunner.exe
-runtime\optimization_guide_internal.dll
-runtime\webgpu_dawn.dll
 model\OptGuideOnDeviceModel\2025.8.8.1141\weights.bin
 ```
 
@@ -42,9 +39,9 @@ model\OptGuideOnDeviceModel\2025.8.8.1141\weights.bin
 .\scripts\build_runner.ps1
 ```
 
-The DLLs and `weights.bin` must be supplied by the user from their own compatible
-Chrome / Chrome component installation. They are not uploaded to GitHub and
-should not be redistributed in this repository.
+`weights.bin` must be supplied by the user from their own compatible Chrome /
+Chrome component installation. It is not uploaded to GitHub and should not be
+redistributed in this repository.
 
 本地服务默认不校验 API key。为了兼容 OpenAI SDK 或已有客户端，可以传任意 Bearer token：
 
