@@ -200,3 +200,16 @@ weights are not included and are not licensed by this project.
 ## 友情链接
 
 - [LINUX.DO](https://linux.do/)
+
+
+## Java / JNI / JNA Diffusion
+
+An additive Java 21 diffusion subsystem is available in this fork. It runs independently of Gemini Nano, supports unconditioned, image, depth, class-label, and numeric-vector conditioning, and provides three execution paths:
+
+- pure Java reference DDIM pipeline;
+- JNA through a stable portable C ABI;
+- JNI through the same native C++ backend.
+
+The existing ChromeLLM/OpenAI-compatible server can optionally act as a local scene-conditioning planner; the diffusion engine itself does not require an LLM.
+
+See [docs/DIFFUSION_JAVA_NATIVE.md](docs/DIFFUSION_JAVA_NATIVE.md).
