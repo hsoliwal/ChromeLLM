@@ -6,9 +6,9 @@
     <jna.version>5.17.0</jna.version><jackson.version>2.20.0</jackson.version><junit.version>5.13.4</junit.version>
   </properties>
   <dependencies>
-    <dependency><groupId>net.java.dev.jna</groupId><artifactId>jna-jpms</artifactId><version>\${jna.version}</version></dependency>
-    <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId><version>\${jackson.version}</version></dependency>
-    <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>\${junit.version}</version><scope>test</scope></dependency>
+    <dependency><groupId>net.java.dev.jna</groupId><artifactId>jna-jpms</artifactId><version>${jna.version}</version></dependency>
+    <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId><version>${jackson.version}</version></dependency>
+    <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>${junit.version}</version><scope>test</scope></dependency>
   </dependencies>
   <build><plugins>
     <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.1</version><configuration><release>21</release><parameters>true</parameters></configuration></plugin>
