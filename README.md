@@ -213,3 +213,21 @@ An additive Java 21 diffusion subsystem is available in this fork. It runs indep
 The existing ChromeLLM/OpenAI-compatible server can optionally act as a local scene-conditioning planner; the diffusion engine itself does not require an LLM.
 
 See [docs/DIFFUSION_JAVA_NATIVE.md](docs/DIFFUSION_JAVA_NATIVE.md).
+
+
+## Local GPU Image / Video Processing
+
+The fork also contains a Java 21 image/video processing layer that treats decoded images and video frames as RGBA pixel buffers and executes deterministic transformations locally.
+
+Execution backends:
+
+- OpenCL GPU through JNA and a stable C ABI;
+- OpenCL GPU through JNI;
+- pure Java CPU fallback;
+- `AUTO` selection that prefers a GPU and falls back safely.
+
+Implemented operations include color transforms, gamma, thresholding, channel scaling, Sobel edges, blur, alpha-aware object compositing, procedural image generation, masked removal approximation, and FFmpeg frame streaming for whole-video processing.
+
+This is deliberately complementary to diffusion: ordinary pixel work stays local and cheap; learned inpainting/generation is only needed when the program must invent visual content that is not present in the source pixels.
+
+See [docs/GPU_IMAGE_VIDEO.md](docs/GPU_IMAGE_VIDEO.md).
