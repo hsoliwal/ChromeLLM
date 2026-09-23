@@ -29,15 +29,19 @@ public final class CpuImageProcessor implements ImageProcessor {
     @Override
     public RgbaFrame blend(RgbaFrame base, RgbaFrame overlay, float opacity) {
         sameDimensions(base, overlay);
-        float a = clamp01(opacity);
+        float opacityValue = clamp01(opacity);
         byte[] left = base.pixels();
         byte[] right = overlay.pixels();
         byte[] out = new byte[left.length];
         for (int i = 0; i < out.length; i += 4) {
+            float overlayAlpha = (unsigned(right[i + 3]) / 255f) * opacityValue;
             for (int c = 0; c < 3; c++) {
-                out[i + c] = (byte)Math.round(unsigned(left[i + c]) * (1f - a) + unsigned(right[i + c]) * a);
+                out[i + c] = (byte)Math.round(unsigned(left[i + c]) * (1f - overlayAlpha)
+                        + unsigned(right[i + c]) * overlayAlpha);
             }
-            out[i + 3] = (byte)Math.round(unsigned(left[i + 3]) * (1f - a) + unsigned(right[i + 3]) * a);
+            float baseAlpha = unsigned(left[i + 3]) / 255f;
+            float outAlpha = overlayAlpha + baseAlpha * (1f - overlayAlpha);
+            out[i + 3] = toByte(outAlpha * 255f);
         }
         return new RgbaFrame(base.width(), base.height(), out);
     }
