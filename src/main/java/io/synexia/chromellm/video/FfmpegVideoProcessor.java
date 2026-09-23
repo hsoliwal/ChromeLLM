@@ -4,13 +4,9 @@ import io.synexia.chromellm.gpu.ImageProcessor;
 import io.synexia.chromellm.gpu.RgbaFrame;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 
 public final class FfmpegVideoProcessor {
@@ -60,12 +56,11 @@ public final class FfmpegVideoProcessor {
             VideoStreamInfo info = source.streamInfo();
             sourceBackend = source.backendName();
 
-            Process encoder = new ProcessBuilder(encoderCommand(input, output, info))
-                    .redirectError(ProcessBuilder.Redirect.INHERIT)
-                    .start();
-
-            boolean completed = false;
-            try (OutputStream encoded = encoder.getOutputStream()) {
+            try (FfmpegRgbaEncoder encoder = new FfmpegRgbaEncoder(
+                    ffmpeg,
+                    input,
+                    output,
+                    info)) {
                 while (true) {
                     RgbaFrame frame = source.nextFrame();
                     if (frame == null) break;
@@ -77,19 +72,9 @@ public final class FfmpegVideoProcessor {
                         throw new IllegalStateException("frame transform changed dimensions");
                     }
 
-                    encoded.write(result.pixels());
+                    encoder.write(result);
                     frames++;
                 }
-                completed = true;
-            } finally {
-                if (!completed) {
-                    encoder.destroyForcibly();
-                }
-            }
-
-            int encoderExit = encoder.waitFor();
-            if (encoderExit != 0) {
-                throw new IOException("ffmpeg encoder failed with exit code " + encoderExit);
             }
 
             return new VideoProcessResult(
@@ -101,26 +86,4 @@ public final class FfmpegVideoProcessor {
         }
     }
 
-    private List<String> encoderCommand(Path input, Path output, VideoStreamInfo info) {
-        List<String> command = new ArrayList<>();
-        command.add(ffmpeg);
-        command.add("-v"); command.add("error");
-        command.add("-y");
-        command.add("-f"); command.add("rawvideo");
-        command.add("-pix_fmt"); command.add("rgba");
-        command.add("-s"); command.add(info.width() + "x" + info.height());
-        command.add("-r"); command.add(String.format(Locale.ROOT, "%.8f", info.framesPerSecond()));
-        command.add("-i"); command.add("pipe:0");
-        command.add("-i"); command.add(input.toAbsolutePath().toString());
-        command.add("-map"); command.add("0:v:0");
-        command.add("-map"); command.add("1:a?");
-        command.add("-c:v"); command.add("libx264");
-        command.add("-preset"); command.add("veryfast");
-        command.add("-crf"); command.add("18");
-        command.add("-pix_fmt"); command.add("yuv420p");
-        command.add("-c:a"); command.add("copy");
-        command.add("-shortest");
-        command.add(output.toAbsolutePath().toString());
-        return List.copyOf(command);
-    }
 }
