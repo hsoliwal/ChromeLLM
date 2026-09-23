@@ -280,10 +280,13 @@ __kernel void blend_rgba(
     int gid=(int)get_global_id(0);
     if (gid>=pixels) return;
     int i=gid*4;
-    float a=clamp(opacity,0.0f,1.0f);
-    for (int c=0;c<4;c++) {
+    float a=clamp(opacity,0.0f,1.0f)*((float)overlay[i+3]/255.0f);
+    for (int c=0;c<3;c++) {
         dst[i+c]=sat255((float)base[i+c]*(1.0f-a)+(float)overlay[i+c]*a);
     }
+    float base_alpha=(float)base[i+3]/255.0f;
+    float out_alpha=a+base_alpha*(1.0f-a);
+    dst[i+3]=sat255(out_alpha*255.0f);
 }
 
 inline uint hash32(uint x) {
