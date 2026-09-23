@@ -51,7 +51,7 @@ public final class FfmpegVideoProcessor {
                 .start();
 
         long frames = 0L;
-        Throwable failure = null;
+        boolean completed = false;
         try (InputStream decoded = decoder.getInputStream();
              OutputStream encoded = encoder.getOutputStream()) {
             byte[] frameBuffer = new byte[info.rgbaFrameBytes()];
@@ -70,11 +70,9 @@ public final class FfmpegVideoProcessor {
                 encoded.write(result.pixels());
                 frames++;
             }
-        } catch (Throwable throwable) {
-            failure = throwable;
-            throw throwable;
+            completed = true;
         } finally {
-            if (failure != null) {
+            if (!completed) {
                 decoder.destroyForcibly();
                 encoder.destroyForcibly();
             }
