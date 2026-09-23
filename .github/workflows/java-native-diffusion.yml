@@ -42,4 +42,6 @@ jobs:
       - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --config Release --parallel 2
       - if: runner.os == 'Linux'
-        run: mvn -B -Dchromellm.native.integration=true -Djava.library.path=$GITHUB_WORKSPACE/build test
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/build
+        run: mvn -B -Dchromellm.native.integration=true -DargLine="-Djava.library.path=${{ github.workspace }}/build" test
