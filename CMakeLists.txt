@@ -24,3 +24,34 @@ target_include_directories(chromellm_gpu_jni PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/native
     ${JNI_INCLUDE_DIRS})
 target_link_libraries(chromellm_gpu_jni PRIVATE chromellm_gpu)
+
+
+find_package(OpenCV QUIET COMPONENTS core imgproc photo video)
+if(OpenCV_FOUND)
+  add_library(chromellm_opencv_jni SHARED native/opencv_jni.cpp)
+  target_include_directories(chromellm_opencv_jni PRIVATE
+      ${JNI_INCLUDE_DIRS}
+      ${OpenCV_INCLUDE_DIRS})
+  target_link_libraries(chromellm_opencv_jni PRIVATE ${OpenCV_LIBS})
+  message(STATUS "OpenCV JNI enabled: ${OpenCV_VERSION}")
+else()
+  message(STATUS "OpenCV not found; chromellm_opencv_jni will not be built")
+endif()
+
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+  pkg_check_modules(FFMPEG QUIET IMPORTED_TARGET
+      libavformat
+      libavcodec
+      libavutil
+      libswscale)
+endif()
+
+if(FFMPEG_FOUND)
+  add_library(chromellm_ffmpeg_jni SHARED native/ffmpeg_decoder_jni.cpp)
+  target_include_directories(chromellm_ffmpeg_jni PRIVATE ${JNI_INCLUDE_DIRS})
+  target_link_libraries(chromellm_ffmpeg_jni PRIVATE PkgConfig::FFMPEG)
+  message(STATUS "FFmpeg JNI enabled")
+else()
+  message(STATUS "FFmpeg development libraries not found; chromellm_ffmpeg_jni will not be built")
+endif()
