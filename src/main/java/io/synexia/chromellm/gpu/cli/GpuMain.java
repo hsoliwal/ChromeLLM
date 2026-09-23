@@ -10,16 +10,26 @@ import io.synexia.chromellm.gpu.PixelGenerator;
 import io.synexia.chromellm.gpu.PixelOperation;
 import io.synexia.chromellm.gpu.PixelParameters;
 import io.synexia.chromellm.gpu.RgbaFrame;
+import io.synexia.chromellm.video.DecoderBackend;
+import io.synexia.chromellm.video.FfmpegProbe;
+import io.synexia.chromellm.video.FfmpegVideoInterpolator;
 import io.synexia.chromellm.video.FfmpegVideoProcessor;
+import io.synexia.chromellm.video.FrameTransform;
 import io.synexia.chromellm.video.GpuFrameTransform;
+import io.synexia.chromellm.video.TransformChain;
+import io.synexia.chromellm.vision.VisionProcessor;
+import io.synexia.chromellm.vision.VisionProcessorFactory;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 public final class GpuMain {
-    private GpuMain() {}
+    private GpuMain() {
+    }
 
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
@@ -29,6 +39,12 @@ public final class GpuMain {
 
         String command = args[0].toLowerCase(Locale.ROOT);
         Map<String, String> options = parse(args, 1);
+
+        if (isVisionOnlyCommand(command)) {
+            runVisionCommand(command, options);
+            return;
+        }
+
         GpuProcessorFactory.Backend backend = enumValue(
                 GpuProcessorFactory.Backend.class,
                 options.getOrDefault("backend", "auto"));
@@ -46,14 +62,41 @@ public final class GpuMain {
         }
     }
 
+    private static boolean isVisionOnlyCommand(String command) {
+        return switch (command) {
+            case "inpaint", "clone", "grabcut", "interpolate-image", "video-interpolate" -> true;
+            default -> false;
+        };
+    }
+
+    private static void runVisionCommand(String command, Map<String, String> options) throws Exception {
+        VisionProcessorFactory.Backend backend = enumValue(
+                VisionProcessorFactory.Backend.class,
+                options.getOrDefault("vision-backend", "auto"));
+
+        try (VisionProcessor vision = VisionProcessorFactory.open(backend)) {
+            switch (command) {
+                case "inpaint" -> inpaint(vision, options);
+                case "clone" -> cloneObject(vision, options);
+                case "grabcut" -> grabCut(vision, options);
+                case "interpolate-image" -> interpolateImage(vision, options);
+                case "video-interpolate" -> interpolateVideo(vision, options);
+                default -> throw new IllegalArgumentException("unknown vision command: " + command);
+            }
+        }
+    }
+
     private static void image(ImageProcessor processor, Map<String, String> options) throws Exception {
         Path input = requiredPath(options, "input");
         Path output = requiredPath(options, "output");
-        PixelOperation operation = enumValue(PixelOperation.class, required(options, "op"));
-        PixelParameters parameters = parameters(options);
-        RgbaFrame result = processor.process(ImageIoFrames.read(input), operation, parameters);
-        ImageIoFrames.write(result, output);
-        completed(processor, output);
+        RgbaFrame current = ImageIoFrames.read(input);
+
+        for (FrameTransform transform : transforms(processor, options)) {
+            current = transform.apply(current, 0L);
+        }
+
+        ImageIoFrames.write(current, output);
+        completed(processor.backendName(), output);
     }
 
     private static void generate(ImageProcessor processor, Map<String, String> options) throws Exception {
@@ -66,7 +109,7 @@ public final class GpuMain {
                 options.getOrDefault("generator", "plasma"));
         RgbaFrame result = processor.generate(width, height, generator, seed, parameters(options));
         ImageIoFrames.write(result, output);
-        completed(processor, output);
+        completed(processor.backendName(), output);
     }
 
     private static void place(ImageProcessor processor, Map<String, String> options) throws Exception {
@@ -84,7 +127,7 @@ public final class GpuMain {
                 y,
                 opacity);
         ImageIoFrames.write(result, output);
-        completed(processor, output);
+        completed(processor.backendName(), output);
     }
 
     private static void remove(ImageProcessor processor, Map<String, String> options) throws Exception {
@@ -97,19 +140,75 @@ public final class GpuMain {
         AlphaMask alphaMask = AlphaMask.fromFrameLuma(ImageIoFrames.read(mask));
         RgbaFrame result = MaskOps.removeApprox(processor, source, alphaMask, radius, passes);
         ImageIoFrames.write(result, output);
-        completed(processor, output);
+        completed(processor.backendName(), output);
+    }
+
+    private static void inpaint(VisionProcessor vision, Map<String, String> options) throws Exception {
+        Path input = requiredPath(options, "input");
+        Path mask = requiredPath(options, "mask");
+        Path output = requiredPath(options, "output");
+        float radius = floatValue(options, "radius", 3f);
+        RgbaFrame source = ImageIoFrames.read(input);
+        AlphaMask alphaMask = AlphaMask.fromFrameLuma(ImageIoFrames.read(mask));
+        RgbaFrame result = vision.inpaint(source, alphaMask, radius);
+        ImageIoFrames.write(result, output);
+        completed(vision.backendName(), output);
+    }
+
+    private static void cloneObject(VisionProcessor vision, Map<String, String> options) throws Exception {
+        Path input = requiredPath(options, "input");
+        Path object = requiredPath(options, "object");
+        Path output = requiredPath(options, "output");
+        RgbaFrame background = ImageIoFrames.read(input);
+        RgbaFrame foreground = ImageIoFrames.read(object);
+        int centerX = intValue(options, "center-x", background.width() / 2);
+        int centerY = intValue(options, "center-y", background.height() / 2);
+        RgbaFrame result = vision.seamlessClone(background, foreground, centerX, centerY);
+        ImageIoFrames.write(result, output);
+        completed(vision.backendName(), output);
+    }
+
+    private static void grabCut(VisionProcessor vision, Map<String, String> options) throws Exception {
+        Path input = requiredPath(options, "input");
+        Path output = requiredPath(options, "output");
+        RgbaFrame image = ImageIoFrames.read(input);
+        int x = intValue(options, "x", 0);
+        int y = intValue(options, "y", 0);
+        int width = intValue(options, "width", image.width() - x);
+        int height = intValue(options, "height", image.height() - y);
+        int iterations = intValue(options, "iterations", 5);
+        AlphaMask mask = vision.grabCut(image, x, y, width, height, iterations);
+        ImageIoFrames.write(maskFrame(mask), output);
+        completed(vision.backendName(), output);
+    }
+
+    private static void interpolateImage(VisionProcessor vision, Map<String, String> options) throws Exception {
+        Path previous = requiredPath(options, "previous");
+        Path next = requiredPath(options, "next");
+        Path output = requiredPath(options, "output");
+        float position = floatValue(options, "position", 0.5f);
+        RgbaFrame result = vision.interpolate(
+                ImageIoFrames.read(previous),
+                ImageIoFrames.read(next),
+                position);
+        ImageIoFrames.write(result, output);
+        completed(vision.backendName(), output);
     }
 
     private static void video(ImageProcessor processor, Map<String, String> options) throws Exception {
         Path input = requiredPath(options, "input");
         Path output = requiredPath(options, "output");
-        PixelOperation operation = enumValue(PixelOperation.class, required(options, "op"));
-        PixelParameters parameters = parameters(options);
-        var result = new FfmpegVideoProcessor().process(
-                input,
-                output,
-                processor,
-                new GpuFrameTransform(processor, operation, parameters));
+        DecoderBackend decoder = enumValue(
+                DecoderBackend.class,
+                options.getOrDefault("decoder", "auto"));
+
+        FrameTransform transform = new TransformChain(transforms(processor, options));
+        var result = new FfmpegVideoProcessor(
+                System.getProperty("chromellm.ffmpeg", "ffmpeg"),
+                new FfmpegProbe(),
+                decoder)
+                .process(input, output, processor, transform);
+
         System.out.printf(
                 Locale.ROOT,
                 "processed %d frames to %s using %s in %.3fs%n",
@@ -117,6 +216,77 @@ public final class GpuMain {
                 result.output(),
                 result.processorBackend(),
                 result.elapsed().toNanos() / 1_000_000_000.0);
+    }
+
+    private static void interpolateVideo(VisionProcessor vision, Map<String, String> options) throws Exception {
+        Path input = requiredPath(options, "input");
+        Path output = requiredPath(options, "output");
+        int factor = intValue(options, "factor", 2);
+        DecoderBackend decoder = enumValue(
+                DecoderBackend.class,
+                options.getOrDefault("decoder", "auto"));
+
+        var result = new FfmpegVideoInterpolator(
+                System.getProperty("chromellm.ffmpeg", "ffmpeg"),
+                new FfmpegProbe(),
+                decoder)
+                .interpolate(input, output, vision, factor);
+
+        System.out.printf(
+                Locale.ROOT,
+                "generated %d frames to %s at %.3f fps using %s in %.3fs%n",
+                result.framesProcessed(),
+                result.output(),
+                result.stream().framesPerSecond(),
+                result.processorBackend(),
+                result.elapsed().toNanos() / 1_000_000_000.0);
+    }
+
+    private static List<FrameTransform> transforms(ImageProcessor processor, Map<String, String> options) {
+        String pipeline = options.get("pipeline");
+        if (pipeline == null || pipeline.isBlank()) {
+            PixelOperation operation = enumValue(PixelOperation.class, required(options, "op"));
+            return List.of(new GpuFrameTransform(processor, operation, parameters(options)));
+        }
+
+        List<FrameTransform> result = new ArrayList<>();
+        for (String token : pipeline.split(",")) {
+            result.add(parseTransform(processor, token.trim()));
+        }
+        if (result.isEmpty()) throw new IllegalArgumentException("pipeline is empty");
+        return List.copyOf(result);
+    }
+
+    private static FrameTransform parseTransform(ImageProcessor processor, String specification) {
+        String[] parts = specification.split(":");
+        PixelOperation operation = enumValue(PixelOperation.class, parts[0]);
+        float p0 = number(parts, 1, 0f);
+        float p1 = number(parts, 2, 0f);
+        float p2 = number(parts, 3, 0f);
+        float p3 = number(parts, 4, 0f);
+        return new GpuFrameTransform(
+                processor,
+                operation,
+                new PixelParameters(p0, p1, p2, p3));
+    }
+
+    private static float number(String[] values, int index, float fallback) {
+        return index < values.length && !values[index].isBlank()
+                ? Float.parseFloat(values[index])
+                : fallback;
+    }
+
+    private static RgbaFrame maskFrame(AlphaMask mask) {
+        byte[] alpha = mask.values();
+        byte[] rgba = new byte[alpha.length * 4];
+        for (int p = 0; p < alpha.length; p++) {
+            int i = p * 4;
+            rgba[i] = alpha[p];
+            rgba[i + 1] = alpha[p];
+            rgba[i + 2] = alpha[p];
+            rgba[i + 3] = (byte)255;
+        }
+        return new RgbaFrame(mask.width(), mask.height(), rgba);
     }
 
     private static void info(ImageProcessor processor) {
@@ -136,7 +306,9 @@ public final class GpuMain {
         Map<String, String> values = new HashMap<>();
         for (int i = start; i < args.length; i++) {
             String token = args[i];
-            if (!token.startsWith("--")) throw new IllegalArgumentException("expected --option, got " + token);
+            if (!token.startsWith("--")) {
+                throw new IllegalArgumentException("expected --option, got " + token);
+            }
             String key = token.substring(2);
             if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
                 values.put(key, "true");
@@ -148,12 +320,16 @@ public final class GpuMain {
     }
 
     private static <E extends Enum<E>> E enumValue(Class<E> type, String value) {
-        return Enum.valueOf(type, value.trim().toUpperCase(Locale.ROOT).replace('-', '_'));
+        return Enum.valueOf(
+                type,
+                value.trim().toUpperCase(Locale.ROOT).replace('-', '_'));
     }
 
     private static String required(Map<String, String> options, String key) {
         String value = options.get(key);
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("missing --" + key);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("missing --" + key);
+        }
         return value;
     }
 
@@ -162,36 +338,51 @@ public final class GpuMain {
     }
 
     private static int intValue(Map<String, String> options, String key, int fallback) {
-        return options.containsKey(key) ? Integer.parseInt(options.get(key)) : fallback;
+        return options.containsKey(key)
+                ? Integer.parseInt(options.get(key))
+                : fallback;
     }
 
     private static long longValue(Map<String, String> options, String key, long fallback) {
-        return options.containsKey(key) ? Long.parseLong(options.get(key)) : fallback;
+        return options.containsKey(key)
+                ? Long.parseLong(options.get(key))
+                : fallback;
     }
 
     private static float floatValue(Map<String, String> options, String key, float fallback) {
-        return options.containsKey(key) ? Float.parseFloat(options.get(key)) : fallback;
+        return options.containsKey(key)
+                ? Float.parseFloat(options.get(key))
+                : fallback;
     }
 
-    private static void completed(ImageProcessor processor, Path output) {
+    private static void completed(String backend, Path output) {
         System.out.println("output=" + output.toAbsolutePath());
-        System.out.println("backend=" + processor.backendName());
-        System.out.println("hardwareAccelerated=" + processor.hardwareAccelerated());
+        System.out.println("backend=" + backend);
     }
 
     private static void usage() {
         System.out.println("""
-                ChromeLLM GPU image/video CLI
+                ChromeLLM local image/video runtime
 
-                Commands:
+                Pixel/GPU:
                   info --backend auto|cpu|jna|jni
-                  image --input in.png --output out.png --op invert|grayscale|brightness-contrast|gamma|threshold|channel-scale|sobel-edge|box-blur [--p0 N --p1 N --p2 N --p3 N] [--backend auto]
-                  generate --output out.png --width 1024 --height 1024 --generator solid|gradient|noise|plasma|checkerboard [--seed N] [--p0 N ...] [--backend auto]
-                  place --input base.png --object object.png --x 100 --y 100 --opacity 1 --output out.png [--backend auto]
-                  remove --input image.png --mask mask.png --radius 8 --passes 4 --output out.png [--backend auto]
-                  video --input in.mp4 --output out.mp4 --op grayscale [--p0 N ...] [--backend auto]
+                  image --input in.png --output out.png --op grayscale [--backend auto]
+                  image --input in.png --output out.png --pipeline "grayscale,box-blur:2,gamma:1.1"
+                  generate --output out.png --width 1024 --height 1024 --generator plasma --seed 42
+                  place --input base.png --object object.png --x 100 --y 100 --output out.png
+                  remove --input image.png --mask mask.png --radius 8 --passes 4 --output out.png
+                  video --input in.mp4 --output out.mp4 --pipeline "grayscale,box-blur:2" --decoder auto|process|jni
 
-                AUTO prefers OpenCL through JNA, then JNI, then the Java CPU fallback.
+                OpenCV vision:
+                  inpaint --input image.png --mask mask.png --radius 3 --output out.png --vision-backend auto|java|opencv
+                  clone --input room.png --object chair.png --center-x 500 --center-y 400 --output out.png
+                  grabcut --input image.png --x 100 --y 100 --width 500 --height 500 --output mask.png
+                  interpolate-image --previous a.png --next b.png --position 0.5 --output middle.png
+                  video-interpolate --input in.mp4 --output out.mp4 --factor 2 --decoder auto --vision-backend auto
+
+                AUTO pixel backend prefers OpenCL through JNA, then JNI, then Java CPU.
+                AUTO vision backend prefers OpenCV JNI, then Java fallback.
+                AUTO decoder prefers direct FFmpeg JNI/libav, then the FFmpeg process/pipe fallback.
                 """);
     }
 }
