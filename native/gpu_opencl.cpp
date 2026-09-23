@@ -66,11 +66,12 @@ void* load_symbol(LibraryHandle library, const char* name) {
 #else
 using LibraryHandle = void*;
 LibraryHandle open_library() {
+    LibraryHandle handle = nullptr;
 #if defined(__APPLE__)
-    LibraryHandle handle = dlopen("/System/Library/Frameworks/OpenCL.framework/OpenCL", RTLD_NOW | RTLD_LOCAL);
+    handle = dlopen("/System/Library/Frameworks/OpenCL.framework/OpenCL", RTLD_NOW | RTLD_LOCAL);
     if (handle) return handle;
 #endif
-    LibraryHandle handle = dlopen("libOpenCL.so.1", RTLD_NOW | RTLD_LOCAL);
+    handle = dlopen("libOpenCL.so.1", RTLD_NOW | RTLD_LOCAL);
     if (!handle) handle = dlopen("libOpenCL.so", RTLD_NOW | RTLD_LOCAL);
     return handle;
 }
