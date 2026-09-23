@@ -231,3 +231,16 @@ Implemented operations include color transforms, gamma, thresholding, channel sc
 This is deliberately complementary to diffusion: ordinary pixel work stays local and cheap; learned inpainting/generation is only needed when the program must invent visual content that is not present in the source pixels.
 
 See [docs/GPU_IMAGE_VIDEO.md](docs/GPU_IMAGE_VIDEO.md).
+
+
+## Native OpenCV + FFmpeg JNI
+
+The local image/video runtime also supports optional native vision and media backends:
+
+- OpenCV JNI for Telea inpaint, seamless cloning, GrabCut masks, and optical-flow interpolation.
+- Direct FFmpeg JNI/libav decoding to one RGBA frame at a time.
+- `DecoderBackend.AUTO` prefers JNI and falls back to the FFmpeg process/pipe path.
+- `TransformChain` applies multiple frame transforms in one decode/encode pass.
+- Optical-flow video interpolation generates additional frames locally.
+
+See [docs/NATIVE_VISION_MEDIA.md](docs/NATIVE_VISION_MEDIA.md).
