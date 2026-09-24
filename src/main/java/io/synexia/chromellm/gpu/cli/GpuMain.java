@@ -320,21 +320,32 @@ public final class GpuMain {
         DecoderBackend decoder = enumValue(
                 DecoderBackend.class,
                 options.getOrDefault("decoder", "auto"));
+        VideoEncodingOptions encoding = encodingOptions(options, VideoEncodingOptions.defaults());
+        int progressEvery = intValue(options, "progress-every", 30);
 
         var result = new FfmpegVideoInterpolator(
                 System.getProperty("chromellm.ffmpeg", "ffmpeg"),
                 new FfmpegProbe(),
                 decoder)
-                .interpolate(input, output, vision, factor);
+                .interpolate(
+                        input,
+                        output,
+                        vision,
+                        factor,
+                        encoding,
+                        GpuMain::printProgress,
+                        ProcessingControl.NEVER_CANCELLED,
+                        progressEvery);
 
         System.out.printf(
                 Locale.ROOT,
-                "generated %d frames to %s at %.3f fps using %s in %.3fs%n",
+                "generated %d frames to %s at %.3f fps using %s in %.3fs (%.3f processing fps)%n",
                 result.framesProcessed(),
                 result.output(),
                 result.stream().framesPerSecond(),
                 result.processorBackend(),
-                result.elapsed().toNanos() / 1_000_000_000.0);
+                result.elapsed().toNanos() / 1_000_000_000.0,
+                result.processingFramesPerSecond());
     }
 
     private static FrameTransform transform(ImageProcessor processor, Map<String, String> options) {
@@ -516,7 +527,7 @@ public final class GpuMain {
                   clone --input room.png --object chair.png --center-x 500 --center-y 400 --output out.png
                   grabcut --input image.png --x 100 --y 100 --width 500 --height 500 --output mask.png
                   interpolate-image --previous a.png --next b.png --position 0.5 --output middle.png
-                  video-interpolate --input in.mp4 --output out.mp4 --factor 2 --decoder auto --vision-backend auto
+                  video-interpolate --input in.mp4 --output out.mp4 --factor 2 --decoder auto --vision-backend auto --codec h264 --crf 18
 
                 AUTO pixel backend prefers OpenCL through JNA, then JNI, then Java CPU.
                 AUTO vision backend prefers OpenCV JNI, then Java fallback.
