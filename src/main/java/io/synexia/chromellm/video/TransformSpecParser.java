@@ -40,6 +40,9 @@ public final class TransformSpecParser {
             case "unsharp", "unsharp_mask" -> unsharp(parts);
             case "region" -> region(parts);
             case "range" -> range(parts);
+            case "flip_horizontal", "fliph" -> new GeometryTransform(GeometryOperation.FLIP_HORIZONTAL);
+            case "flip_vertical", "flipv" -> new GeometryTransform(GeometryOperation.FLIP_VERTICAL);
+            case "rotate_180", "rotate180" -> new GeometryTransform(GeometryOperation.ROTATE_180);
             default -> pixel(parts, 0);
         };
     }
