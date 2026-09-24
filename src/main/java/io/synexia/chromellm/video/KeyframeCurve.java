@@ -30,7 +30,8 @@ public final class KeyframeCurve {
 
         for (int i = 1; i < keyframes.size(); i++) {
             Keyframe right = keyframes.get(i);
-            if (frameIndex <= right.frameIndex()) {
+            if (frameIndex == right.frameIndex()) return right.value();
+            if (frameIndex < right.frameIndex()) {
                 Keyframe left = keyframes.get(i - 1);
                 float position = (float)(frameIndex - left.frameIndex())
                         / (float)(right.frameIndex() - left.frameIndex());
