@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "pipeline": "resize:1920:1080,temporal-denoise:0.25:0.35:4,unsharp:2:1.0:3",
+  "lut": {
+    "file": "luts/cinematic.cube",
+    "intensity": 0.85
+  },
+  "overlays": [
+    {
+      "file": "assets/watermark.png",
+      "x": 40,
+      "y": 40,
+      "opacity": 0.75,
+      "startFrame": 0,
+      "endFrame": 1800
+    }
+  ],
+  "automation": [
+    {
+      "operation": "brightness-contrast",
+      "p0": [
+        {"frame": 0, "value": 0.0, "easing": "linear"},
+        {"frame": 120, "value": 0.08, "easing": "ease-in-out"},
+        {"frame": 240, "value": 0.0, "easing": "ease-in-out"}
+      ],
+      "p1": [
+        {"frame": 0, "value": 1.0, "easing": "hold"}
+      ]
+    }
+  ],
+  "encoding": {
+    "videoCodec": "h265",
+    "preset": "medium",
+    "crf": 20,
+    "pixelFormat": "yuv420p",
+    "audioMode": "aac",
+    "audioBitrateKbps": 192,
+    "threads": 0,
+    "extraArguments": ["-movflags", "+faststart"]
+  },
+  "progressEveryFrames": 30
+}
