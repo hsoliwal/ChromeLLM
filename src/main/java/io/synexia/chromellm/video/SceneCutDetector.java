@@ -26,7 +26,7 @@ public final class SceneCutDetector {
     public double score(RgbaFrame previous, RgbaFrame current) {
         double pixel = FrameStatistics.meanAbsoluteLumaDifference(previous, current, sampleStride);
         double histogram = FrameStatistics.histogramDistance(previous, current, sampleStride);
-        return 0.65d * pixel + 0.35d * histogram;
+        return pixel * (0.75d + 0.25d * histogram);
     }
 
     public double threshold() {
