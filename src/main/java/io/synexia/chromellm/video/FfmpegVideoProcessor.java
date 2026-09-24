@@ -39,10 +39,34 @@ public final class FfmpegVideoProcessor {
             Path output,
             ImageProcessor processor,
             FrameTransform transform) throws IOException, InterruptedException {
+        return process(
+                input,
+                output,
+                processor,
+                transform,
+                VideoEncodingOptions.defaults(),
+                ProcessingProgressListener.NONE,
+                ProcessingControl.NEVER_CANCELLED,
+                30);
+    }
+
+    public VideoProcessResult process(
+            Path input,
+            Path output,
+            ImageProcessor processor,
+            FrameTransform transform,
+            VideoEncodingOptions encodingOptions,
+            ProcessingProgressListener progressListener,
+            ProcessingControl control,
+            int progressEveryFrames) throws IOException, InterruptedException {
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(output, "output");
         Objects.requireNonNull(processor, "processor");
         Objects.requireNonNull(transform, "transform");
+        Objects.requireNonNull(encodingOptions, "encodingOptions");
+        progressListener = Objects.requireNonNullElse(progressListener, ProcessingProgressListener.NONE);
+        control = Objects.requireNonNullElse(control, ProcessingControl.NEVER_CANCELLED);
+        if (progressEveryFrames < 1) throw new IllegalArgumentException("progressEveryFrames must be positive");
 
         Instant start = Instant.now();
         long frames = 0L;
@@ -65,8 +89,10 @@ public final class FfmpegVideoProcessor {
                         ffmpeg,
                         input,
                         output,
-                        info)) {
+                        info,
+                        encodingOptions)) {
                     while (true) {
+                        control.checkCancelled();
                         RgbaFrame frame = source.nextFrame();
                         if (frame == null) break;
 
@@ -79,12 +105,16 @@ public final class FfmpegVideoProcessor {
 
                         encoder.write(result);
                         frames++;
+                        if (frames % progressEveryFrames == 0L) {
+                            progressListener.onProgress(progress(frames, start));
+                        }
                     }
                 }
             } finally {
                 if (lifecycle != null) lifecycle.onStreamEnd();
             }
 
+            progressListener.onProgress(progress(frames, start));
             return new VideoProcessResult(
                     output,
                     frames,
@@ -94,4 +124,10 @@ public final class FfmpegVideoProcessor {
         }
     }
 
+    private static ProcessingProgress progress(long frames, Instant start) {
+        Duration elapsed = Duration.between(start, Instant.now());
+        double seconds = elapsed.toNanos() / 1_000_000_000d;
+        double fps = seconds <= 0d ? 0d : frames / seconds;
+        return new ProcessingProgress(frames, elapsed, fps);
+    }
 }
