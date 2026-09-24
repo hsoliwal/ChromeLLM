@@ -4,7 +4,7 @@ import io.synexia.chromellm.gpu.RgbaFrame;
 
 import java.util.Objects;
 
-public final class FrameRangeTransform implements FrameTransform {
+public final class FrameRangeTransform implements FrameTransform, FrameTransformLifecycle {
     private final long startInclusive;
     private final long endExclusive;
     private final FrameTransform delegate;
@@ -23,5 +23,20 @@ public final class FrameRangeTransform implements FrameTransform {
         return frameIndex >= startInclusive && frameIndex < endExclusive
                 ? delegate.apply(frame, frameIndex)
                 : frame;
+    }
+
+    @Override
+    public void onStreamStart(VideoStreamInfo streamInfo) {
+        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamStart(streamInfo);
+    }
+
+    @Override
+    public void reset() {
+        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.reset();
+    }
+
+    @Override
+    public void onStreamEnd() {
+        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamEnd();
     }
 }
