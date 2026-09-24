@@ -21,8 +21,22 @@ final class FfmpegRgbaEncoder implements AutoCloseable {
             Path originalInput,
             Path outputPath,
             VideoStreamInfo info) throws IOException {
+        this(ffmpeg, originalInput, outputPath, info, VideoEncodingOptions.defaults());
+    }
+
+    FfmpegRgbaEncoder(
+            String ffmpeg,
+            Path originalInput,
+            Path outputPath,
+            VideoStreamInfo info,
+            VideoEncodingOptions encodingOptions) throws IOException {
         this.info = Objects.requireNonNull(info, "info");
-        this.process = new ProcessBuilder(command(ffmpeg, originalInput, outputPath, info))
+        this.process = new ProcessBuilder(command(
+                ffmpeg,
+                originalInput,
+                outputPath,
+                info,
+                Objects.requireNonNull(encodingOptions, "encodingOptions")))
                 .redirectError(ProcessBuilder.Redirect.INHERIT)
                 .start();
         this.output = process.getOutputStream();
@@ -66,11 +80,12 @@ final class FfmpegRgbaEncoder implements AutoCloseable {
         if (failure != null) throw failure;
     }
 
-    private static List<String> command(
+    static List<String> command(
             String ffmpeg,
             Path originalInput,
             Path outputPath,
-            VideoStreamInfo info) {
+            VideoStreamInfo info,
+            VideoEncodingOptions options) {
         List<String> command = new ArrayList<>();
         command.add(ffmpeg);
         command.add("-v"); command.add("error");
@@ -82,14 +97,51 @@ final class FfmpegRgbaEncoder implements AutoCloseable {
         command.add("-i"); command.add("pipe:0");
         command.add("-i"); command.add(originalInput.toAbsolutePath().toString());
         command.add("-map"); command.add("0:v:0");
-        command.add("-map"); command.add("1:a?");
-        command.add("-c:v"); command.add("libx264");
-        command.add("-preset"); command.add("veryfast");
-        command.add("-crf"); command.add("18");
-        command.add("-pix_fmt"); command.add("yuv420p");
-        command.add("-c:a"); command.add("copy");
+        if (options.audioMode() != AudioMode.NONE) {
+            command.add("-map"); command.add("1:a?");
+        }
+
+        command.add("-c:v"); command.add(options.videoCodec().ffmpegName());
+        addVideoQualityArguments(command, options);
+        command.add("-pix_fmt"); command.add(options.pixelFormat());
+        if (options.threads() > 0) {
+            command.add("-threads"); command.add(Integer.toString(options.threads()));
+        }
+
+        switch (options.audioMode()) {
+            case COPY -> {
+                command.add("-c:a");
+                command.add("copy");
+            }
+            case AAC -> {
+                command.add("-c:a");
+                command.add("aac");
+                command.add("-b:a");
+                command.add(options.audioBitrateKbps() + "k");
+            }
+            case NONE -> command.add("-an");
+        }
+
         command.add("-shortest");
+        command.addAll(options.extraArguments());
         command.add(outputPath.toAbsolutePath().toString());
         return List.copyOf(command);
+    }
+
+    private static void addVideoQualityArguments(List<String> command, VideoEncodingOptions options) {
+        switch (options.videoCodec()) {
+            case H264, H265 -> {
+                command.add("-preset");
+                command.add(options.preset());
+                command.add("-crf");
+                command.add(Integer.toString(options.crf()));
+            }
+            case AV1, VP9 -> {
+                command.add("-crf");
+                command.add(Integer.toString(options.crf()));
+                command.add("-b:v");
+                command.add("0");
+            }
+        }
     }
 }
