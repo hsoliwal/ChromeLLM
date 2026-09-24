@@ -34,6 +34,9 @@ public final class MediaPresetLoader {
         Objects.requireNonNull(processor, "processor");
 
         MediaPreset preset = mapper.readValue(presetPath.toFile(), MediaPreset.class);
+        if (preset.version() == null || preset.version() != 1) {
+            throw new IllegalArgumentException("unsupported media preset version: " + preset.version());
+        }
         Path base = presetPath.toAbsolutePath().normalize().getParent();
         List<FrameTransform> transforms = new ArrayList<>();
 
