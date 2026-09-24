@@ -86,6 +86,7 @@ final class FfmpegRgbaEncoder implements AutoCloseable {
             Path outputPath,
             VideoStreamInfo info,
             VideoEncodingOptions options) {
+        validateGeometry(info, options);
         List<String> command = new ArrayList<>();
         command.add(ffmpeg);
         command.add("-v"); command.add("error");
@@ -126,6 +127,20 @@ final class FfmpegRgbaEncoder implements AutoCloseable {
         command.addAll(options.extraArguments());
         command.add(outputPath.toAbsolutePath().toString());
         return List.copyOf(command);
+    }
+
+    private static void validateGeometry(VideoStreamInfo info, VideoEncodingOptions options) {
+        String pixelFormat = options.pixelFormat().toLowerCase(Locale.ROOT);
+        if ("yuv420p".equals(pixelFormat)
+                && ((info.width() & 1) != 0 || (info.height() & 1) != 0)) {
+            throw new IllegalArgumentException(
+                    "yuv420p requires even output dimensions, got "
+                            + info.width() + "x" + info.height());
+        }
+        if ("yuv422p".equals(pixelFormat) && (info.width() & 1) != 0) {
+            throw new IllegalArgumentException(
+                    "yuv422p requires an even output width, got " + info.width());
+        }
     }
 
     private static void addVideoQualityArguments(List<String> command, VideoEncodingOptions options) {
