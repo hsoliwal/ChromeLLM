@@ -10,14 +10,22 @@ import io.synexia.chromellm.gpu.ObjectComposer;
 import io.synexia.chromellm.gpu.PixelGenerator;
 import io.synexia.chromellm.gpu.PixelParameters;
 import io.synexia.chromellm.gpu.RgbaFrame;
+import io.synexia.chromellm.preset.CompiledMediaPreset;
+import io.synexia.chromellm.preset.MediaPresetLoader;
+import io.synexia.chromellm.video.AudioMode;
 import io.synexia.chromellm.video.DecoderBackend;
 import io.synexia.chromellm.video.FfmpegProbe;
 import io.synexia.chromellm.video.FfmpegVideoInterpolator;
 import io.synexia.chromellm.video.FfmpegVideoProcessor;
 import io.synexia.chromellm.video.FrameTransform;
+import io.synexia.chromellm.video.ProcessingControl;
+import io.synexia.chromellm.video.ProcessingProgress;
+import io.synexia.chromellm.video.ProcessingProgressListener;
 import io.synexia.chromellm.video.SceneCutDetector;
 import io.synexia.chromellm.video.TransformSpecParser;
 import io.synexia.chromellm.video.VideoAnalyzer;
+import io.synexia.chromellm.video.VideoCodec;
+import io.synexia.chromellm.video.VideoEncodingOptions;
 import io.synexia.chromellm.vision.VisionProcessor;
 import io.synexia.chromellm.vision.VisionProcessorFactory;
 
@@ -93,8 +101,9 @@ public final class GpuMain {
     private static void image(ImageProcessor processor, Map<String, String> options) throws Exception {
         Path input = requiredPath(options, "input");
         Path output = requiredPath(options, "output");
-        FrameTransform transform = transform(processor, options);
-        RgbaFrame result = transform.apply(ImageIoFrames.read(input), 0L);
+        CompiledMediaPreset preset = loadPreset(processor, options);
+        FrameTransform selected = preset == null ? transform(processor, options) : preset.transform();
+        RgbaFrame result = selected.apply(ImageIoFrames.read(input), 0L);
         ImageIoFrames.write(result, output);
         completed(processor.backendName(), output);
     }
@@ -201,20 +210,41 @@ public final class GpuMain {
         DecoderBackend decoder = enumValue(
                 DecoderBackend.class,
                 options.getOrDefault("decoder", "auto"));
+        CompiledMediaPreset preset = loadPreset(processor, options);
+        FrameTransform selected = preset == null ? transform(processor, options) : preset.transform();
+        VideoEncodingOptions baseEncoding = preset == null
+                ? VideoEncodingOptions.defaults()
+                : preset.encodingOptions();
+        VideoEncodingOptions encoding = encodingOptions(options, baseEncoding);
+        int progressEvery = intValue(
+                options,
+                "progress-every",
+                preset == null ? 30 : preset.progressEveryFrames());
 
+        ProcessingProgressListener progress = value -> printProgress(value);
         var result = new FfmpegVideoProcessor(
                 System.getProperty("chromellm.ffmpeg", "ffmpeg"),
                 new FfmpegProbe(),
                 decoder)
-                .process(input, output, processor, transform(processor, options));
+                .process(
+                        input,
+                        output,
+                        processor,
+                        selected,
+                        encoding,
+                        progress,
+                        ProcessingControl.NEVER_CANCELLED,
+                        progressEvery);
 
         System.out.printf(
                 Locale.ROOT,
-                "processed %d frames to %s using %s in %.3fs%n",
+                "processed %d frames to %s using %s in %.3fs (%.3f fps, %.3fx realtime)%n",
                 result.framesProcessed(),
                 result.output(),
                 result.processorBackend(),
-                result.elapsed().toNanos() / 1_000_000_000.0);
+                result.elapsed().toNanos() / 1_000_000_000.0,
+                result.processingFramesPerSecond(),
+                result.realtimeFactor());
     }
 
     private static void batchImage(ImageProcessor processor, Map<String, String> options) throws Exception {
@@ -223,8 +253,9 @@ public final class GpuMain {
         boolean recursive = booleanValue(options, "recursive", true);
         boolean overwrite = booleanValue(options, "overwrite", false);
         int requestedParallelism = intValue(options, "parallelism", 1);
-        int effectiveParallelism = processor.hardwareAccelerated() ? 1 : requestedParallelism;
-        String specification = pipelineSpecification(options);
+        CompiledMediaPreset preset = loadPreset(processor, options);
+        int effectiveParallelism = processor.hardwareAccelerated() || preset != null ? 1 : requestedParallelism;
+        String specification = preset == null ? pipelineSpecification(options) : null;
         TransformSpecParser parser = new TransformSpecParser(processor);
 
         var result = new BatchImageProcessor().process(
@@ -232,7 +263,9 @@ public final class GpuMain {
                 output,
                 recursive,
                 overwrite,
-                () -> parser.parsePipeline(specification),
+                preset == null
+                        ? () -> parser.parsePipeline(specification)
+                        : preset::transform,
                 effectiveParallelism);
 
         System.out.printf(
@@ -306,6 +339,44 @@ public final class GpuMain {
 
     private static FrameTransform transform(ImageProcessor processor, Map<String, String> options) {
         return new TransformSpecParser(processor).parsePipeline(pipelineSpecification(options));
+    }
+
+    private static CompiledMediaPreset loadPreset(
+            ImageProcessor processor,
+            Map<String, String> options) throws Exception {
+        String preset = options.get("preset");
+        return preset == null || preset.isBlank()
+                ? null
+                : new MediaPresetLoader().load(Path.of(preset), processor);
+    }
+
+    private static VideoEncodingOptions encodingOptions(
+            Map<String, String> options,
+            VideoEncodingOptions base) {
+        VideoCodec codec = options.containsKey("codec")
+                ? enumValue(VideoCodec.class, options.get("codec"))
+                : base.videoCodec();
+        AudioMode audio = options.containsKey("audio")
+                ? enumValue(AudioMode.class, options.get("audio"))
+                : base.audioMode();
+        return new VideoEncodingOptions(
+                codec,
+                options.getOrDefault("encoder-preset", base.preset()),
+                intValue(options, "crf", base.crf()),
+                options.getOrDefault("pixel-format", base.pixelFormat()),
+                audio,
+                intValue(options, "audio-bitrate", base.audioBitrateKbps()),
+                intValue(options, "threads", base.threads()),
+                base.extraArguments());
+    }
+
+    private static void printProgress(ProcessingProgress progress) {
+        System.out.printf(
+                Locale.ROOT,
+                "progress frames=%d elapsed=%.3fs speed=%.3f fps%n",
+                progress.framesProcessed(),
+                progress.elapsed().toNanos() / 1_000_000_000.0,
+                progress.processingFramesPerSecond());
     }
 
     private static String pipelineSpecification(Map<String, String> options) {
@@ -421,11 +492,14 @@ public final class GpuMain {
                   info --backend auto|cpu|jna|jni
                   image --input in.png --output out.png --op grayscale [--backend auto]
                   image --input in.png --output out.png --pipeline "grayscale,unsharp:2:1.2:3"
+                  image --input in.png --output out.png --preset grade.json
                   generate --output out.png --width 1024 --height 1024 --generator plasma --seed 42
                   place --input base.png --object object.png --x 100 --y 100 --output out.png
                   remove --input image.png --mask mask.png --radius 8 --passes 4 --output out.png
                   batch-image --input-dir photos --output-dir processed --pipeline "gamma:1.1,unsharp:2:1.0:3" --recursive true --parallelism 4
+                  batch-image --input-dir photos --output-dir processed --preset grade.json
                   video --input in.mp4 --output out.mp4 --pipeline "temporal-denoise:0.25:0.35:4,unsharp:2:1.0:3,stabilize:8:4:0.75:0.35" --decoder auto
+                  video --input in.mp4 --output out.mp4 --preset cinematic.json --codec h265 --crf 20 --audio aac --progress-every 30
                   analyze-video --input in.mp4 --cut-threshold 0.35 --sample-stride 4 --frame-stride 1 --decoder auto
 
                 Pipeline syntax:
@@ -435,6 +509,7 @@ public final class GpuMain {
                   unsharp[:radius:amount:threshold]
                   region:x:y:width:height:pixel-op[:p0:p1:p2:p3]
                   range:startInclusive:endExclusive:pixel-op[:p0:p1:p2:p3]
+                  flip-horizontal | flip-vertical | rotate-180
 
                 OpenCV vision:
                   inpaint --input image.png --mask mask.png --radius 3 --output out.png --vision-backend auto|java|opencv
