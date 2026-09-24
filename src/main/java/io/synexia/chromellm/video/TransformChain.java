@@ -5,7 +5,7 @@ import io.synexia.chromellm.gpu.RgbaFrame;
 import java.util.List;
 import java.util.Objects;
 
-public final class TransformChain implements FrameTransform, FrameTransformLifecycle {
+public final class TransformChain implements FrameTransform, FrameTransformLifecycle, FrameTransformShape {
     private final List<FrameTransform> transforms;
 
     public TransformChain(List<FrameTransform> transforms) {
@@ -28,10 +28,25 @@ public final class TransformChain implements FrameTransform, FrameTransformLifec
     }
 
     @Override
+    public VideoStreamInfo outputStreamInfo(VideoStreamInfo input) {
+        VideoStreamInfo current = Objects.requireNonNull(input, "input");
+        for (FrameTransform transform : transforms) {
+            if (transform instanceof FrameTransformShape shape) {
+                current = Objects.requireNonNull(shape.outputStreamInfo(current), "shape transform returned null");
+            }
+        }
+        return current;
+    }
+
+    @Override
     public void onStreamStart(VideoStreamInfo streamInfo) {
+        VideoStreamInfo current = Objects.requireNonNull(streamInfo, "streamInfo");
         for (FrameTransform transform : transforms) {
             if (transform instanceof FrameTransformLifecycle lifecycle) {
-                lifecycle.onStreamStart(streamInfo);
+                lifecycle.onStreamStart(current);
+            }
+            if (transform instanceof FrameTransformShape shape) {
+                current = Objects.requireNonNull(shape.outputStreamInfo(current), "shape transform returned null");
             }
         }
     }
