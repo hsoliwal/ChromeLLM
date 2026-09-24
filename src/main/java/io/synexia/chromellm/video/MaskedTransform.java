@@ -5,7 +5,7 @@ import io.synexia.chromellm.gpu.RgbaFrame;
 
 import java.util.Objects;
 
-public final class MaskedTransform implements FrameTransform {
+public final class MaskedTransform implements FrameTransform, FrameTransformLifecycle {
     private final FrameTransform delegate;
     private final FrameMaskProvider maskProvider;
 
@@ -41,5 +41,20 @@ public final class MaskedTransform implements FrameTransform {
             }
         }
         return new RgbaFrame(frame.width(), frame.height(), output);
+    }
+
+    @Override
+    public void onStreamStart(VideoStreamInfo streamInfo) {
+        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamStart(streamInfo);
+    }
+
+    @Override
+    public void reset() {
+        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.reset();
+    }
+
+    @Override
+    public void onStreamEnd() {
+        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamEnd();
     }
 }
