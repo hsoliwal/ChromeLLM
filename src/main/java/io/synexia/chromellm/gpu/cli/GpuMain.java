@@ -1,5 +1,6 @@
 package io.synexia.chromellm.gpu.cli;
 
+import io.synexia.chromellm.batch.BatchImageProcessor;
 import io.synexia.chromellm.gpu.AlphaMask;
 import io.synexia.chromellm.gpu.GpuProcessorFactory;
 import io.synexia.chromellm.gpu.ImageIoFrames;
@@ -7,7 +8,6 @@ import io.synexia.chromellm.gpu.ImageProcessor;
 import io.synexia.chromellm.gpu.MaskOps;
 import io.synexia.chromellm.gpu.ObjectComposer;
 import io.synexia.chromellm.gpu.PixelGenerator;
-import io.synexia.chromellm.gpu.PixelOperation;
 import io.synexia.chromellm.gpu.PixelParameters;
 import io.synexia.chromellm.gpu.RgbaFrame;
 import io.synexia.chromellm.video.DecoderBackend;
@@ -15,15 +15,14 @@ import io.synexia.chromellm.video.FfmpegProbe;
 import io.synexia.chromellm.video.FfmpegVideoInterpolator;
 import io.synexia.chromellm.video.FfmpegVideoProcessor;
 import io.synexia.chromellm.video.FrameTransform;
-import io.synexia.chromellm.video.GpuFrameTransform;
-import io.synexia.chromellm.video.TransformChain;
+import io.synexia.chromellm.video.SceneCutDetector;
+import io.synexia.chromellm.video.TransformSpecParser;
+import io.synexia.chromellm.video.VideoAnalyzer;
 import io.synexia.chromellm.vision.VisionProcessor;
 import io.synexia.chromellm.vision.VisionProcessorFactory;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -44,6 +43,10 @@ public final class GpuMain {
             runVisionCommand(command, options);
             return;
         }
+        if ("analyze-video".equals(command)) {
+            analyzeVideo(options);
+            return;
+        }
 
         GpuProcessorFactory.Backend backend = enumValue(
                 GpuProcessorFactory.Backend.class,
@@ -56,6 +59,7 @@ public final class GpuMain {
                 case "place" -> place(processor, options);
                 case "remove" -> remove(processor, options);
                 case "video" -> video(processor, options);
+                case "batch-image" -> batchImage(processor, options);
                 case "info" -> info(processor);
                 default -> throw new IllegalArgumentException("unknown command: " + command);
             }
@@ -89,13 +93,9 @@ public final class GpuMain {
     private static void image(ImageProcessor processor, Map<String, String> options) throws Exception {
         Path input = requiredPath(options, "input");
         Path output = requiredPath(options, "output");
-        RgbaFrame current = ImageIoFrames.read(input);
-
-        for (FrameTransform transform : transforms(processor, options)) {
-            current = transform.apply(current, 0L);
-        }
-
-        ImageIoFrames.write(current, output);
+        FrameTransform transform = transform(processor, options);
+        RgbaFrame result = transform.apply(ImageIoFrames.read(input), 0L);
+        ImageIoFrames.write(result, output);
         completed(processor.backendName(), output);
     }
 
@@ -202,12 +202,11 @@ public final class GpuMain {
                 DecoderBackend.class,
                 options.getOrDefault("decoder", "auto"));
 
-        FrameTransform transform = new TransformChain(transforms(processor, options));
         var result = new FfmpegVideoProcessor(
                 System.getProperty("chromellm.ffmpeg", "ffmpeg"),
                 new FfmpegProbe(),
                 decoder)
-                .process(input, output, processor, transform);
+                .process(input, output, processor, transform(processor, options));
 
         System.out.printf(
                 Locale.ROOT,
@@ -216,6 +215,69 @@ public final class GpuMain {
                 result.output(),
                 result.processorBackend(),
                 result.elapsed().toNanos() / 1_000_000_000.0);
+    }
+
+    private static void batchImage(ImageProcessor processor, Map<String, String> options) throws Exception {
+        Path input = requiredPath(options, "input-dir");
+        Path output = requiredPath(options, "output-dir");
+        boolean recursive = booleanValue(options, "recursive", true);
+        boolean overwrite = booleanValue(options, "overwrite", false);
+        int requestedParallelism = intValue(options, "parallelism", 1);
+        int effectiveParallelism = processor.hardwareAccelerated() ? 1 : requestedParallelism;
+        String specification = pipelineSpecification(options);
+        TransformSpecParser parser = new TransformSpecParser(processor);
+
+        var result = new BatchImageProcessor().process(
+                input,
+                output,
+                recursive,
+                overwrite,
+                () -> parser.parsePipeline(specification),
+                effectiveParallelism);
+
+        System.out.printf(
+                Locale.ROOT,
+                "batch discovered=%d succeeded=%d failed=%d backend=%s parallelism=%d elapsed=%.3fs%n",
+                result.discovered(),
+                result.succeeded(),
+                result.failed(),
+                processor.backendName(),
+                effectiveParallelism,
+                result.elapsed().toNanos() / 1_000_000_000.0);
+        result.failures().forEach(failure ->
+                System.err.println("FAILED " + failure.input() + " :: " + failure.message()));
+    }
+
+    private static void analyzeVideo(Map<String, String> options) throws Exception {
+        Path input = requiredPath(options, "input");
+        DecoderBackend decoder = enumValue(
+                DecoderBackend.class,
+                options.getOrDefault("decoder", "auto"));
+        double threshold = doubleValue(options, "cut-threshold", 0.35d);
+        int sampleStride = intValue(options, "sample-stride", 4);
+        int frameStride = intValue(options, "frame-stride", 1);
+
+        var result = new VideoAnalyzer(
+                System.getProperty("chromellm.ffmpeg", "ffmpeg"),
+                new FfmpegProbe(),
+                decoder)
+                .analyze(input, new SceneCutDetector(threshold, sampleStride), frameStride);
+
+        System.out.printf(
+                Locale.ROOT,
+                "frames=%d fps=%.6f size=%dx%d decoder=%s cuts=%d luma(avg/min/max)=%.6f/%.6f/%.6f elapsed=%.3fs%n",
+                result.framesAnalyzed(),
+                result.stream().framesPerSecond(),
+                result.stream().width(),
+                result.stream().height(),
+                result.decoderBackend(),
+                result.sceneCuts().size(),
+                result.averageLuma(),
+                result.minimumLuma(),
+                result.maximumLuma(),
+                result.elapsed().toNanos() / 1_000_000_000.0);
+        result.sceneCuts().forEach(cut ->
+                System.out.printf(Locale.ROOT, "cut frame=%d score=%.6f%n", cut.frameIndex(), cut.score()));
     }
 
     private static void interpolateVideo(VisionProcessor vision, Map<String, String> options) throws Exception {
@@ -242,38 +304,19 @@ public final class GpuMain {
                 result.elapsed().toNanos() / 1_000_000_000.0);
     }
 
-    private static List<FrameTransform> transforms(ImageProcessor processor, Map<String, String> options) {
+    private static FrameTransform transform(ImageProcessor processor, Map<String, String> options) {
+        return new TransformSpecParser(processor).parsePipeline(pipelineSpecification(options));
+    }
+
+    private static String pipelineSpecification(Map<String, String> options) {
         String pipeline = options.get("pipeline");
-        if (pipeline == null || pipeline.isBlank()) {
-            PixelOperation operation = enumValue(PixelOperation.class, required(options, "op"));
-            return List.of(new GpuFrameTransform(processor, operation, parameters(options)));
-        }
-
-        List<FrameTransform> result = new ArrayList<>();
-        for (String token : pipeline.split(",")) {
-            result.add(parseTransform(processor, token.trim()));
-        }
-        if (result.isEmpty()) throw new IllegalArgumentException("pipeline is empty");
-        return List.copyOf(result);
-    }
-
-    private static FrameTransform parseTransform(ImageProcessor processor, String specification) {
-        String[] parts = specification.split(":");
-        PixelOperation operation = enumValue(PixelOperation.class, parts[0]);
-        float p0 = number(parts, 1, 0f);
-        float p1 = number(parts, 2, 0f);
-        float p2 = number(parts, 3, 0f);
-        float p3 = number(parts, 4, 0f);
-        return new GpuFrameTransform(
-                processor,
-                operation,
-                new PixelParameters(p0, p1, p2, p3));
-    }
-
-    private static float number(String[] values, int index, float fallback) {
-        return index < values.length && !values[index].isBlank()
-                ? Float.parseFloat(values[index])
-                : fallback;
+        if (pipeline != null && !pipeline.isBlank()) return pipeline;
+        String operation = required(options, "op");
+        return operation
+                + ":" + floatValue(options, "p0", 0f)
+                + ":" + floatValue(options, "p1", 0f)
+                + ":" + floatValue(options, "p2", 0f)
+                + ":" + floatValue(options, "p3", 0f);
     }
 
     private static RgbaFrame maskFrame(AlphaMask mask) {
@@ -337,6 +380,10 @@ public final class GpuMain {
         return Path.of(required(options, key));
     }
 
+    private static boolean booleanValue(Map<String, String> options, String key, boolean fallback) {
+        return options.containsKey(key) ? Boolean.parseBoolean(options.get(key)) : fallback;
+    }
+
     private static int intValue(Map<String, String> options, String key, int fallback) {
         return options.containsKey(key)
                 ? Integer.parseInt(options.get(key))
@@ -355,6 +402,12 @@ public final class GpuMain {
                 : fallback;
     }
 
+    private static double doubleValue(Map<String, String> options, String key, double fallback) {
+        return options.containsKey(key)
+                ? Double.parseDouble(options.get(key))
+                : fallback;
+    }
+
     private static void completed(String backend, Path output) {
         System.out.println("output=" + output.toAbsolutePath());
         System.out.println("backend=" + backend);
@@ -367,11 +420,21 @@ public final class GpuMain {
                 Pixel/GPU:
                   info --backend auto|cpu|jna|jni
                   image --input in.png --output out.png --op grayscale [--backend auto]
-                  image --input in.png --output out.png --pipeline "grayscale,box-blur:2,gamma:1.1"
+                  image --input in.png --output out.png --pipeline "grayscale,unsharp:2:1.2:3"
                   generate --output out.png --width 1024 --height 1024 --generator plasma --seed 42
                   place --input base.png --object object.png --x 100 --y 100 --output out.png
                   remove --input image.png --mask mask.png --radius 8 --passes 4 --output out.png
-                  video --input in.mp4 --output out.mp4 --pipeline "grayscale,box-blur:2" --decoder auto|process|jni
+                  batch-image --input-dir photos --output-dir processed --pipeline "gamma:1.1,unsharp:2:1.0:3" --recursive true --parallelism 4
+                  video --input in.mp4 --output out.mp4 --pipeline "temporal-denoise:0.25:0.35:4,unsharp:2:1.0:3,stabilize:8:4:0.75:0.35" --decoder auto
+                  analyze-video --input in.mp4 --cut-threshold 0.35 --sample-stride 4 --frame-stride 1 --decoder auto
+
+                Pipeline syntax:
+                  pixel-op[:p0:p1:p2:p3]
+                  temporal-denoise[:currentWeight:cutThreshold:sampleStride]
+                  stabilize[:searchRadius:sampleStride:smoothing:cutThreshold]
+                  unsharp[:radius:amount:threshold]
+                  region:x:y:width:height:pixel-op[:p0:p1:p2:p3]
+                  range:startInclusive:endExclusive:pixel-op[:p0:p1:p2:p3]
 
                 OpenCV vision:
                   inpaint --input image.png --mask mask.png --radius 3 --output out.png --vision-backend auto|java|opencv
@@ -383,6 +446,7 @@ public final class GpuMain {
                 AUTO pixel backend prefers OpenCL through JNA, then JNI, then Java CPU.
                 AUTO vision backend prefers OpenCV JNI, then Java fallback.
                 AUTO decoder prefers direct FFmpeg JNI/libav, then the FFmpeg process/pipe fallback.
+                GPU batch execution is serialized by default to avoid sharing one OpenCL kernel context concurrently.
                 """);
     }
 }

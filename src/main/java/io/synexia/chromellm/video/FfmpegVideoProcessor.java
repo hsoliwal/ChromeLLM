@@ -55,26 +55,34 @@ public final class FfmpegVideoProcessor {
                 probe)) {
             VideoStreamInfo info = source.streamInfo();
             sourceBackend = source.backendName();
+            FrameTransformLifecycle lifecycle = transform instanceof FrameTransformLifecycle value
+                    ? value
+                    : null;
+            if (lifecycle != null) lifecycle.onStreamStart(info);
 
-            try (FfmpegRgbaEncoder encoder = new FfmpegRgbaEncoder(
-                    ffmpeg,
-                    input,
-                    output,
-                    info)) {
-                while (true) {
-                    RgbaFrame frame = source.nextFrame();
-                    if (frame == null) break;
+            try {
+                try (FfmpegRgbaEncoder encoder = new FfmpegRgbaEncoder(
+                        ffmpeg,
+                        input,
+                        output,
+                        info)) {
+                    while (true) {
+                        RgbaFrame frame = source.nextFrame();
+                        if (frame == null) break;
 
-                    RgbaFrame result = Objects.requireNonNull(
-                            transform.apply(frame, frames),
-                            "frame transform returned null");
-                    if (result.width() != info.width() || result.height() != info.height()) {
-                        throw new IllegalStateException("frame transform changed dimensions");
+                        RgbaFrame result = Objects.requireNonNull(
+                                transform.apply(frame, frames),
+                                "frame transform returned null");
+                        if (result.width() != info.width() || result.height() != info.height()) {
+                            throw new IllegalStateException("frame transform changed dimensions");
+                        }
+
+                        encoder.write(result);
+                        frames++;
                     }
-
-                    encoder.write(result);
-                    frames++;
                 }
+            } finally {
+                if (lifecycle != null) lifecycle.onStreamEnd();
             }
 
             return new VideoProcessResult(

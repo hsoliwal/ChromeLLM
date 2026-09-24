@@ -5,7 +5,7 @@ import io.synexia.chromellm.gpu.RgbaFrame;
 import java.util.List;
 import java.util.Objects;
 
-public final class TransformChain implements FrameTransform {
+public final class TransformChain implements FrameTransform, FrameTransformLifecycle {
     private final List<FrameTransform> transforms;
 
     public TransformChain(List<FrameTransform> transforms) {
@@ -27,7 +27,39 @@ public final class TransformChain implements FrameTransform {
         return current;
     }
 
+    @Override
+    public void onStreamStart(VideoStreamInfo streamInfo) {
+        for (FrameTransform transform : transforms) {
+            if (transform instanceof FrameTransformLifecycle lifecycle) {
+                lifecycle.onStreamStart(streamInfo);
+            }
+        }
+    }
+
+    @Override
+    public void reset() {
+        for (FrameTransform transform : transforms) {
+            if (transform instanceof FrameTransformLifecycle lifecycle) {
+                lifecycle.reset();
+            }
+        }
+    }
+
+    @Override
+    public void onStreamEnd() {
+        for (int i = transforms.size() - 1; i >= 0; i--) {
+            FrameTransform transform = transforms.get(i);
+            if (transform instanceof FrameTransformLifecycle lifecycle) {
+                lifecycle.onStreamEnd();
+            }
+        }
+    }
+
     public int size() {
         return transforms.size();
+    }
+
+    public List<FrameTransform> transforms() {
+        return transforms;
     }
 }

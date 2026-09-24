@@ -244,3 +244,30 @@ The local image/video runtime also supports optional native vision and media bac
 - Optical-flow video interpolation generates additional frames locally.
 
 See [docs/NATIVE_VISION_MEDIA.md](docs/NATIVE_VISION_MEDIA.md).
+
+
+## Java VirtualDub-Style Pipeline
+
+The local media runtime now includes a higher-level Java 21 processing pipeline over the existing GPU/OpenCV/FFmpeg primitives.
+
+It adds:
+
+- lifecycle-aware `TransformChain` execution;
+- scene-cut detection and video analysis;
+- temporal denoise with automatic cut resets;
+- pure-Java block-matching motion estimation and stabilization;
+- unsharp masking and general RGBA color matrices;
+- frame-region, mask and frame-range transforms;
+- mask invert/threshold/feather utilities;
+- recursive non-destructive batch image processing;
+- reusable transform-spec parsing for both images and video.
+
+Example:
+
+```bash
+mvn -q exec:java \
+  -Dexec.mainClass=io.synexia.chromellm.gpu.cli.GpuMain \
+  -Dexec.args="video --input in.mp4 --output out.mp4 --pipeline 'temporal-denoise:0.25:0.35:4,unsharp:2:1.0:3,stabilize:8:4:0.75:0.35' --decoder auto"
+```
+
+See [docs/VIRTUALDUB_JAVA_PIPELINE.md](docs/VIRTUALDUB_JAVA_PIPELINE.md).
