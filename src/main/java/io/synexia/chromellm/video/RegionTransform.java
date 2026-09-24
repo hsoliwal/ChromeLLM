@@ -4,7 +4,7 @@ import io.synexia.chromellm.gpu.RgbaFrame;
 
 import java.util.Objects;
 
-public final class RegionTransform implements FrameTransform {
+public final class RegionTransform implements FrameTransform, FrameTransformLifecycle {
     private final FrameRegion region;
     private final FrameTransform delegate;
 
@@ -22,5 +22,26 @@ public final class RegionTransform implements FrameTransform {
             throw new IllegalStateException("region transform changed patch dimensions");
         }
         return FrameRegions.paste(frame, transformed, effective.x(), effective.y());
+    }
+
+    @Override
+    public void onStreamStart(VideoStreamInfo streamInfo) {
+        if (delegate instanceof FrameTransformLifecycle lifecycle) {
+            FrameRegion effective = region.clampTo(streamInfo.width(), streamInfo.height());
+            lifecycle.onStreamStart(new VideoStreamInfo(
+                    effective.width(),
+                    effective.height(),
+                    streamInfo.framesPerSecond()));
+        }
+    }
+
+    @Override
+    public void reset() {
+        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.reset();
+    }
+
+    @Override
+    public void onStreamEnd() {
+        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamEnd();
     }
 }
