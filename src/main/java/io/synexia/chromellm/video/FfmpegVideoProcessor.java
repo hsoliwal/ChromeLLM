@@ -78,6 +78,9 @@ public final class FfmpegVideoProcessor {
                 ffmpeg,
                 probe)) {
             VideoStreamInfo info = source.streamInfo();
+            VideoStreamInfo outputInfo = transform instanceof FrameTransformShape shape
+                    ? shape.outputStreamInfo(info)
+                    : info;
             sourceBackend = source.backendName();
             FrameTransformLifecycle lifecycle = transform instanceof FrameTransformLifecycle value
                     ? value
@@ -89,7 +92,7 @@ public final class FfmpegVideoProcessor {
                         ffmpeg,
                         input,
                         output,
-                        info,
+                        outputInfo,
                         encodingOptions)) {
                     while (true) {
                         control.checkCancelled();
@@ -99,8 +102,11 @@ public final class FfmpegVideoProcessor {
                         RgbaFrame result = Objects.requireNonNull(
                                 transform.apply(frame, frames),
                                 "frame transform returned null");
-                        if (result.width() != info.width() || result.height() != info.height()) {
-                            throw new IllegalStateException("frame transform changed dimensions");
+                        if (result.width() != outputInfo.width() || result.height() != outputInfo.height()) {
+                            throw new IllegalStateException(
+                                    "frame transform produced unexpected dimensions "
+                                            + result.width() + "x" + result.height()
+                                            + "; expected " + outputInfo.width() + "x" + outputInfo.height());
                         }
 
                         encoder.write(result);
@@ -118,7 +124,7 @@ public final class FfmpegVideoProcessor {
             return new VideoProcessResult(
                     output,
                     frames,
-                    info,
+                    outputInfo,
                     Duration.between(start, Instant.now()),
                     sourceBackend + " -> " + processor.backendName());
         }
