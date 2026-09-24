@@ -1,6 +1,7 @@
 package io.synexia.chromellm.gpu.cli;
 
 import io.synexia.chromellm.batch.BatchImageProcessor;
+import io.synexia.chromellm.batch.BatchVideoProcessor;
 import io.synexia.chromellm.gpu.AlphaMask;
 import io.synexia.chromellm.gpu.GpuProcessorFactory;
 import io.synexia.chromellm.gpu.ImageIoFrames;
@@ -68,6 +69,7 @@ public final class GpuMain {
                 case "remove" -> remove(processor, options);
                 case "video" -> video(processor, options);
                 case "batch-image" -> batchImage(processor, options);
+                case "batch-video" -> batchVideo(processor, options);
                 case "info" -> info(processor);
                 default -> throw new IllegalArgumentException("unknown command: " + command);
             }
@@ -280,6 +282,48 @@ public final class GpuMain {
         result.failures().forEach(failure ->
                 System.err.println("FAILED " + failure.input() + " :: " + failure.message()));
     }
+
+    private static void batchVideo(ImageProcessor processor, Map<String, String> options) throws Exception {
+        Path input = requiredPath(options, "input-dir");
+        Path output = requiredPath(options, "output-dir");
+        boolean recursive = booleanValue(options, "recursive", true);
+        boolean overwrite = booleanValue(options, "overwrite", false);
+        DecoderBackend decoder = enumValue(
+                DecoderBackend.class,
+                options.getOrDefault("decoder", "auto"));
+        CompiledMediaPreset preset = loadPreset(processor, options);
+        String specification = preset == null ? pipelineSpecification(options) : null;
+        TransformSpecParser parser = new TransformSpecParser(processor);
+        VideoEncodingOptions baseEncoding = preset == null
+                ? VideoEncodingOptions.defaults()
+                : preset.encodingOptions();
+        VideoEncodingOptions encoding = encodingOptions(options, baseEncoding);
+
+        var result = new BatchVideoProcessor().process(
+                input,
+                output,
+                recursive,
+                overwrite,
+                processor,
+                preset == null
+                        ? () -> parser.parsePipeline(specification)
+                        : preset::transform,
+                encoding,
+                decoder,
+                System.getProperty("chromellm.ffmpeg", "ffmpeg"));
+
+        System.out.printf(
+                Locale.ROOT,
+                "video batch discovered=%d succeeded=%d failed=%d backend=%s elapsed=%.3fs%n",
+                result.discovered(),
+                result.succeeded(),
+                result.failed(),
+                processor.backendName(),
+                result.elapsed().toNanos() / 1_000_000_000.0);
+        result.failures().forEach(failure ->
+                System.err.println("FAILED " + failure.input() + " :: " + failure.message()));
+    }
+
 
     private static void analyzeVideo(Map<String, String> options) throws Exception {
         Path input = requiredPath(options, "input");
@@ -509,6 +553,7 @@ public final class GpuMain {
                   remove --input image.png --mask mask.png --radius 8 --passes 4 --output out.png
                   batch-image --input-dir photos --output-dir processed --pipeline "gamma:1.1,unsharp:2:1.0:3" --recursive true --parallelism 4
                   batch-image --input-dir photos --output-dir processed --preset grade.json
+                  batch-video --input-dir clips --output-dir processed --preset cinematic.json --decoder auto
                   video --input in.mp4 --output out.mp4 --pipeline "temporal-denoise:0.25:0.35:4,unsharp:2:1.0:3,stabilize:8:4:0.75:0.35" --decoder auto
                   video --input in.mp4 --output out.mp4 --preset cinematic.json --codec h265 --crf 20 --audio aac --progress-every 30
                   analyze-video --input in.mp4 --cut-threshold 0.35 --sample-stride 4 --frame-stride 1 --decoder auto
