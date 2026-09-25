@@ -40,6 +40,13 @@ public final class TransformSpecParser {
             case "unsharp", "unsharp_mask" -> unsharp(parts);
             case "region" -> region(parts);
             case "range" -> range(parts);
+            case "resize" -> resize(parts);
+            case "crop" -> crop(parts);
+            case "flip_horizontal", "fliph" -> new GeometryTransform(GeometryOperation.FLIP_HORIZONTAL);
+            case "flip_vertical", "flipv" -> new GeometryTransform(GeometryOperation.FLIP_VERTICAL);
+            case "rotate_90_cw", "rotate90cw" -> new GeometryTransform(GeometryOperation.ROTATE_90_CLOCKWISE);
+            case "rotate_90_ccw", "rotate90ccw" -> new GeometryTransform(GeometryOperation.ROTATE_90_COUNTERCLOCKWISE);
+            case "rotate_180", "rotate180" -> new GeometryTransform(GeometryOperation.ROTATE_180);
             default -> pixel(parts, 0);
         };
     }
@@ -91,6 +98,24 @@ public final class TransformSpecParser {
         long start = Long.parseLong(parts[1]);
         long end = Long.parseLong(parts[2]);
         return new FrameRangeTransform(start, end, pixel(parts, 3));
+    }
+
+    private FrameTransform resize(String[] parts) {
+        if (parts.length != 3) {
+            throw new IllegalArgumentException("resize syntax: resize:width:height");
+        }
+        return new ResizeTransform(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+    }
+
+    private FrameTransform crop(String[] parts) {
+        if (parts.length != 5) {
+            throw new IllegalArgumentException("crop syntax: crop:x:y:width:height");
+        }
+        return new CropTransform(new FrameRegion(
+                Integer.parseInt(parts[1]),
+                Integer.parseInt(parts[2]),
+                Integer.parseInt(parts[3]),
+                Integer.parseInt(parts[4])));
     }
 
     private FrameTransform pixel(String[] parts, int operationIndex) {

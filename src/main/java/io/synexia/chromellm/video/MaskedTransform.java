@@ -45,6 +45,13 @@ public final class MaskedTransform implements FrameTransform, FrameTransformLife
 
     @Override
     public void onStreamStart(VideoStreamInfo streamInfo) {
+        if (delegate instanceof FrameTransformShape shape) {
+            VideoStreamInfo output = shape.outputStreamInfo(streamInfo);
+            if (output.width() != streamInfo.width() || output.height() != streamInfo.height()) {
+                throw new IllegalArgumentException(
+                        "masked delegate must preserve frame dimensions");
+            }
+        }
         if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamStart(streamInfo);
     }
 

@@ -8,6 +8,7 @@ on:
       - feature/gpu-image-video
       - feature/opencv-ffmpeg-native
       - feature/virtualdub-java-pipeline
+      - feature/media-production-pipeline
   pull_request:
 
 jobs:

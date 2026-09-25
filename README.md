@@ -271,3 +271,30 @@ mvn -q exec:java \
 ```
 
 See [docs/VIRTUALDUB_JAVA_PIPELINE.md](docs/VIRTUALDUB_JAVA_PIPELINE.md).
+
+
+## Production Media Presets and Encoding
+
+The Java media runtime now also includes a production workflow layer:
+
+- configurable H.264, H.265, AV1 and VP9 encoding;
+- audio copy, AAC, or no-audio output;
+- progress callbacks, cooperative cancellation, processing FPS and realtime-factor metrics;
+- dimension-changing resize/crop/90-degree rotation with stream-shape propagation;
+- frame-preserving flips and 180-degree rotation;
+- Adobe/Resolve-style 3D `.cube` LUT grading with trilinear interpolation;
+- reusable alpha-aware image overlays;
+- HOLD/LINEAR/ease-in/ease-out/ease-in-out keyframe automation;
+- versioned JSON media presets with relative LUT/asset paths;
+- non-destructive recursive batch video processing;
+- configurable encoding/progress for optical-flow interpolation as well as ordinary video processing.
+
+Example preset processing:
+
+```bash
+mvn -q exec:java \
+  -Dexec.mainClass=io.synexia.chromellm.gpu.cli.GpuMain \
+  -Dexec.args="video --input in.mp4 --output out.mp4 --preset cinematic.json --codec h265 --crf 20"
+```
+
+See [docs/MEDIA_PRODUCTION_PIPELINE.md](docs/MEDIA_PRODUCTION_PIPELINE.md) and [docs/media-preset-v1.example.json](docs/media-preset-v1.example.json).

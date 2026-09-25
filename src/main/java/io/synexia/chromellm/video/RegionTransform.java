@@ -26,12 +26,24 @@ public final class RegionTransform implements FrameTransform, FrameTransformLife
 
     @Override
     public void onStreamStart(VideoStreamInfo streamInfo) {
+        FrameRegion effective = region.clampTo(streamInfo.width(), streamInfo.height());
+        VideoStreamInfo patchInfo = new VideoStreamInfo(
+                effective.width(),
+                effective.height(),
+                streamInfo.framesPerSecond());
+        rejectShapeChange(patchInfo);
         if (delegate instanceof FrameTransformLifecycle lifecycle) {
-            FrameRegion effective = region.clampTo(streamInfo.width(), streamInfo.height());
-            lifecycle.onStreamStart(new VideoStreamInfo(
-                    effective.width(),
-                    effective.height(),
-                    streamInfo.framesPerSecond()));
+            lifecycle.onStreamStart(patchInfo);
+        }
+    }
+
+    private void rejectShapeChange(VideoStreamInfo input) {
+        if (delegate instanceof FrameTransformShape shape) {
+            VideoStreamInfo output = shape.outputStreamInfo(input);
+            if (output.width() != input.width() || output.height() != input.height()) {
+                throw new IllegalArgumentException(
+                        "region delegate must preserve patch dimensions");
+            }
         }
     }
 

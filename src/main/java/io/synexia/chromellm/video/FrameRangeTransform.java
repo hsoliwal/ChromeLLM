@@ -27,7 +27,18 @@ public final class FrameRangeTransform implements FrameTransform, FrameTransform
 
     @Override
     public void onStreamStart(VideoStreamInfo streamInfo) {
+        rejectShapeChange(streamInfo);
         if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamStart(streamInfo);
+    }
+
+    private void rejectShapeChange(VideoStreamInfo streamInfo) {
+        if (delegate instanceof FrameTransformShape shape) {
+            VideoStreamInfo output = shape.outputStreamInfo(streamInfo);
+            if (output.width() != streamInfo.width() || output.height() != streamInfo.height()) {
+                throw new IllegalArgumentException(
+                        "dimension-changing transforms cannot be limited to a frame range");
+            }
+        }
     }
 
     @Override
