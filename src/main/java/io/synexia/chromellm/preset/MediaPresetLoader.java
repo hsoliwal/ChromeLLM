@@ -97,7 +97,9 @@ public final class MediaPresetLoader {
     }
 
     private static KeyframeCurve curve(List<KeyframePreset> presets) {
-        if (presets == null || presets.isEmpty()) return KeyframeCurve.constant(0f);
+        if (presets == null || presets.isEmpty()) {
+            return KeyframeCurve.constant(0f);
+        }
         return new KeyframeCurve(presets.stream().map(preset -> {
             if (preset.frame() == null || preset.value() == null) {
                 throw new IllegalArgumentException("keyframe frame and value are required");
@@ -111,7 +113,9 @@ public final class MediaPresetLoader {
 
     private static VideoEncodingOptions compileEncoding(EncodingPreset preset) {
         VideoEncodingOptions defaults = VideoEncodingOptions.defaults();
-        if (preset == null) return defaults;
+        if (preset == null) {
+            return defaults;
+        }
         VideoCodec codec = preset.videoCodec() == null
                 ? defaults.videoCodec()
                 : VideoCodec.valueOf(normalize(preset.videoCodec()));

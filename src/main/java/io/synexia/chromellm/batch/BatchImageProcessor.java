@@ -35,9 +35,15 @@ public final class BatchImageProcessor {
             int parallelism) throws IOException, InterruptedException {
         Path input = inputDirectory.toAbsolutePath().normalize();
         Path output = outputDirectory.toAbsolutePath().normalize();
-        if (!Files.isDirectory(input)) throw new IllegalArgumentException("inputDirectory is not a directory: " + input);
-        if (input.equals(output)) throw new IllegalArgumentException("input and output directories must differ");
-        if (parallelism < 1) throw new IllegalArgumentException("parallelism must be positive");
+        if (!Files.isDirectory(input)) {
+            throw new IllegalArgumentException("inputDirectory is not a directory: " + input);
+        }
+        if (input.equals(output)) {
+            throw new IllegalArgumentException("input and output directories must differ");
+        }
+        if (parallelism < 1) {
+            throw new IllegalArgumentException("parallelism must be positive");
+        }
 
         List<Path> files = discover(input, recursive);
         Files.createDirectories(output);
@@ -48,8 +54,12 @@ public final class BatchImageProcessor {
             int succeeded = 0;
             for (Path source : files) {
                 BatchFailure failure = processOne(input, output, source, overwrite, transformFactory);
-                if (failure == null) succeeded++;
-                else failures.add(failure);
+                if (failure == null) {
+                    succeeded++;
+                }
+                else {
+                    failures.add(failure);
+                }
             }
             return new BatchProcessResult(files.size(), succeeded, failures, Duration.between(start, Instant.now()));
         }
@@ -64,7 +74,9 @@ public final class BatchImageProcessor {
             for (Future<BatchFailure> future : futures) {
                 try {
                     BatchFailure failure = future.get();
-                    if (failure != null) failures.add(failure);
+                    if (failure != null) {
+                        failures.add(failure);
+                    }
                 } catch (java.util.concurrent.ExecutionException exception) {
                     Throwable cause = exception.getCause();
                     failures.add(new BatchFailure(input, cause == null ? exception.toString() : cause.toString()));
@@ -97,7 +109,9 @@ public final class BatchImageProcessor {
             Files.createDirectories(target.getParent());
             RgbaFrame frame = ImageIoFrames.read(source);
             FrameTransform transform = transformFactory.get();
-            if (transform == null) throw new IllegalStateException("transformFactory returned null");
+            if (transform == null) {
+                throw new IllegalStateException("transformFactory returned null");
+            }
             FrameTransformLifecycle lifecycle = transform instanceof FrameTransformLifecycle value ? value : null;
             if (lifecycle != null) {
                 lifecycle.reset();
@@ -107,7 +121,9 @@ public final class BatchImageProcessor {
                 RgbaFrame result = transform.apply(frame, 0L);
                 ImageIoFrames.write(result, target);
             } finally {
-                if (lifecycle != null) lifecycle.onStreamEnd();
+                if (lifecycle != null) {
+                    lifecycle.onStreamEnd();
+                }
             }
             return null;
         } catch (Exception exception) {
@@ -128,7 +144,9 @@ public final class BatchImageProcessor {
     private static boolean supported(Path path) {
         String name = path.getFileName().toString();
         int dot = name.lastIndexOf('.');
-        if (dot < 0 || dot == name.length() - 1) return false;
+        if (dot < 0 || dot == name.length() - 1) {
+            return false;
+        }
         return EXTENSIONS.contains(name.substring(dot + 1).toLowerCase(Locale.ROOT));
     }
 }

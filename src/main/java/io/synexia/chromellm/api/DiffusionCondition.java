@@ -7,7 +7,9 @@ public record DiffusionCondition(DiffusionMode mode, float[] data, int width, in
     public DiffusionCondition {
         Objects.requireNonNull(mode, "mode");
         data = data == null ? new float[0] : Arrays.copyOf(data, data.length);
-        if (width < 0 || height < 0 || channels < 0) throw new IllegalArgumentException("dimensions must be non-negative");
+        if (width < 0 || height < 0 || channels < 0) {
+            throw new IllegalArgumentException("dimensions must be non-negative");
+        }
         if ((mode == DiffusionMode.IMAGE || mode == DiffusionMode.DEPTH)
                 && width * height * Math.max(channels, 1) != data.length) {
             throw new IllegalArgumentException("condition data does not match dimensions");

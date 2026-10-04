@@ -29,7 +29,9 @@ public final class JavaDiffusionEngine implements DiffusionEngine {
             double u1 = Math.max(1e-12, rng.nextDouble()), u2 = rng.nextDouble();
             double mag = Math.sqrt(-2.0 * Math.log(u1));
             values[i] = (float)(mag * Math.cos(2.0 * Math.PI * u2));
-            if (i + 1 < size) values[i + 1] = (float)(mag * Math.sin(2.0 * Math.PI * u2));
+            if (i + 1 < size) {
+                values[i + 1] = (float)(mag * Math.sin(2.0 * Math.PI * u2));
+            }
         }
         return values;
     }
@@ -38,6 +40,8 @@ public final class JavaDiffusionEngine implements DiffusionEngine {
         float min = Float.POSITIVE_INFINITY, max = Float.NEGATIVE_INFINITY;
         for (float value : values) { min = Math.min(min, value); max = Math.max(max, value); }
         float range = Math.max(1e-8f, max - min);
-        for (int i = 0; i < values.length; i++) values[i] = (values[i] - min) / range;
+        for (int i = 0;i < values.length;i++) {
+            values[i] = (values[i] - min) / range;
+        }
     }
 }

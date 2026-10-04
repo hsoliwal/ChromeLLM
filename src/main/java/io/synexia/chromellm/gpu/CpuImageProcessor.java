@@ -119,14 +119,20 @@ public final class CpuImageProcessor implements ImageProcessor {
 
     private static void blur(byte[] s, byte[] d, int w, int h, int x, int y, int radius) {
         int[] sum = new int[4]; int count = 0;
-        for(int dy=-radius;dy<=radius;dy++) for(int dx=-radius;dx<=radius;dx++) {
-            int xx=Math.max(0,Math.min(w-1,x+dx)), yy=Math.max(0,Math.min(h-1,y+dy));
-            int i=(yy*w+xx)*4;
-            for(int c=0;c<4;c++) sum[c]+=unsigned(s[i+c]);
-            count++;
+        for (int dy = -radius;dy <= radius;dy++) {
+            for (int dx = -radius;dx <= radius;dx++) {
+                int xx = Math.max(0, Math.min(w - 1, x + dx)), yy = Math.max(0, Math.min(h - 1, y + dy));
+                int i = (yy * w + xx) * 4;
+                for (int c = 0;c < 4;c++) {
+                    sum[c] += unsigned(s[i + c]);
+                }
+                count++;
+            }
         }
         int o=(y*w+x)*4;
-        for(int c=0;c<4;c++) d[o+c]=(byte)(sum[c]/count);
+        for (int c = 0;c < 4;c++) {
+            d[o + c] = (byte)(sum[c] / count);
+        }
     }
 
     private static float luma(byte[] s,int w,int h,int x,int y) {
@@ -169,7 +175,9 @@ public final class CpuImageProcessor implements ImageProcessor {
     }
 
     private static void sameDimensions(RgbaFrame a,RgbaFrame b) {
-        if(a.width()!=b.width()||a.height()!=b.height()) throw new IllegalArgumentException("frame dimensions differ");
+        if (a.width() != b.width() || a.height() != b.height()) {
+            throw new IllegalArgumentException("frame dimensions differ");
+        }
     }
     private static int unsigned(byte b) { return b & 0xff; }
     private static float clamp01(float v) { return Math.max(0f,Math.min(1f,v)); }

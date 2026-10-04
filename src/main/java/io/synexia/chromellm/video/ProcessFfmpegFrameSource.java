@@ -44,8 +44,12 @@ public final class ProcessFfmpegFrameSource implements VideoFrameSource {
 
     @Override
     public RgbaFrame nextFrame() throws IOException {
-        if (closed) throw new IllegalStateException("frame source is closed");
-        if (eof) return null;
+        if (closed) {
+            throw new IllegalStateException("frame source is closed");
+        }
+        if (eof) {
+            return null;
+        }
 
         byte[] frame = new byte[info.rgbaFrameBytes()];
         int read = readFully(decoded, frame);
@@ -66,7 +70,9 @@ public final class ProcessFfmpegFrameSource implements VideoFrameSource {
 
     @Override
     public void close() throws IOException {
-        if (closed) return;
+        if (closed) {
+            return;
+        }
         closed = true;
         decoded.close();
         try {
@@ -85,7 +91,9 @@ public final class ProcessFfmpegFrameSource implements VideoFrameSource {
         int offset = 0;
         while (offset < target.length) {
             int read = input.read(target, offset, target.length - offset);
-            if (read < 0) break;
+            if (read < 0) {
+                break;
+            }
             offset += read;
         }
         return offset;

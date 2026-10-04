@@ -10,7 +10,9 @@ public final class BlockMatchingTranslationEstimator implements TranslationEstim
         if (searchRadius < 0 || searchRadius > 64) {
             throw new IllegalArgumentException("searchRadius must be between 0 and 64");
         }
-        if (sampleStride < 1) throw new IllegalArgumentException("sampleStride must be positive");
+        if (sampleStride < 1) {
+            throw new IllegalArgumentException("sampleStride must be positive");
+        }
         this.searchRadius = searchRadius;
         this.sampleStride = sampleStride;
     }

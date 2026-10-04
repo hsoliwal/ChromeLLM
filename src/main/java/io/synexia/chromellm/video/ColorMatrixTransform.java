@@ -14,7 +14,9 @@ public final class ColorMatrixTransform implements FrameTransform {
         }
         this.matrix = Arrays.copyOf(matrix, matrix.length);
         for (float value : this.matrix) {
-            if (!Float.isFinite(value)) throw new IllegalArgumentException("color matrix values must be finite");
+            if (!Float.isFinite(value)) {
+                throw new IllegalArgumentException("color matrix values must be finite");
+            }
         }
     }
 

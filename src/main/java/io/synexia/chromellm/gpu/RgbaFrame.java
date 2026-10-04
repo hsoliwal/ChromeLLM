@@ -9,7 +9,9 @@ public final class RgbaFrame {
     private final byte[] rgba;
 
     public RgbaFrame(int width, int height, byte[] rgba) {
-        if (width <= 0 || height <= 0) throw new IllegalArgumentException("width and height must be positive");
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("width and height must be positive");
+        }
         Objects.requireNonNull(rgba, "rgba");
         if (rgba.length != Math.multiplyExact(Math.multiplyExact(width, height), 4)) {
             throw new IllegalArgumentException("RGBA buffer length does not match dimensions");

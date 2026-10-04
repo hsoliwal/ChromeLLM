@@ -15,11 +15,15 @@ public final class UnsharpMaskTransform implements FrameTransform {
 
     public UnsharpMaskTransform(ImageProcessor processor, int radius, float amount, int threshold) {
         this.processor = Objects.requireNonNull(processor, "processor");
-        if (radius < 1 || radius > 8) throw new IllegalArgumentException("radius must be between 1 and 8");
+        if (radius < 1 || radius > 8) {
+            throw new IllegalArgumentException("radius must be between 1 and 8");
+        }
         if (!Float.isFinite(amount) || amount < 0f || amount > 5f) {
             throw new IllegalArgumentException("amount must be between 0 and 5");
         }
-        if (threshold < 0 || threshold > 255) throw new IllegalArgumentException("threshold must be between 0 and 255");
+        if (threshold < 0 || threshold > 255) {
+            throw new IllegalArgumentException("threshold must be between 0 and 255");
+        }
         this.radius = radius;
         this.amount = amount;
         this.threshold = threshold;

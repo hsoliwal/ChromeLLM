@@ -16,7 +16,9 @@ public final class JniFfmpegFrameSource implements VideoFrameSource {
     public JniFfmpegFrameSource(Path input) {
         Objects.requireNonNull(input, "input");
         this.handle = NativeFfmpegDecoder.open(input.toAbsolutePath().toString());
-        if (handle == 0L) throw new IllegalStateException("native FFmpeg decoder failed to open input");
+        if (handle == 0L) {
+            throw new IllegalStateException("native FFmpeg decoder failed to open input");
+        }
         this.info = new VideoStreamInfo(
                 NativeFfmpegDecoder.width(handle),
                 NativeFfmpegDecoder.height(handle),
@@ -34,15 +36,21 @@ public final class JniFfmpegFrameSource implements VideoFrameSource {
         ensureOpen();
         byte[] rgba = new byte[info.rgbaFrameBytes()];
         int rc = NativeFfmpegDecoder.nextRgba(handle, rgba);
-        if (rc == 0) return null;
-        if (rc < 0) throw new IOException("native FFmpeg decode failed with code " + rc);
+        if (rc == 0) {
+            return null;
+        }
+        if (rc < 0) {
+            throw new IOException("native FFmpeg decode failed with code " + rc);
+        }
         return new RgbaFrame(info.width(), info.height(), rgba);
     }
 
     public void seekMillis(long millis) throws IOException {
         ensureOpen();
         int rc = NativeFfmpegDecoder.seekMillis(handle, millis);
-        if (rc < 0) throw new IOException("native FFmpeg seek failed with code " + rc);
+        if (rc < 0) {
+            throw new IOException("native FFmpeg seek failed with code " + rc);
+        }
     }
 
     @Override
@@ -59,6 +67,8 @@ public final class JniFfmpegFrameSource implements VideoFrameSource {
     }
 
     private void ensureOpen() {
-        if (handle == 0L) throw new IllegalStateException("frame source is closed");
+        if (handle == 0L) {
+            throw new IllegalStateException("frame source is closed");
+        }
     }
 }

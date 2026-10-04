@@ -52,16 +52,22 @@ public final class MaskedTransform implements FrameTransform, FrameTransformLife
                         "masked delegate must preserve frame dimensions");
             }
         }
-        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamStart(streamInfo);
+        if (delegate instanceof FrameTransformLifecycle lifecycle) {
+            lifecycle.onStreamStart(streamInfo);
+        }
     }
 
     @Override
     public void reset() {
-        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.reset();
+        if (delegate instanceof FrameTransformLifecycle lifecycle) {
+            lifecycle.reset();
+        }
     }
 
     @Override
     public void onStreamEnd() {
-        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamEnd();
+        if (delegate instanceof FrameTransformLifecycle lifecycle) {
+            lifecycle.onStreamEnd();
+        }
     }
 }

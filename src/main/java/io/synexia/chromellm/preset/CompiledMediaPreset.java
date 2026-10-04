@@ -13,6 +13,8 @@ public record CompiledMediaPreset(
     public CompiledMediaPreset {
         transform = Objects.requireNonNull(transform, "transform");
         encodingOptions = Objects.requireNonNull(encodingOptions, "encodingOptions");
-        if (progressEveryFrames < 1) throw new IllegalArgumentException("progressEveryFrames must be positive");
+        if (progressEveryFrames < 1) {
+            throw new IllegalArgumentException("progressEveryFrames must be positive");
+        }
     }
 }

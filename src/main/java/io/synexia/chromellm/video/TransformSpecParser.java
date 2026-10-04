@@ -23,15 +23,21 @@ public final class TransformSpecParser {
         List<FrameTransform> transforms = new ArrayList<>();
         for (String raw : specification.split(",")) {
             String token = raw.trim();
-            if (!token.isEmpty()) transforms.add(parseTransform(token));
+            if (!token.isEmpty()) {
+                transforms.add(parseTransform(token));
+            }
         }
-        if (transforms.isEmpty()) throw new IllegalArgumentException("pipeline specification is empty");
+        if (transforms.isEmpty()) {
+            throw new IllegalArgumentException("pipeline specification is empty");
+        }
         return new TransformChain(transforms);
     }
 
     public FrameTransform parseTransform(String specification) {
         String[] parts = specification.split(":");
-        if (parts.length == 0 || parts[0].isBlank()) throw new IllegalArgumentException("empty transform");
+        if (parts.length == 0 || parts[0].isBlank()) {
+            throw new IllegalArgumentException("empty transform");
+        }
         String name = normalize(parts[0]);
 
         return switch (name) {

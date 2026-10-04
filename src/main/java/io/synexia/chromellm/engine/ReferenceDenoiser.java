@@ -8,13 +8,17 @@ public final class ReferenceDenoiser implements Denoiser {
     public float[] predictNoise(float[] latent, int width, int height, int channels, int step, int totalSteps, DiffusionCondition condition, float guidanceScale) {
         float[] prediction = new float[latent.length];
         float progress = totalSteps <= 1 ? 1f : 1f - ((float)step / (totalSteps - 1));
-        for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) for (int c = 0; c < channels; c++) {
-            int index = (y * width + x) * channels + c;
-            float local = localAverage(latent, width, height, channels, x, y, c);
-            float structure = latent[index] - local;
-            float target = conditionTarget(condition, width, height, channels, x, y, c);
-            float attraction = condition.mode() == DiffusionMode.UNCONDITIONED ? 0f : (latent[index] - target) * Math.min(guidanceScale / 10f, 2f);
-            prediction[index] = structure * (0.55f + 0.35f * progress) + attraction * (0.15f + 0.35f * progress);
+        for (int y = 0;y < height;y++) {
+            for (int x = 0;x < width;x++) {
+                for (int c = 0;c < channels;c++) {
+                    int index = (y * width + x) * channels + c;
+                    float local = localAverage(latent, width, height, channels, x, y, c);
+                    float structure = latent[index] - local;
+                    float target = conditionTarget(condition, width, height, channels, x, y, c);
+                    float attraction = condition.mode() == DiffusionMode.UNCONDITIONED ? 0f : (latent[index] - target) * Math.min(guidanceScale / 10f, 2f);
+                    prediction[index] = structure * (0.55f + 0.35f * progress) + attraction * (0.15f + 0.35f * progress);
+                }
+            }
         }
         return prediction;
     }
