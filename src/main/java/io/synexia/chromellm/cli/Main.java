@@ -55,7 +55,9 @@ public final class Main {
             return r;
         }
         private static String require(String flag,String value) {
-            if(value==null) throw new IllegalArgumentException("missing value for "+flag);
+            if (value == null) {
+                throw new IllegalArgumentException("missing value for " + flag);
+            }
             return value;
         }
     }

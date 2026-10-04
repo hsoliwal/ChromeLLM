@@ -4,19 +4,23 @@ public final class DiffusionScheduler {
     private final float[] alphaBar;
 
     public DiffusionScheduler(int steps) {
-        if (steps < 1) throw new IllegalArgumentException("steps must be positive");
+        if (steps < 1) {
+            throw new IllegalArgumentException("steps must be positive");
+        }
         this.alphaBar = new float[steps];
         float product = 1f;
         for (int i = 0; i < steps; i++) {
             float t = steps == 1 ? 0f : (float)i / (steps - 1);
             float beta = 0.0001f + t * (0.02f - 0.0001f);
-            product *= (1f - beta);
+            product *= 1f - beta;
             alphaBar[i] = product;
         }
     }
 
     public float[] step(float[] x, float[] predictedNoise, int index, float eta, java.util.random.RandomGenerator rng) {
-        if (x.length != predictedNoise.length) throw new IllegalArgumentException("latent and noise prediction size differ");
+        if (x.length != predictedNoise.length) {
+            throw new IllegalArgumentException("latent and noise prediction size differ");
+        }
         float aBar = alphaBar[index];
         float prevABar = index == 0 ? 1f : alphaBar[index - 1];
         float sqrtABar = (float)Math.sqrt(aBar);

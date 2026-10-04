@@ -8,8 +8,12 @@ public record ProcessingProgress(
         double processingFramesPerSecond) {
 
     public ProcessingProgress {
-        if (framesProcessed < 0L) throw new IllegalArgumentException("framesProcessed must be non-negative");
-        if (elapsed == null || elapsed.isNegative()) throw new IllegalArgumentException("elapsed must be non-negative");
+        if (framesProcessed < 0L) {
+            throw new IllegalArgumentException("framesProcessed must be non-negative");
+        }
+        if (elapsed == null || elapsed.isNegative()) {
+            throw new IllegalArgumentException("elapsed must be non-negative");
+        }
         if (!Double.isFinite(processingFramesPerSecond) || processingFramesPerSecond < 0d) {
             throw new IllegalArgumentException("processingFramesPerSecond must be finite and non-negative");
         }

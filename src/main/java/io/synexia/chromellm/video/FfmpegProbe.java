@@ -30,10 +30,14 @@ public final class FfmpegProbe {
                 .start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
         int exit = process.waitFor();
-        if (exit != 0) throw new IOException("ffprobe failed with exit code " + exit);
+        if (exit != 0) {
+            throw new IOException("ffprobe failed with exit code " + exit);
+        }
 
         String[] lines = output.lines().map(String::trim).filter(s -> !s.isEmpty()).toArray(String[]::new);
-        if (lines.length < 3) throw new IOException("Unexpected ffprobe output: " + output);
+        if (lines.length < 3) {
+            throw new IOException("Unexpected ffprobe output: " + output);
+        }
 
         int width = Integer.parseInt(lines[0]);
         int height = Integer.parseInt(lines[1]);
@@ -44,10 +48,14 @@ public final class FfmpegProbe {
     static double parseRate(String value) {
         String text = value.trim();
         int slash = text.indexOf('/');
-        if (slash < 0) return Double.parseDouble(text);
+        if (slash < 0) {
+            return Double.parseDouble(text);
+        }
         double numerator = Double.parseDouble(text.substring(0, slash));
         double denominator = Double.parseDouble(text.substring(slash + 1));
-        if (denominator == 0d) throw new IllegalArgumentException("invalid frame rate: " + value);
+        if (denominator == 0d) {
+            throw new IllegalArgumentException("invalid frame rate: " + value);
+        }
         return numerator / denominator;
     }
 }

@@ -7,14 +7,18 @@ public final class ResizeTransform implements FrameTransform, FrameTransformShap
     private final int height;
 
     public ResizeTransform(int width, int height) {
-        if (width <= 0 || height <= 0) throw new IllegalArgumentException("resize dimensions must be positive");
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("resize dimensions must be positive");
+        }
         this.width = width;
         this.height = height;
     }
 
     @Override
     public RgbaFrame apply(RgbaFrame frame, long frameIndex) {
-        if (frame.width() == width && frame.height() == height) return frame;
+        if (frame.width() == width && frame.height() == height) {
+            return frame;
+        }
         byte[] source = frame.pixels();
         byte[] output = new byte[width * height * 4];
 

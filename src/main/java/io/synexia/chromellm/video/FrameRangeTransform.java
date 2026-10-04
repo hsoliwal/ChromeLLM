@@ -28,7 +28,9 @@ public final class FrameRangeTransform implements FrameTransform, FrameTransform
     @Override
     public void onStreamStart(VideoStreamInfo streamInfo) {
         rejectShapeChange(streamInfo);
-        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamStart(streamInfo);
+        if (delegate instanceof FrameTransformLifecycle lifecycle) {
+            lifecycle.onStreamStart(streamInfo);
+        }
     }
 
     private void rejectShapeChange(VideoStreamInfo streamInfo) {
@@ -43,11 +45,15 @@ public final class FrameRangeTransform implements FrameTransform, FrameTransform
 
     @Override
     public void reset() {
-        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.reset();
+        if (delegate instanceof FrameTransformLifecycle lifecycle) {
+            lifecycle.reset();
+        }
     }
 
     @Override
     public void onStreamEnd() {
-        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamEnd();
+        if (delegate instanceof FrameTransformLifecycle lifecycle) {
+            lifecycle.onStreamEnd();
+        }
     }
 }

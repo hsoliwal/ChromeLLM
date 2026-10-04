@@ -7,7 +7,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class CubeLutParserTest {
     @TempDir
@@ -45,5 +46,21 @@ class CubeLutParserTest {
         Path cube = temp.resolve("bad.cube");
         Files.writeString(cube, "LUT_3D_SIZE 2\n0 0 0\n");
         assertThrows(IllegalArgumentException.class, () -> new CubeLutParser().parse(cube));
+    }
+
+    @Test
+    void rejectsNaNDomainBoundsForEveryChannel() {
+        for (int channel = 0; channel < 3; channel++) {
+            float[] domainMin = {0f, 0f, 0f};
+            float[] domainMax = {1f, 1f, 1f};
+            domainMin[channel] = Float.NaN;
+            assertThrows(IllegalArgumentException.class,
+                    () -> new CubeLut(2, domainMin, domainMax, new float[24]));
+
+            domainMin[channel] = 0f;
+            domainMax[channel] = Float.NaN;
+            assertThrows(IllegalArgumentException.class,
+                    () -> new CubeLut(2, domainMin, domainMax, new float[24]));
+        }
     }
 }

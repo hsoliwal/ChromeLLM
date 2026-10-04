@@ -15,10 +15,14 @@ public final class ObjectComposer {
 
         for (int oy = 0; oy < object.height(); oy++) {
             int by = y + oy;
-            if (by < 0 || by >= background.height()) continue;
+            if (by < 0 || by >= background.height()) {
+                continue;
+            }
             for (int ox = 0; ox < object.width(); ox++) {
                 int bx = x + ox;
-                if (bx < 0 || bx >= background.width()) continue;
+                if (bx < 0 || bx >= background.width()) {
+                    continue;
+                }
                 int source = (oy * object.width() + ox) * 4;
                 int target = (by * background.width() + bx) * 4;
                 canvas[target] = objectPixels[source];

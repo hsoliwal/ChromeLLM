@@ -13,7 +13,9 @@ public final class JniOpenClImageProcessor implements ImageProcessor {
 
     public JniOpenClImageProcessor(boolean allowCpuFallback) {
         this.handle=JniGpu.create(allowCpuFallback);
-        if(handle==0L) throw new IllegalStateException("OpenCL JNI initialization failed");
+        if (handle == 0L) {
+            throw new IllegalStateException("OpenCL JNI initialization failed");
+        }
         this.accelerated=JniGpu.hardwareAccelerated(handle);
         this.deviceName=JniGpu.deviceName(handle);
     }
@@ -28,7 +30,9 @@ public final class JniOpenClImageProcessor implements ImageProcessor {
     @Override
     public RgbaFrame blend(RgbaFrame base,RgbaFrame overlay,float opacity) {
         ensureOpen();
-        if(base.width()!=overlay.width()||base.height()!=overlay.height()) throw new IllegalArgumentException("frame dimensions differ");
+        if (base.width() != overlay.width() || base.height() != overlay.height()) {
+            throw new IllegalArgumentException("frame dimensions differ");
+        }
         return new RgbaFrame(base.width(),base.height(),
                 JniGpu.blend(handle,base.pixels(),overlay.pixels(),base.width(),base.height(),opacity));
     }
@@ -50,5 +54,8 @@ public final class JniOpenClImageProcessor implements ImageProcessor {
         }
     }
 
-    private void ensureOpen() { if(handle==0L) throw new IllegalStateException("processor is closed"); }
+    private void ensureOpen() {
+        if (handle == 0L) {
+            throw new IllegalStateException("processor is closed");
+        } }
 }

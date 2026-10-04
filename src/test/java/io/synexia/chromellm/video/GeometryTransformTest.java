@@ -3,7 +3,7 @@ package io.synexia.chromellm.video;
 import io.synexia.chromellm.gpu.RgbaFrame;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class GeometryTransformTest {
     @Test

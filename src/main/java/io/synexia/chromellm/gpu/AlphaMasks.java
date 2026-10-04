@@ -14,7 +14,9 @@ public final class AlphaMasks {
     }
 
     public static AlphaMask threshold(AlphaMask mask, int threshold) {
-        if (threshold < 0 || threshold > 255) throw new IllegalArgumentException("threshold must be between 0 and 255");
+        if (threshold < 0 || threshold > 255) {
+            throw new IllegalArgumentException("threshold must be between 0 and 255");
+        }
         byte[] source = mask.values();
         byte[] output = new byte[source.length];
         for (int i = 0; i < source.length; i++) {
@@ -24,7 +26,9 @@ public final class AlphaMasks {
     }
 
     public static AlphaMask feather(AlphaMask mask, int radius) {
-        if (radius < 1 || radius > 64) throw new IllegalArgumentException("radius must be between 1 and 64");
+        if (radius < 1 || radius > 64) {
+            throw new IllegalArgumentException("radius must be between 1 and 64");
+        }
         byte[] source = mask.values();
         byte[] horizontal = new byte[source.length];
         byte[] output = new byte[source.length];

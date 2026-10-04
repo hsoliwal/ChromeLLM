@@ -10,7 +10,9 @@ public final class SceneCutDetector {
         if (!Double.isFinite(threshold) || threshold < 0d || threshold > 1d) {
             throw new IllegalArgumentException("threshold must be between 0 and 1");
         }
-        if (sampleStride < 1) throw new IllegalArgumentException("sampleStride must be positive");
+        if (sampleStride < 1) {
+            throw new IllegalArgumentException("sampleStride must be positive");
+        }
         this.threshold = threshold;
         this.sampleStride = sampleStride;
     }

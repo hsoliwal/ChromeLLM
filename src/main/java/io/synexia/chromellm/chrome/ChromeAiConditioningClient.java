@@ -40,15 +40,21 @@ public final class ChromeAiConditioningClient {
                     .header("Content-Type","application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
             var response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() / 100 != 2) throw new IllegalStateException("ChromeLLM HTTP " + response.statusCode() + ": " + response.body());
+            if (response.statusCode() / 100 != 2) {
+                throw new IllegalStateException("ChromeLLM HTTP " + response.statusCode() + ": " + response.body());
+            }
             String content = mapper.readTree(response.body()).path("choices").path(0).path("message").path("content").asText();
             JsonNode plan = mapper.readTree(stripFence(content));
             List<Float> values = new ArrayList<>();
             for (JsonNode value : plan.path("vector")) values.add((float)Math.max(0d, Math.min(1d, value.asDouble())));
-            if (values.isEmpty()) throw new IllegalStateException("ChromeLLM returned an empty conditioning vector");
+            if (values.isEmpty()) {
+                throw new IllegalStateException("ChromeLLM returned an empty conditioning vector");
+            }
             float[] vector = new float[values.size() + 1];
             vector[0] = (plan.path("class_id").asInt(0) & 0xFFFF) / 65535f;
-            for (int i = 0; i < values.size(); i++) vector[i + 1] = values.get(i);
+            for (int i = 0;i < values.size();i++) {
+                vector[i + 1] = values.get(i);
+            }
             return DiffusionCondition.vector(vector);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to call ChromeLLM", e);
@@ -63,8 +69,12 @@ public final class ChromeAiConditioningClient {
         String value = content.trim();
         if (value.startsWith(fence)) {
             int firstNewline = value.indexOf('\n');
-            if (firstNewline >= 0) value = value.substring(firstNewline + 1);
-            if (value.endsWith(fence)) value = value.substring(0, value.length() - fence.length());
+            if (firstNewline >= 0) {
+                value = value.substring(firstNewline + 1);
+            }
+            if (value.endsWith(fence)) {
+                value = value.substring(0, value.length() - fence.length());
+            }
         }
         return value.trim();
     }

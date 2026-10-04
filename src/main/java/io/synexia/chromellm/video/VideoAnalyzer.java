@@ -27,7 +27,9 @@ public final class VideoAnalyzer {
             int frameStride) throws IOException, InterruptedException {
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(detector, "detector");
-        if (frameStride < 1) throw new IllegalArgumentException("frameStride must be positive");
+        if (frameStride < 1) {
+            throw new IllegalArgumentException("frameStride must be positive");
+        }
 
         Instant start = Instant.now();
         try (VideoFrameSource source = VideoFrameSources.open(input, decoderBackend, ffmpeg, probe)) {
@@ -42,7 +44,9 @@ public final class VideoAnalyzer {
 
             while (true) {
                 RgbaFrame frame = source.nextFrame();
-                if (frame == null) break;
+                if (frame == null) {
+                    break;
+                }
                 if (frameIndex % frameStride == 0L) {
                     double luma = FrameStatistics.averageLuma(frame);
                     sum += luma;
@@ -51,7 +55,9 @@ public final class VideoAnalyzer {
                     sampled++;
                     if (previousSample != null) {
                         double score = detector.score(previousSample, frame);
-                        if (score >= detector.threshold()) cuts.add(new SceneCut(frameIndex, score));
+                        if (score >= detector.threshold()) {
+                            cuts.add(new SceneCut(frameIndex, score));
+                        }
                     }
                     previousSample = frame;
                 }

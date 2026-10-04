@@ -9,7 +9,9 @@ public final class CubeLut {
     private final float[] table;
 
     public CubeLut(int size, float[] domainMin, float[] domainMax, float[] table) {
-        if (size < 2 || size > 256) throw new IllegalArgumentException("LUT size must be between 2 and 256");
+        if (size < 2 || size > 256) {
+            throw new IllegalArgumentException("LUT size must be between 2 and 256");
+        }
         if (domainMin == null || domainMin.length != 3 || domainMax == null || domainMax.length != 3) {
             throw new IllegalArgumentException("LUT domain vectors must contain 3 values");
         }

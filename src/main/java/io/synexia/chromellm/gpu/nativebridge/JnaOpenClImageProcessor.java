@@ -20,7 +20,9 @@ public final class JnaOpenClImageProcessor implements ImageProcessor {
     JnaOpenClImageProcessor(NativeGpuLibrary library, boolean allowCpuFallback) {
         this.library = library;
         this.handle = library.gpu_create(allowCpuFallback ? 1 : 0);
-        if (handle == null) throw new IllegalStateException("OpenCL initialization failed: " + library.gpu_last_error());
+        if (handle == null) {
+            throw new IllegalStateException("OpenCL initialization failed: " + library.gpu_last_error());
+        }
         this.deviceName = library.gpu_device_name(handle);
         this.accelerated = library.gpu_hardware_accelerated(handle) != 0;
     }
@@ -37,7 +39,9 @@ public final class JnaOpenClImageProcessor implements ImageProcessor {
     @Override
     public RgbaFrame blend(RgbaFrame base, RgbaFrame overlay, float opacity) {
         ensureOpen();
-        if(base.width()!=overlay.width()||base.height()!=overlay.height()) throw new IllegalArgumentException("frame dimensions differ");
+        if (base.width() != overlay.width() || base.height() != overlay.height()) {
+            throw new IllegalArgumentException("frame dimensions differ");
+        }
         byte[] a=base.pixels(), b=overlay.pixels(), out=new byte[a.length];
         check(library.gpu_blend_rgba8(handle,a,b,out,base.width(),base.height(),opacity),"gpu_blend_rgba8");
         return new RgbaFrame(base.width(),base.height(),out);
@@ -62,8 +66,13 @@ public final class JnaOpenClImageProcessor implements ImageProcessor {
         }
     }
 
-    private void ensureOpen() { if(handle==null) throw new IllegalStateException("processor is closed"); }
+    private void ensureOpen() {
+        if (handle == null) {
+            throw new IllegalStateException("processor is closed");
+        } }
     private void check(int rc,String operation) {
-        if(rc!=0) throw new IllegalStateException(operation+" failed ("+rc+"): "+library.gpu_last_error());
+        if (rc != 0) {
+            throw new IllegalStateException(operation + " failed (" + rc + "): " + library.gpu_last_error());
+        }
     }
 }

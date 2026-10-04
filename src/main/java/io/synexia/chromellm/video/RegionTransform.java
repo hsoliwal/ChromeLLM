@@ -49,11 +49,15 @@ public final class RegionTransform implements FrameTransform, FrameTransformLife
 
     @Override
     public void reset() {
-        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.reset();
+        if (delegate instanceof FrameTransformLifecycle lifecycle) {
+            lifecycle.reset();
+        }
     }
 
     @Override
     public void onStreamEnd() {
-        if (delegate instanceof FrameTransformLifecycle lifecycle) lifecycle.onStreamEnd();
+        if (delegate instanceof FrameTransformLifecycle lifecycle) {
+            lifecycle.onStreamEnd();
+        }
     }
 }

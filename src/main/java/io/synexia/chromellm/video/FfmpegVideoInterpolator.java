@@ -62,7 +62,9 @@ public final class FfmpegVideoInterpolator {
         Objects.requireNonNull(encodingOptions, "encodingOptions");
         progressListener = Objects.requireNonNullElse(progressListener, ProcessingProgressListener.NONE);
         control = Objects.requireNonNullElse(control, ProcessingControl.NEVER_CANCELLED);
-        if (progressEveryFrames < 1) throw new IllegalArgumentException("progressEveryFrames must be positive");
+        if (progressEveryFrames < 1) {
+            throw new IllegalArgumentException("progressEveryFrames must be positive");
+        }
 
         Instant start = Instant.now();
         long written = 0L;
@@ -102,7 +104,9 @@ public final class FfmpegVideoInterpolator {
                 while (true) {
                     control.checkCancelled();
                     RgbaFrame next = source.nextFrame();
-                    if (next == null) break;
+                    if (next == null) {
+                        break;
+                    }
 
                     for (int step = 1; step < factor; step++) {
                         control.checkCancelled();

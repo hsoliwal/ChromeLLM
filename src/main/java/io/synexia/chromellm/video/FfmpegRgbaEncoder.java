@@ -43,7 +43,9 @@ final class FfmpegRgbaEncoder implements AutoCloseable {
     }
 
     void write(RgbaFrame frame) throws IOException {
-        if (closed) throw new IllegalStateException("encoder is closed");
+        if (closed) {
+            throw new IllegalStateException("encoder is closed");
+        }
         if (frame.width() != info.width() || frame.height() != info.height()) {
             throw new IllegalArgumentException("frame dimensions differ from encoder stream");
         }
@@ -52,7 +54,9 @@ final class FfmpegRgbaEncoder implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        if (closed) return;
+        if (closed) {
+            return;
+        }
         closed = true;
 
         IOException failure = null;
@@ -66,18 +70,28 @@ final class FfmpegRgbaEncoder implements AutoCloseable {
             int exit = process.waitFor();
             if (exit != 0) {
                 IOException exitFailure = new IOException("ffmpeg encoder failed with exit code " + exit);
-                if (failure == null) failure = exitFailure;
-                else failure.addSuppressed(exitFailure);
+                if (failure == null) {
+                    failure = exitFailure;
+                }
+                else {
+                    failure.addSuppressed(exitFailure);
+                }
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             process.destroyForcibly();
             IOException interrupted = new IOException("interrupted while closing ffmpeg encoder", exception);
-            if (failure == null) failure = interrupted;
-            else failure.addSuppressed(interrupted);
+            if (failure == null) {
+                failure = interrupted;
+            }
+            else {
+                failure.addSuppressed(interrupted);
+            }
         }
 
-        if (failure != null) throw failure;
+        if (failure != null) {
+            throw failure;
+        }
     }
 
     static List<String> command(

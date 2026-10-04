@@ -6,7 +6,8 @@ import io.synexia.chromellm.vision.nativebridge.OpenCvVisionProcessor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @EnabledIfSystemProperty(named = "chromellm.native.integration", matches = "true")
 class OpenCvVisionProcessorIntegrationTest {

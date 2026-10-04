@@ -4,7 +4,8 @@ import io.synexia.chromellm.gpu.AlphaMask;
 import io.synexia.chromellm.gpu.RgbaFrame;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JavaVisionProcessorTest {
     @Test

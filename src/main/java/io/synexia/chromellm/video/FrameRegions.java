@@ -23,10 +23,14 @@ public final class FrameRegions {
         byte[] source = patch.pixels();
         for (int py = 0; py < patch.height(); py++) {
             int fy = y + py;
-            if (fy < 0 || fy >= frame.height()) continue;
+            if (fy < 0 || fy >= frame.height()) {
+                continue;
+            }
             for (int px = 0; px < patch.width(); px++) {
                 int fx = x + px;
-                if (fx < 0 || fx >= frame.width()) continue;
+                if (fx < 0 || fx >= frame.width()) {
+                    continue;
+                }
                 int src = (py * patch.width() + px) * 4;
                 int dst = (fy * frame.width() + fx) * 4;
                 output[dst] = source[src];

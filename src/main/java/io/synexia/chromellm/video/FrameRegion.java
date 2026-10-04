@@ -2,7 +2,9 @@ package io.synexia.chromellm.video;
 
 public record FrameRegion(int x, int y, int width, int height) {
     public FrameRegion {
-        if (width <= 0 || height <= 0) throw new IllegalArgumentException("region dimensions must be positive");
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("region dimensions must be positive");
+        }
     }
 
     public FrameRegion clampTo(int frameWidth, int frameHeight) {

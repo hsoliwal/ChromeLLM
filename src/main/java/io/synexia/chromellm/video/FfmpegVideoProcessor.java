@@ -66,7 +66,9 @@ public final class FfmpegVideoProcessor {
         Objects.requireNonNull(encodingOptions, "encodingOptions");
         progressListener = Objects.requireNonNullElse(progressListener, ProcessingProgressListener.NONE);
         control = Objects.requireNonNullElse(control, ProcessingControl.NEVER_CANCELLED);
-        if (progressEveryFrames < 1) throw new IllegalArgumentException("progressEveryFrames must be positive");
+        if (progressEveryFrames < 1) {
+            throw new IllegalArgumentException("progressEveryFrames must be positive");
+        }
 
         Instant start = Instant.now();
         long frames = 0L;
@@ -85,7 +87,9 @@ public final class FfmpegVideoProcessor {
             FrameTransformLifecycle lifecycle = transform instanceof FrameTransformLifecycle value
                     ? value
                     : null;
-            if (lifecycle != null) lifecycle.onStreamStart(info);
+            if (lifecycle != null) {
+                lifecycle.onStreamStart(info);
+            }
 
             try {
                 try (FfmpegRgbaEncoder encoder = new FfmpegRgbaEncoder(
@@ -97,7 +101,9 @@ public final class FfmpegVideoProcessor {
                     while (true) {
                         control.checkCancelled();
                         RgbaFrame frame = source.nextFrame();
-                        if (frame == null) break;
+                        if (frame == null) {
+                            break;
+                        }
 
                         RgbaFrame result = Objects.requireNonNull(
                                 transform.apply(frame, frames),
@@ -117,7 +123,9 @@ public final class FfmpegVideoProcessor {
                     }
                 }
             } finally {
-                if (lifecycle != null) lifecycle.onStreamEnd();
+                if (lifecycle != null) {
+                    lifecycle.onStreamEnd();
+                }
             }
 
             progressListener.onProgress(progress(frames, start));

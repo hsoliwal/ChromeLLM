@@ -40,7 +40,9 @@ public final class FrameStatistics {
         long[] b = histogram(second, stride);
         long aTotal = sum(a);
         long bTotal = sum(b);
-        if (aTotal == 0L || bTotal == 0L) return 0d;
+        if (aTotal == 0L || bTotal == 0L) {
+            return 0d;
+        }
 
         double distance = 0d;
         for (int i = 0; i < HISTOGRAM_BINS; i++) {

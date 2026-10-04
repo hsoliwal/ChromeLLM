@@ -9,7 +9,9 @@ public final class AlphaMask {
     private final byte[] alpha;
 
     public AlphaMask(int width, int height, byte[] alpha) {
-        if (width <= 0 || height <= 0) throw new IllegalArgumentException("width and height must be positive");
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("width and height must be positive");
+        }
         Objects.requireNonNull(alpha, "alpha");
         if (alpha.length != Math.multiplyExact(width, height)) {
             throw new IllegalArgumentException("mask length does not match dimensions");

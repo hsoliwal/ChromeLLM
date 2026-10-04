@@ -223,7 +223,7 @@ public final class GpuMain {
                 "progress-every",
                 preset == null ? 30 : preset.progressEveryFrames());
 
-        ProcessingProgressListener progress = value -> printProgress(value);
+        ProcessingProgressListener progress = GpuMain::printProgress;
         var result = new FfmpegVideoProcessor(
                 System.getProperty("chromellm.ffmpeg", "ffmpeg"),
                 new FfmpegProbe(),
@@ -436,7 +436,9 @@ public final class GpuMain {
 
     private static String pipelineSpecification(Map<String, String> options) {
         String pipeline = options.get("pipeline");
-        if (pipeline != null && !pipeline.isBlank()) return pipeline;
+        if (pipeline != null && !pipeline.isBlank()) {
+            return pipeline;
+        }
         String operation = required(options, "op");
         return operation
                 + ":" + floatValue(options, "p0", 0f)

@@ -38,8 +38,12 @@ public final class BatchVideoProcessor {
             String ffmpeg) throws IOException {
         Path input = inputDirectory.toAbsolutePath().normalize();
         Path output = outputDirectory.toAbsolutePath().normalize();
-        if (!Files.isDirectory(input)) throw new IllegalArgumentException("inputDirectory is not a directory: " + input);
-        if (input.equals(output)) throw new IllegalArgumentException("input and output directories must differ");
+        if (!Files.isDirectory(input)) {
+            throw new IllegalArgumentException("inputDirectory is not a directory: " + input);
+        }
+        if (input.equals(output)) {
+            throw new IllegalArgumentException("input and output directories must differ");
+        }
 
         List<Path> files = discover(input, recursive);
         Files.createDirectories(output);
@@ -62,7 +66,9 @@ public final class BatchVideoProcessor {
             try {
                 Files.createDirectories(target.getParent());
                 FrameTransform transform = transformFactory.get();
-                if (transform == null) throw new IllegalStateException("transformFactory returned null");
+                if (transform == null) {
+                    throw new IllegalStateException("transformFactory returned null");
+                }
                 new FfmpegVideoProcessor(
                         ffmpeg,
                         new FfmpegProbe(),
@@ -102,7 +108,9 @@ public final class BatchVideoProcessor {
     private static boolean supported(Path path) {
         String name = path.getFileName().toString();
         int dot = name.lastIndexOf('.');
-        if (dot < 0 || dot == name.length() - 1) return false;
+        if (dot < 0 || dot == name.length() - 1) {
+            return false;
+        }
         return EXTENSIONS.contains(name.substring(dot + 1).toLowerCase(Locale.ROOT));
     }
 }
