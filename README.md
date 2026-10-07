@@ -200,3 +200,101 @@ weights are not included and are not licensed by this project.
 ## 友情链接
 
 - [LINUX.DO](https://linux.do/)
+
+
+## Java / JNI / JNA Diffusion
+
+An additive Java 21 diffusion subsystem is available in this fork. It runs independently of Gemini Nano, supports unconditioned, image, depth, class-label, and numeric-vector conditioning, and provides three execution paths:
+
+- pure Java reference DDIM pipeline;
+- JNA through a stable portable C ABI;
+- JNI through the same native C++ backend.
+
+The existing ChromeLLM/OpenAI-compatible server can optionally act as a local scene-conditioning planner; the diffusion engine itself does not require an LLM.
+
+See [docs/DIFFUSION_JAVA_NATIVE.md](docs/DIFFUSION_JAVA_NATIVE.md).
+
+
+## Local GPU Image / Video Processing
+
+The fork also contains a Java 21 image/video processing layer that treats decoded images and video frames as RGBA pixel buffers and executes deterministic transformations locally.
+
+Execution backends:
+
+- OpenCL GPU through JNA and a stable C ABI;
+- OpenCL GPU through JNI;
+- pure Java CPU fallback;
+- `AUTO` selection that prefers a GPU and falls back safely.
+
+Implemented operations include color transforms, gamma, thresholding, channel scaling, Sobel edges, blur, alpha-aware object compositing, procedural image generation, masked removal approximation, and FFmpeg frame streaming for whole-video processing.
+
+This is deliberately complementary to diffusion: ordinary pixel work stays local and cheap; learned inpainting/generation is only needed when the program must invent visual content that is not present in the source pixels.
+
+See [docs/GPU_IMAGE_VIDEO.md](docs/GPU_IMAGE_VIDEO.md).
+
+
+## Native OpenCV + FFmpeg JNI
+
+The local image/video runtime also supports optional native vision and media backends:
+
+- OpenCV JNI for Telea inpaint, seamless cloning, GrabCut masks, and optical-flow interpolation.
+- Direct FFmpeg JNI/libav decoding to one RGBA frame at a time.
+- `DecoderBackend.AUTO` prefers JNI and falls back to the FFmpeg process/pipe path.
+- `TransformChain` applies multiple frame transforms in one decode/encode pass.
+- Optical-flow video interpolation generates additional frames locally.
+
+See [docs/NATIVE_VISION_MEDIA.md](docs/NATIVE_VISION_MEDIA.md).
+
+
+## Java VirtualDub-Style Pipeline
+
+The local media runtime now includes a higher-level Java 21 processing pipeline over the existing GPU/OpenCV/FFmpeg primitives.
+
+It adds:
+
+- lifecycle-aware `TransformChain` execution;
+- scene-cut detection and video analysis;
+- temporal denoise with automatic cut resets;
+- pure-Java block-matching motion estimation and stabilization;
+- unsharp masking and general RGBA color matrices;
+- frame-region, mask and frame-range transforms;
+- mask invert/threshold/feather utilities;
+- recursive non-destructive batch image processing;
+- reusable transform-spec parsing for both images and video.
+
+Example:
+
+```bash
+mvn -q exec:java \
+  -Dexec.mainClass=io.synexia.chromellm.gpu.cli.GpuMain \
+  -Dexec.args="video --input in.mp4 --output out.mp4 --pipeline 'temporal-denoise:0.25:0.35:4,unsharp:2:1.0:3,stabilize:8:4:0.75:0.35' --decoder auto"
+```
+
+See [docs/VIRTUALDUB_JAVA_PIPELINE.md](docs/VIRTUALDUB_JAVA_PIPELINE.md).
+
+
+## Production Media Presets and Encoding
+
+The Java media runtime now also includes a production workflow layer:
+
+- configurable H.264, H.265, AV1 and VP9 encoding;
+- audio copy, AAC, or no-audio output;
+- progress callbacks, cooperative cancellation, processing FPS and realtime-factor metrics;
+- dimension-changing resize/crop/90-degree rotation with stream-shape propagation;
+- frame-preserving flips and 180-degree rotation;
+- Adobe/Resolve-style 3D `.cube` LUT grading with trilinear interpolation;
+- reusable alpha-aware image overlays;
+- HOLD/LINEAR/ease-in/ease-out/ease-in-out keyframe automation;
+- versioned JSON media presets with relative LUT/asset paths;
+- non-destructive recursive batch video processing;
+- configurable encoding/progress for optical-flow interpolation as well as ordinary video processing.
+
+Example preset processing:
+
+```bash
+mvn -q exec:java \
+  -Dexec.mainClass=io.synexia.chromellm.gpu.cli.GpuMain \
+  -Dexec.args="video --input in.mp4 --output out.mp4 --preset cinematic.json --codec h265 --crf 20"
+```
+
+See [docs/MEDIA_PRODUCTION_PIPELINE.md](docs/MEDIA_PRODUCTION_PIPELINE.md) and [docs/media-preset-v1.example.json](docs/media-preset-v1.example.json).
