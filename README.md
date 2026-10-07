@@ -1,3 +1,21 @@
+## M3 direction in this fork
+
+M3 is based on the idea that shared immutable structure and indexed metadata can
+provide a basis for reusable computation. The programme starts with M3 String,
+regex, and precompute in M3JDK21, then collections and SWT/Eclipse integration.
+
+This ChromeLLM fork is a supporting local-model tooling surface. Its runtime and model boundaries remain distinct from M3JDK21; the shared design paper supplies programme context rather than a claim of M3 String integration.
+
+**Explore the idea:** [M3 technical design paper](https://github.com/hsoliwal/M3jdk21/blob/master/m3/papers/M3_SHARED_STRUCTURE_AND_REUSABLE_COMPUTATION.md) ·
+[Programme goals and roadmap](https://github.com/hsoliwal/M3jdk21#project-goals-and-plan).
+The paper explains the proposed architecture, cost tradeoffs, and evaluation plan.
+Readers are invited to examine the work and contribute representative workloads.
+
+This section describes the direction of the hsoliwal fork. Upstream documentation
+follows below; upstream authorship, licenses, and project identity remain intact.
+
+---
+
 # Chrome2api
 
 English | [简体中文](README.zh-CN.md)
