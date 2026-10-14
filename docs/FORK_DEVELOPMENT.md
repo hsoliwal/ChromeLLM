@@ -91,3 +91,10 @@ source, Chromium/Dawn reference headers, runtime binaries, optional native
 dependencies, and Google model assets have different provenance. A file's
 presence in this tree does not by itself establish redistribution rights.
 Never commit model weights, credentials, browser profiles, or private prompts.
+
+## Source-contract reference
+
+The [project/module map](ARCHITECTURE_AND_PROJECTS.md), [Java package contracts](JAVA_PACKAGE_CONTRACTS.md),
+[media lifecycle guide](MEDIA_PIPELINE_CONTRACTS.md), and [native/HTTP contracts](NATIVE_RUNTIME_CONTRACTS.md)
+explain the inspected implementation boundaries. The [coverage ledger](DOCUMENTATION_COVERAGE.md)
+records source-set counts, special artifacts, unexecuted checks, and remaining documentation gaps.
