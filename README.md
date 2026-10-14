@@ -1,5 +1,11 @@
 ## M3 direction in this fork
 
+**Optional M3JDK21 Java API:** see the new
+[ChromeML Chat JMOD contract](docs/M3JDK21_CHROMEML_JMOD_API.md).
+This consumes the fork's existing loopback HTTP server and does not bundle
+Chrome native binaries, weights, or model rights into any JDK module.
+
+
 M3 is based on the idea that shared immutable structure and indexed metadata can
 provide a basis for reusable computation. The programme starts with M3 String,
 regex, and precompute in M3JDK21, then collections and SWT/Eclipse integration.
