@@ -134,3 +134,59 @@ For advanced media work, continue with [native vision/media](NATIVE_VISION_MEDIA
 [license](../LICENSE), [notice](../NOTICE), and [third-party terms](../THIRD_PARTY.md).
 Documentation and successful source compilation do not establish runtime,
 model-license, performance, or production-readiness guarantees.
+
+## End-to-end API exercise with explicit success and failure boundaries
+
+After starting the loopback service and checking its local model/runtime
+prerequisites, this PowerShell example constructs JSON without shell-escaping a
+large literal. It is source-checked but unexecuted, and performs real local
+inference if run:
+
+```powershell
+$request = @{
+  model = 'chrome-gemini-nano'
+  messages = @(@{ role = 'user'; content = 'Say exactly OK.' })
+  max_tokens = 16
+  stream = $false
+} | ConvertTo-Json -Depth 6
+$reply = Invoke-RestMethod -Method Post `
+  -Uri 'http://127.0.0.1:11435/v1/chat/completions' `
+  -ContentType 'application/json' -Body $request
+$reply.choices[0].message.content
+```
+
+Inspect the returned envelope and text, but do not assert an exact generated
+string as a transport test. Usage counts are null in this implementation.
+
+| Change to request | Current implementation boundary | Diagnostic interpretation |
+| --- | --- | --- |
+| `messages = @()` | Rejects empty messages before running inference | Request-shape error, not missing weights |
+| `n = 2` | Rejects any supplied `n` not numerically equal to 1 | Multi-choice generation is unsupported |
+| `max_tokens = 0` | `asPositiveInt` rejects nonpositive values | Fix the request before investigating the runner |
+| Unknown route | `handleRequest` returns 404 | Verify `/v1/chat/completions`; other API families are absent |
+| Runner timeout/process failure | Non-streaming path returns a server error | Check runtime/model compatibility and process output |
+
+`CHROMEML_API_TIMEOUT_MS` defaults to 120000 in the server. Its timer is created
+inside `runRunner`, after a queued job begins, so this is not an overall
+queue-plus-generation deadline. The body limit defaults to 10 MiB. On an
+oversized body the reader destroys the request, so a client can observe a
+connection failure rather than a neatly delivered JSON 413 response.
+
+Streaming sends HTTP 200/SSE headers before inference completes. A later runner
+failure is emitted as an SSE error object, so checking only the HTTP status is
+insufficient. Read the stream to its terminal event and inspect error payloads.
+
+### Media inputs: the current source is more specific than a compatibility label
+
+`normalizeLocalPath` rejects remote HTTP(S) media URLs, resolves relative paths
+against the repository root, and checks existence. Absolute paths are accepted;
+this is **not a workspace-confined file API**. Restrict access to trusted local
+clients and use non-sensitive test media.
+
+The current `normalizeImageInput` also accepts supported base64 image data URLs,
+decodes them into `runtime/tmp/media`, and tracks them for cleanup. This extends
+the local-path-only description in the older API guide. Audio still follows the
+local-path route and only one audio file is accepted. Temporary media creation
+is a filesystem side effect, and malformed requests are not a guarantee that
+no temporary files were created. Do not equate local inference with isolation
+from the server process's filesystem permissions.
