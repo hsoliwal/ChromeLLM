@@ -218,7 +218,7 @@ See [docs/OPENAI_COMPAT_API.md](docs/OPENAI_COMPAT_API.md) for API details.
 - One audio file input at the runner layer.
 - `max_tokens` mapped to output length.
 - `temperature`, `top_k`, and context-token options passed to the runner.
-- Non-streaming and simulated SSE streaming responses.
+- Non-streaming responses and SSE streaming of runner output fragments.
 
 ## Compatibility Notes
 
