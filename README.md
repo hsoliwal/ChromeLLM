@@ -1,3 +1,7 @@
+## Explore this fork
+
+Start with the [runtime guide and command cheat sheet](docs/START_HERE.md) to choose the Windows chat or Java/native media path and follow a request from HTTP to the runner.
+
 ## M3 direction in this fork
 
 M3 is based on the idea that shared immutable structure and indexed metadata can
