@@ -18,6 +18,23 @@ follows below; upstream authorship, licenses, and project identity remain intact
 
 # Chrome2api
 
+## Start here in this fork
+
+This repository is [hsoliwal/ChromeLLM](https://github.com/hsoliwal/ChromeLLM),
+a fork of [xszwow/Chrome2api](https://github.com/xszwow/Chrome2api).
+The Windows ChromeML API wrapper and the Java/native diffusion and media tools
+have separate prerequisites and execution paths.
+
+- [Fork development guide](docs/FORK_DEVELOPMENT.md): choose a subsystem, find
+  its source, and understand the build and test boundaries
+- [Local API reference](docs/OPENAI_COMPAT_API.md): supported routes and request limits
+- [Java/native diffusion](docs/DIFFUSION_JAVA_NATIVE.md) and
+  [media processing](docs/MEDIA_PRODUCTION_PIPELINE.md): independent Java 21 workflows
+
+The upstream instructions and attribution below are retained. Programme direction
+above is context, not evidence of runtime compatibility or measured performance.
+
+
 English | [简体中文](README.zh-CN.md)
 
 OpenAI-compatible local API wrapper for Chrome Gemini Nano / ChromeML.
@@ -201,7 +218,7 @@ See [docs/OPENAI_COMPAT_API.md](docs/OPENAI_COMPAT_API.md) for API details.
 - One audio file input at the runner layer.
 - `max_tokens` mapped to output length.
 - `temperature`, `top_k`, and context-token options passed to the runner.
-- Non-streaming and simulated SSE streaming responses.
+- Non-streaming responses and SSE streaming of runner output fragments.
 
 ## Compatibility Notes
 
