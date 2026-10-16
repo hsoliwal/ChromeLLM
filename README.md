@@ -1,3 +1,96 @@
+<!-- fork-homepage-guide:start -->
+# Choose your local AI or media workflow
+
+This [hsoliwal/ChromeLLM fork](https://github.com/hsoliwal/ChromeLLM) builds on
+[xszwow/Chrome2api](https://github.com/xszwow/Chrome2api). It brings together a
+Windows ChromeML chat adapter and independent Java/native diffusion and media
+experiments. Choose the subsystem before installing tools or interpreting a
+successful check; each has its own runtime and licensing boundary.
+
+## Three useful starting points
+
+| Goal | What the source contains | Requirements / limits |
+| --- | --- | --- |
+| Local Gemini Nano chat | Node HTTP adapter → PowerShell → native ChromeML runner | Windows, compatible runtime DLLs and lawfully supplied compatible model weights |
+| Learn a diffusion pipeline | Java reference engine, JNA C ABI and JNI paths | JDK 21 + Maven for Java; native libraries are separate |
+| Transform images/video | RGBA processors, transform chains, presets, optional GPU/OpenCV/FFmpeg backends | The selected backend and media dependencies must actually be available |
+
+These components are present in the source; this homepage pass did not run them.
+The pure-Java reference diffusion example uses a structural denoiser, not bundled
+trained photorealistic weights. M3 programme context does not establish M3 String
+integration, GPU acceleration, cross-backend equivalence, or performance results.
+
+## Concepts you will encounter
+
+- **OpenAI-compatible:** selected HTTP request/response shapes, not the entire
+  OpenAI API or Chrome Prompt API.
+- **Runner / ABI:** the native process and binary interface to compatible local
+  ChromeML components; compiling the wrapper does not establish ABI compatibility.
+- **JNA / JNI:** two Java-to-native integration paths with separate loading and
+  resource-lifecycle concerns.
+- **RGBA / transform chain:** pixel buffers and ordered operations; video also
+  involves decode/encode, stream shape, progress and cancellation.
+- **Backend fallback:** a usable result may come from the CPU; verify the selected
+  backend rather than inferring GPU use from success.
+
+## Quickstart A: Java-only diffusion exploration
+
+Use JDK 21 and Maven, from this fork's root. The output command writes `out.ppm`;
+choose a path you may replace. No `--prompt` means no chat-server dependency.
+
+```sh
+git clone https://github.com/hsoliwal/ChromeLLM.git
+cd ChromeLLM
+mvn test
+mvn package
+mvn -q exec:java -Dexec.mainClass=io.synexia.chromellm.cli.Main -Dexec.args="--engine java --width 256 --height 256 --steps 40 --seed 7 --output out.ppm"
+```
+
+Commands are source-checked, not executed here. Java tests do not establish that
+native libraries loaded or a GPU ran. See the
+[diffusion guide](docs/DIFFUSION_JAVA_NATIVE.md) before selecting JNA/JNI.
+
+## Quickstart B: Windows loopback chat
+
+First follow the runtime/model setup below. Model weights are not supplied or
+licensed by this repository. Keep the service on loopback: the server does not
+use the Authorization header as access control, and its local-path media access
+is not a workspace sandbox. Do not expose it through a public tunnel.
+
+```powershell
+.\启动API服务.ps1 -HostAddress 127.0.0.1 -Port 11435
+# In a second terminal:
+curl.exe http://127.0.0.1:11435/v1/models
+```
+
+`/v1/models` returns metadata; it does not load the model. To exercise inference,
+use the small completion request in [START_HERE](docs/START_HERE.md), inspect the
+returned content/errors, and do not make exact generated wording a health check.
+
+## Compact cheat sheet and a request walkthrough
+
+| Question | Source or command | What it establishes |
+| --- | --- | --- |
+| Where do HTTP routes live? | [`runtime/chromeml_api_server.cjs`](runtime/chromeml_api_server.cjs) | Supported routes, validation and runner queue |
+| How do I rebuild the Windows runner? | `.\scripts\build_runner.ps1` | Requires Zig; replaces the local executable |
+| How do I test the Java layer? | `mvn test` | Java test scope, not a Windows model compatibility check |
+| Where are media presets explained? | [Media production guide](docs/MEDIA_PRODUCTION_PIPELINE.md) | Encoding, assets, automation and output side effects |
+| What is still unverified? | [Coverage ledger](docs/DOCUMENTATION_COVERAGE.md) | Source-review and execution boundaries |
+
+For a text completion, the HTTP server validates a nonempty `messages` array,
+converts it to a prompt, queues the runner, and shapes its output as a completion.
+Clients resend conversation history; requests are not persistent conversational
+sessions. A later streaming failure can appear inside an SSE error after HTTP
+200, so read the stream to completion. Follow the
+[worked request trace](docs/START_HERE.md) and
+[architecture map](docs/ARCHITECTURE_AND_PROJECTS.md) for the exact boundaries.
+
+Original project instructions and notices follow intact. Preserve the separate
+project, Chromium/Dawn, runtime-binary and model licensing/provenance boundaries.
+<!-- fork-homepage-guide:end -->
+
+---
+
 ## Explore this fork
 
 Start with the [runtime guide and command cheat sheet](docs/START_HERE.md) to choose the Windows chat or Java/native media path and follow a request from HTTP to the runner.
