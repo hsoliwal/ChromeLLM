@@ -5,6 +5,22 @@ on:
   pull_request:
     paths: ['standalone/**', '.github/workflows/standalone-jni.yml']
 jobs:
+  # Fail closed if any removed browser, ChromeML, Node or Windows launcher
+  # artifact returns to the tracked product tree.
+  no-browser-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify browserless product file inventory
+        shell: bash
+        run: |
+          git ls-files | grep -E '^(runtime/|reference/|scripts/|model/OptGuideOnDeviceModel/|src/main/java/io/synexia/chromellm/chrome/)|\.(dll|exe|cjs|ps1)$' > forbidden-browser-paths.txt || true
+          if test -s forbidden-browser-paths.txt; then
+            cat forbidden-browser-paths.txt
+            echo 'Browser/vendor runtime paths must remain absent' >&2
+            exit 1
+          fi
+
   linux-jni-contract:
     runs-on: ubuntu-latest
     steps:
