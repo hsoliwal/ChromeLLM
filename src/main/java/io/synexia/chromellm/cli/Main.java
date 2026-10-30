@@ -3,19 +3,17 @@ package io.synexia.chromellm.cli;
 import io.synexia.chromellm.api.DiffusionCondition;
 import io.synexia.chromellm.api.DiffusionRequest;
 import io.synexia.chromellm.api.DiffusionResult;
-import io.synexia.chromellm.chrome.ChromeAiConditioningClient;
 import io.synexia.chromellm.engine.DiffusionEngine;
 import io.synexia.chromellm.engine.JavaDiffusionEngine;
 import io.synexia.chromellm.nativebridge.JnaDiffusionEngine;
 import io.synexia.chromellm.nativebridge.JniDiffusionEngine;
-import java.net.URI;
 import java.nio.file.Path;
 
 public final class Main {
     private Main() {}
     public static void main(String[] args) throws Exception {
         Arguments o=Arguments.parse(args);
-        DiffusionCondition condition=o.prompt==null?DiffusionCondition.none():new ChromeAiConditioningClient(URI.create(o.chromeBase)).plan(o.prompt);
+        DiffusionCondition condition=DiffusionCondition.none();
         var request=new DiffusionRequest(o.width,o.height,3,o.steps,o.seed,o.guidance,o.eta,condition);
         try(DiffusionEngine engine=engine(o.engine)) {
             DiffusionResult result=engine.generate(request);
@@ -32,7 +30,7 @@ public final class Main {
         };
     }
     private static final class Arguments {
-        String engine="java",output="diffusion.ppm",chromeBase="http://127.0.0.1:11435",prompt;
+        String engine="java",output="diffusion.ppm";
         int width=256,height=256,steps=40; long seed=1L; float guidance=7.5f,eta=0f;
         static Arguments parse(String[] args) {
             Arguments r=new Arguments();
@@ -47,8 +45,6 @@ public final class Main {
                     case "--guidance" -> { r.guidance=Float.parseFloat(require(a,v)); i++; }
                     case "--eta" -> { r.eta=Float.parseFloat(require(a,v)); i++; }
                     case "--output" -> { r.output=require(a,v); i++; }
-                    case "--prompt" -> { r.prompt=require(a,v); i++; }
-                    case "--chrome-base" -> { r.chromeBase=require(a,v); i++; }
                     default -> throw new IllegalArgumentException("unknown argument: "+a);
                 }
             }
