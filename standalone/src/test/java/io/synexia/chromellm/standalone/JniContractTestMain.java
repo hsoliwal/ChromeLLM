@@ -31,6 +31,16 @@ public final class JniContractTestMain {
                         .digest(request.prompt().getBytes(StandardCharsets.UTF_8)));
                 if (!result.promptSha256().equals(expected))
                     throw new AssertionError("wrong prompt binding");
+                // Preserve source text exactly, including leading and trailing newlines.
+                ModelResponse exact = backend.infer(
+                        new ModelRequest("fixture-whitespace", 16, Duration.ofSeconds(5)));
+                String expectedSource = "\n  class Example {\n    void f() {}\n  }\n";
+                if (!Objects.equals(exact.text(), expectedSource))
+                    throw new AssertionError("JNI candidate output was trimmed or changed");
+                boolean nativeInterrupted = false;
+                try { backend.infer(new ModelRequest("fixture-interrupted", 8, Duration.ofSeconds(5))); }
+                catch (InterruptedException expectedException) { nativeInterrupted = true; }
+                if (!nativeInterrupted) throw new AssertionError("JNI interrupt not mapped");
                 boolean timeout = false;
                 try { backend.infer(new ModelRequest("fixture-timeout", 8, Duration.ofSeconds(5))); }
                 catch (TimeoutException expectedException) { timeout = true; }
@@ -60,7 +70,7 @@ public final class JniContractTestMain {
             } finally {
                 backend.close();
             }
-            System.out.println("PASS: JNI UTF-8 roundtrip/refusal, digest, failure mapping, close/reuse");
+            System.out.println("PASS: JNI UTF-8, exact output, digest, interrupt/timeout, failure mapping, close/reuse");
         } finally {
             Files.deleteIfExists(model);
         }

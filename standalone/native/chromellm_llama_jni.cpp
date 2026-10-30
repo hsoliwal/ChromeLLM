@@ -45,25 +45,24 @@ jbyteArray outputBytes(JNIEnv * env, const std::string & text) {
 
 bool interrupted(JNIEnv * env) {
     jclass cls = env->FindClass("java/lang/Thread");
-    if (!cls) return false;
+    if (!cls || env->ExceptionCheck())
+        throw std::runtime_error("JNI Thread class lookup failed");
     jmethodID current = env->GetStaticMethodID(cls, "currentThread", "()Ljava/lang/Thread;");
+    if (!current || env->ExceptionCheck())
+        throw std::runtime_error("JNI currentThread lookup failed");
     jmethodID check = env->GetMethodID(cls, "isInterrupted", "()Z");
-    if (!current || !check) {
-        env->DeleteLocalRef(cls);
-        return false;
-    }
+    if (!check || env->ExceptionCheck())
+        throw std::runtime_error("JNI isInterrupted lookup failed");
     jobject thread = env->CallStaticObjectMethod(cls, current);
-    if (!thread || env->ExceptionCheck()) {
-        env->DeleteLocalRef(cls);
-        return false;
-    }
+    if (!thread || env->ExceptionCheck())
+        throw std::runtime_error("JNI currentThread invocation failed");
     jboolean flag = env->CallBooleanMethod(thread, check);
-    // Check immediately: CheckJNI requires exception inspection before even
-    // deleting local references after a Java method invocation.
-    const bool pending = env->ExceptionCheck();
+    // An exceptional JNI call leaves local references for native-frame cleanup.
+    // Do not issue more JNI calls while a Java exception remains pending.
+    if (env->ExceptionCheck())
+        throw std::runtime_error("JNI interruption probe failed");
     env->DeleteLocalRef(thread);
     env->DeleteLocalRef(cls);
-    if (pending) throw std::runtime_error("JNI interruption probe failed");
     return flag == JNI_TRUE;
 }
 
@@ -190,6 +189,7 @@ std::string generate(JNIEnv * env, State *, const std::string & prompt,
     if (interrupted(env)) throw std::runtime_error("CHROMELLM_INTERRUPTED");
     if (maxTokens < 1 || timeoutMillis < 1 || maxOutputBytes < 1)
         throw std::invalid_argument("invalid bounds");
+    if (prompt == "fixture-whitespace") return "\n  class Example {\n    void f() {}\n  }\n";
     if (prompt == "fixture-timeout") throw std::runtime_error("CHROMELLM_TIMEOUT");
     if (prompt == "fixture-interrupted") throw std::runtime_error("CHROMELLM_INTERRUPTED");
     if (prompt == "fixture-native-error") throw std::runtime_error("fixture synthetic error");

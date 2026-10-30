@@ -80,7 +80,7 @@ public final class JniLlamaCppBackend implements ModelBackend {
             text = StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT)
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(output)).toString().strip();
+                    .decode(ByteBuffer.wrap(output)).toString();
         } catch (CharacterCodingException malformed) {
             throw new IOException("native runtime returned invalid UTF-8", malformed);
         }
