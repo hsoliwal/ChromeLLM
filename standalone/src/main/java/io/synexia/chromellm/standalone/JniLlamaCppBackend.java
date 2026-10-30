@@ -26,6 +26,7 @@ import java.util.concurrent.TimeoutException;
  */
 public final class JniLlamaCppBackend implements ModelBackend {
     private static final int MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+    private static final int REQUIRED_NATIVE_ABI = 1;
     private static Path loadedLibrary;
     private long handle;
 
@@ -41,6 +42,16 @@ public final class JniLlamaCppBackend implements ModelBackend {
             throw new IOException("model must be a readable local file");
         }
         loadOnce(libraryFile);
+        final int abi;
+        try {
+            abi = nativeAbiVersion();
+        } catch (UnsatisfiedLinkError incompatible) {
+            throw new IOException("native JNI ABI version entrypoint is missing", incompatible);
+        }
+        if (abi != REQUIRED_NATIVE_ABI) {
+            throw new IOException("unsupported native JNI ABI version " + abi
+                    + "; expected " + REQUIRED_NATIVE_ABI);
+        }
         // Byte arrays, rather than JNI modified UTF-8 strings, preserve UTF-8 paths.
         handle = nativeOpen(strictUtf8(modelFile.toString()));
         if (handle == 0) {
@@ -117,6 +128,7 @@ public final class JniLlamaCppBackend implements ModelBackend {
         }
     }
 
+    private static native int nativeAbiVersion();
     private static native long nativeOpen(byte[] modelUtf8) throws IOException;
     private static native byte[] nativeInfer(long handle, byte[] promptUtf8, int maxTokens,
             long timeoutMillis, int maxOutputBytes) throws IOException, InterruptedException, TimeoutException;
