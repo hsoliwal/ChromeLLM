@@ -3,6 +3,7 @@ package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
@@ -41,7 +42,7 @@ public final class JniLlamaCppBackend implements ModelBackend {
         }
         loadOnce(libraryFile);
         // Byte arrays, rather than JNI modified UTF-8 strings, preserve UTF-8 paths.
-        handle = nativeOpen(modelFile.toString().getBytes(StandardCharsets.UTF_8));
+        handle = nativeOpen(strictUtf8(modelFile.toString()));
         if (handle == 0) {
             throw new IOException("native engine returned a null model handle");
         }
@@ -67,7 +68,7 @@ public final class JniLlamaCppBackend implements ModelBackend {
         Objects.requireNonNull(request, "request");
         if (handle == 0) throw new IllegalStateException("native backend is closed");
         if (Thread.currentThread().isInterrupted()) throw new InterruptedException("interrupted before inference");
-        byte[] prompt = request.prompt().getBytes(StandardCharsets.UTF_8);
+        byte[] prompt = strictUtf8(request.prompt());
         if (prompt.length > 4 * 1024 * 1024) throw new IOException("prompt exceeds 4 MiB");
         long deadlineMillis = Math.max(1, request.timeout().toMillis());
         byte[] output = nativeInfer(handle, prompt, request.maxTokens(), deadlineMillis, MAX_OUTPUT_BYTES);
@@ -92,6 +93,20 @@ public final class JniLlamaCppBackend implements ModelBackend {
         long old = handle;
         handle = 0;
         if (old != 0) nativeClose(old);
+    }
+
+    private static byte[] strictUtf8(String value) throws IOException {
+        try {
+            ByteBuffer encoded = StandardCharsets.UTF_8.newEncoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .encode(CharBuffer.wrap(value));
+            byte[] result = new byte[encoded.remaining()];
+            encoded.get(result);
+            return result;
+        } catch (CharacterCodingException malformed) {
+            throw new IOException("input is not well-formed UTF-8", malformed);
+        }
     }
 
     private static String digest(byte[] prompt) {
