@@ -202,6 +202,17 @@ std::string generate(JNIEnv * env, State *, const std::string & prompt,
 #endif
 } // namespace
 
+// Negotiate native ABI before allocating a model handle.
+extern "C" JNIEXPORT jint JNICALL
+Java_io_synexia_chromellm_standalone_JniLlamaCppBackend_nativeAbiVersion(
+        JNIEnv *, jclass) {
+#ifdef CHROMELLM_JNI_ABI_MISMATCH_FIXTURE
+    return 2;
+#else
+    return 1;
+#endif
+}
+
 extern "C" JNIEXPORT jlong JNICALL
 Java_io_synexia_chromellm_standalone_JniLlamaCppBackend_nativeOpen(
         JNIEnv * env, jclass, jbyteArray modelPath) {
