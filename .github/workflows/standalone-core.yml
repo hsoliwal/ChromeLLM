@@ -19,6 +19,9 @@ jobs:
       - run: test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar)" = java.base
   jni-synthetic:
     runs-on: ubuntu-latest
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -27,7 +30,17 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
+      - name: Enforce no browser runtime files
+        run: |
+          git ls-files runtime reference scripts/build_runner.ps1 scripts/m3_rebuild_runner.py src/main/java/io/synexia/chromellm/chrome | tee /tmp/legacy-browser-tracked.txt
+          test ! -s /tmp/legacy-browser-tracked.txt
       - run: cmake -S standalone/native -B standalone/native/build -DCHROMELLM_SYNTHETIC_TEST=ON
       - run: cmake --build standalone/native/build --parallel 2
+      - name: Verify no ChromeML/Dawn dynamic library linkage
+        run: |
+          if readelf -d standalone/native/build/libchromellm_llama_jni.so | grep -Ei 'webgpu_dawn|optimization_guide_internal|libnode'; then
+            echo 'Forbidden browser runtime linkage detected' >&2
+            exit 1
+          fi
       - run: mvn -B -ntp -f standalone/pom.xml test-compile
       - run: java -cp standalone/target/classes:standalone/target/test-classes io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/standalone/native/build/libchromellm_llama_jni.so"
