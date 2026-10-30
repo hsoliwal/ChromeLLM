@@ -43,6 +43,15 @@ public final class JniContractTestMain {
                 try { backend.infer(new ModelRequest("fixture-invalid-utf8", 8, Duration.ofSeconds(5))); }
                 catch (IOException expectedException) { invalidUtf8 = true; }
                 if (!invalidUtf8) throw new AssertionError("invalid UTF-8 not rejected");
+                boolean malformedInputRejected = false;
+                try {
+                    backend.infer(new ModelRequest("fixture-invalid-surrogate-" + (char) 0xD800,
+                            8, Duration.ofSeconds(5)));
+                } catch (IOException expectedException) {
+                    malformedInputRejected = true;
+                }
+                if (!malformedInputRejected)
+                    throw new AssertionError("malformed Java input was silently replaced during UTF-8 encoding");
                 backend.close();
                 backend.close();
                 boolean rejected = false;
@@ -51,7 +60,7 @@ public final class JniContractTestMain {
             } finally {
                 backend.close();
             }
-            System.out.println("PASS: JNI UTF-8, digest, failure mapping, invalid UTF-8, close/reuse");
+            System.out.println("PASS: JNI UTF-8 roundtrip/refusal, digest, failure mapping, close/reuse");
         } finally {
             Files.deleteIfExists(model);
         }
