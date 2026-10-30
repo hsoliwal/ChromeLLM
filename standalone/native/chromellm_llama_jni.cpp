@@ -45,11 +45,18 @@ bool interrupted(JNIEnv * env) {
     if (!cls) return false;
     jmethodID current = env->GetStaticMethodID(cls, "currentThread", "()Ljava/lang/Thread;");
     jmethodID check = env->GetMethodID(cls, "isInterrupted", "()Z");
-    if (!current || !check) return false;
+    if (!current || !check) {
+        env->DeleteLocalRef(cls);
+        return false;
+    }
     jobject thread = env->CallStaticObjectMethod(cls, current);
-    if (!thread || env->ExceptionCheck()) return false;
+    if (!thread || env->ExceptionCheck()) {
+        env->DeleteLocalRef(cls);
+        return false;
+    }
     jboolean flag = env->CallBooleanMethod(thread, check);
     env->DeleteLocalRef(thread);
+    env->DeleteLocalRef(cls);
     return flag == JNI_TRUE;
 }
 
@@ -70,6 +77,7 @@ void setBatch(llama_batch_ext * batch, const llama_token * tokens, int32_t count
     llama_batch_ext_clear(batch);
     for (int32_t i = 0; i < count; ++i) {
         const int32_t index = llama_batch_ext_add_token(batch, 0, tokens[i]);
+        if (index < 0) throw std::runtime_error("native llama batch insertion failed");
         const llama_pos pos = start + i;
         llama_batch_ext_set_pos(batch, index, &pos);
     }
