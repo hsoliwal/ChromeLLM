@@ -16,9 +16,24 @@ public final class JniContractTestMain {
     private JniContractTestMain() { }
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 1) throw new IllegalArgumentException("usage: JniContractTestMain <fixture.so>");
+        if (args.length != 1 && (args.length != 2
+                || !args[1].equals("--expect-abi-mismatch"))) {
+            throw new IllegalArgumentException(
+                    "usage: JniContractTestMain <fixture> [--expect-abi-mismatch]");
+        }
         Path model = Files.createTempFile("chromellm-model-fixture-", ".gguf");
         try {
+            if (args.length == 2) {
+                boolean refused = false;
+                try (JniLlamaCppBackend ignored = new JniLlamaCppBackend(Path.of(args[0]), model)) {
+                    throw new AssertionError("incompatible native ABI accepted");
+                } catch (IOException expected) {
+                    refused = expected.getMessage().contains("unsupported native JNI ABI version");
+                }
+                if (!refused) throw new AssertionError("incompatible native ABI not diagnosed");
+                System.out.println("PASS: mismatched native JNI ABI rejected before model open");
+                return;
+            }
             JniLlamaCppBackend backend = new JniLlamaCppBackend(Path.of(args[0]), model);
             try {
                 ModelRequest request = new ModelRequest("utf8 Ελληνικά 🌿", 8, Duration.ofSeconds(5));
