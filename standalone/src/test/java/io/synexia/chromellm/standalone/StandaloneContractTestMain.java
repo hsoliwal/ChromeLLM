@@ -3,6 +3,7 @@ package io.synexia.chromellm.standalone;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
@@ -22,6 +23,30 @@ public final class StandaloneContractTestMain {
         Path model = temp.resolve("fixture.gguf");
         try {
             Files.writeString(model, "not a trained model");
+            Path promptFile = temp.resolve("bounded-prompt.txt");
+            try {
+                String exactPrompt = "  αβ 🌿 \n";
+                Files.writeString(promptFile, exactPrompt, StandardCharsets.UTF_8);
+                check(PromptFileReader.read(promptFile).equals(exactPrompt));
+                Files.write(promptFile, new byte[] {(byte) 0xff});
+                try {
+                    PromptFileReader.read(promptFile);
+                    throw new AssertionError("invalid prompt UTF-8 accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                Files.write(promptFile, new byte[PromptFileReader.MAX_UTF8_BYTES]);
+                check(PromptFileReader.read(promptFile).length() == PromptFileReader.MAX_UTF8_BYTES);
+                Files.write(promptFile, new byte[PromptFileReader.MAX_UTF8_BYTES + 1]);
+                try {
+                    PromptFileReader.read(promptFile);
+                    throw new AssertionError("oversize prompt file accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+            } finally {
+                Files.deleteIfExists(promptFile);
+            }
             String java = Path.of(System.getProperty("java.home"), "bin",
                     System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java").toString();
             String testClasses = Path.of(FakeLlamaCppMain.class.getProtectionDomain()
