@@ -1,52 +1,31 @@
-# Third-Party Files
+# Third-party components and provenance
 
-This repository includes reference files from Chromium and Dawn/WebGPU.
+## Current standalone inference provider
 
-## Chromium
+The optional native inference adapter links to `ggml-org/llama.cpp` from an
+**operator-supplied** source checkout pinned to commit
+`889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b`. The source and its dependencies
+retain their own licenses and notices. No prebuilt llama.cpp runtime or GGUF
+model weights are redistributed in this repository.
 
-Files:
+## Retained independent media dependencies
 
-```text
-reference/chrome_ml_api.h
-reference/chrome_ml_types.h
-reference/on_device_model_executor.cc
-```
+- OpenCV may be linked for optional image processing and retains the license
+  terms of the selected installed version (modern OpenCV uses Apache-2.0).
+- FFmpeg may be linked for optional media workloads; check the actual build
+  configuration for LGPL/GPL and linked-library obligations.
+- OpenCL runtime selection depends on independently installed platform drivers.
 
-These files are included for ABI and behavioral reference. They retain their
-original Chromium copyright and BSD-style license headers.
+## Historical Chromium/ChromeML and Dawn artifacts
 
-## Dawn / WebGPU
+Legacy versions tracked Chromium-derived reference headers and large
+`optimization_guide_internal.dll` / `webgpu_dawn.dll` binaries despite old
+documentation asserting those DLLs were absent. Their presence in Git history
+does NOT establish permission to distribute them. The current tree's browser
+runtime is removed in the browserless cleanup candidate, but **Git history is
+not purged by ordinary file deletion**. License/legal and history remediation
+must be reviewed separately; neither these assets nor Google model weights are
+needed by the new JNI provider.
 
-Files:
-
-```text
-runtime/tag_148_headers/dawn/dawn_proc_table_generated.h
-runtime/tag_148_headers/dawn/webgpu_generated.h
-```
-
-These files retain their original BSD 3-Clause license headers.
-
-## Not Included
-
-This repository does not include Google model weights, Chrome binaries, or
-Chrome proprietary runtime DLLs.
-
-
-
-## OpenCV / FFmpeg
-
-The native vision/media integration can link to locally installed OpenCV and FFmpeg libraries.
-
-- OpenCV 4.5 and later: Apache License 2.0.
-- FFmpeg: primarily LGPL-2.1-or-later; optional GPL components apply when FFmpeg is built with those components enabled.
-
-No OpenCV or FFmpeg binaries are vendored by this integration.
-
-## Design-Reference Repositories
-
-The following public repositories were inspected for architecture only:
-
-- jvl711/JavaFFmpegLibrary
-- tramvm/OpencvJni
-
-No source from those repositories is copied into ChromeLLM. Their inspected repository trees did not expose a repository-level license file, so they are treated strictly as design references.
+See `LICENSE` and `NOTICE`. No automatic download or extraction of proprietary
+Chrome weights or runtime binaries is authorized.
