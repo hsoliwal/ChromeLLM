@@ -97,7 +97,9 @@ std::string Generate(Model& state, const std::vector<uint8_t>& input, int max_to
     std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)> sampler(
             llama_sampler_chain_init(llama_sampler_chain_default_params()), &llama_sampler_free);
     if (!sampler) throw std::runtime_error("unable to create token sampler");
-    llama_sampler_chain_add(sampler.get(), llama_sampler_init_greedy());
+    llama_sampler* greedy = llama_sampler_init_greedy();
+    if (!greedy) throw std::runtime_error("unable to allocate greedy sampler");
+    llama_sampler_chain_add(sampler.get(), greedy);
     for (int32_t start = 0; start < n_prompt; ) {
         CheckDeadline(deadline);
         const int32_t count = std::min<int32_t>(n_prompt - start, static_cast<int32_t>(p.n_batch));
@@ -146,7 +148,8 @@ extern "C" JNIEXPORT jlong JNICALL
 Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nOpen(
         JNIEnv* env, jclass, jbyteArray model_path, jint context, jint threads, jint gpu_layers) {
     try {
-        if (context < 32 || threads < 1 || gpu_layers < 0)
+        if (context < 32 || context > 1'048'576 || threads < 1 || threads > 1024
+                || gpu_layers < 0 || gpu_layers > 1024)
             throw std::invalid_argument("invalid native model settings");
         const auto bytes = Bytes(env, model_path);
         const std::string path(bytes.begin(), bytes.end());
@@ -155,11 +158,15 @@ Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nOpen(
         std::call_once(backend_initialized, [] { llama_backend_init(); });
         llama_model_params params = llama_model_default_params();
         params.n_gpu_layers = gpu_layers;
-        llama_model* raw = llama_model_load_from_file(path.c_str(), params);
+        // Own the model even when validation or shared_ptr allocation throws.
+        std::unique_ptr<llama_model, decltype(&llama_model_free)> raw(
+                llama_model_load_from_file(path.c_str(), params), &llama_model_free);
         if (!raw) throw std::runtime_error("llama.cpp could not load the supplied model");
-        std::shared_ptr<Model> value(new Model(raw, static_cast<uint32_t>(context), threads));
-        if (llama_model_has_encoder(raw) || !llama_model_has_decoder(raw))
+        if (llama_model_has_encoder(raw.get()) || !llama_model_has_decoder(raw.get()))
             throw std::invalid_argument("this JNI provider currently supports decoder-only models");
+        std::shared_ptr<Model> value = std::make_shared<Model>(
+                raw.get(), static_cast<uint32_t>(context), threads);
+        raw.release();
         const jlong id = next_id.fetch_add(1);
         if (id <= 0) throw std::runtime_error("native model session IDs exhausted");
         { std::lock_guard<std::mutex> lock(registry_lock); registry.emplace(id, std::move(value)); }
