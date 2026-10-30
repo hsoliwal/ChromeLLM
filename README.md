@@ -1,6 +1,15 @@
 <!-- fork-homepage-guide:start -->
 # Choose your local AI or media workflow
 
+**Architecture invariant:** ChromeLLM must evolve into a standalone, browser-independent
+inference runtime. Chrome's browser API and ChromeML are optional compatibility
+providers—not required dependencies of the Java/JNI core. The separate
+[Java 21 standalone module](standalone/README.md) is the first executable
+browserless path; the [architecture decision](docs/ADR-0001-BROWSER-INDEPENDENCE.md)
+defines mandatory module boundaries, acceptance gates, and later native integration.
+Neither Chrome-proprietary binaries nor Google model weights are included in the
+standalone module.
+
 This [hsoliwal/ChromeLLM fork](https://github.com/hsoliwal/ChromeLLM) builds on
 [xszwow/Chrome2api](https://github.com/xszwow/Chrome2api). It brings together a
 Windows ChromeML chat adapter and independent Java/native diffusion and media
