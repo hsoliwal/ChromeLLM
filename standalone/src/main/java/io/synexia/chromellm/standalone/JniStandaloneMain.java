@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 package io.synexia.chromellm.standalone;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -17,7 +16,7 @@ public final class JniStandaloneMain {
         Path prompt = Path.of(required(options, "--prompt-file"));
         if (!Files.isRegularFile(prompt)) throw new IllegalArgumentException("prompt file missing");
         ModelRequest request = new ModelRequest(
-                Files.readString(prompt, StandardCharsets.UTF_8),
+                PromptFileReader.read(prompt),
                 Integer.parseInt(options.getOrDefault("--max-tokens", "256")),
                 Duration.ofSeconds(Long.parseLong(options.getOrDefault("--timeout-seconds", "120"))));
         try (ModelBackend backend = new JniLlamaCppBackend(
