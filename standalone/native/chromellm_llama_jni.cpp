@@ -55,8 +55,12 @@ bool interrupted(JNIEnv * env) {
         return false;
     }
     jboolean flag = env->CallBooleanMethod(thread, check);
+    // Check immediately: CheckJNI requires exception inspection before even
+    // deleting local references after a Java method invocation.
+    const bool pending = env->ExceptionCheck();
     env->DeleteLocalRef(thread);
     env->DeleteLocalRef(cls);
+    if (pending) throw std::runtime_error("JNI interruption probe failed");
     return flag == JNI_TRUE;
 }
 
