@@ -55,6 +55,18 @@ public final class StandaloneContractTestMain {
                     checks++;
                 }
                 try {
+                    backend.infer(new ModelRequest("fixture-oversize", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("oversized stdout accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                try {
+                    backend.infer(new ModelRequest("fixture-stderr-overflow", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("oversized stderr accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                try {
                     backend.infer(new ModelRequest("fail", 8, Duration.ofSeconds(10)));
                     throw new AssertionError("failed process accepted");
                 } catch (java.io.IOException expected) {
