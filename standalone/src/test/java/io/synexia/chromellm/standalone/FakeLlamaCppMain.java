@@ -34,6 +34,14 @@ public final class FakeLlamaCppMain {
             System.out.write(new byte[] {(byte) 0xFF});
             return;
         }
+        if (prompt.equals("fixture-oversize")) {
+            System.out.write(new byte[4 * 1024 * 1024 + 1]);
+            return;
+        }
+        if (prompt.equals("fixture-stderr-overflow")) {
+            System.err.write(new byte[64 * 1024 + 1]);
+            return;
+        }
         System.out.print("synthetic reply");
     }
 }
