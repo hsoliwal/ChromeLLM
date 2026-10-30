@@ -12,7 +12,8 @@ On Linux:
 ```sh
 mvn -f standalone/pom.xml verify
 cmake -S standalone/native -B standalone/native/build \
-  -DLLAMA_INCLUDE_DIR=/path/to/llama/include -DLLAMA_LIBRARY=/path/to/libllama.so
+  -DLLAMA_INCLUDE_DIR=/path/to/llama/include -DGGML_INCLUDE_DIR=/path/to/llama/ggml/include \
+  -DLLAMA_LIBRARY=/path/to/libllama.so
 cmake --build standalone/native/build --parallel
 java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
   --module io.synexia.chromellm.standalone/io.synexia.chromellm.standalone.StandaloneMain \
