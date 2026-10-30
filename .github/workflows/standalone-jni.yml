@@ -47,6 +47,22 @@ jobs:
             echo 'Failing JNI strict warning gate' >&2
             exit 1
           fi
+      - name: Reject incompatible native JNI ABI
+        shell: bash
+        run: |
+          cmake -S standalone/native -B build/jni-abi-negative \
+            -DCHROMELLM_JNI_CONTRACT_FIXTURE=ON \
+            '-DCMAKE_CXX_FLAGS=-DCHROMELLM_JNI_ABI_MISMATCH_FIXTURE=1'
+          cmake --build build/jni-abi-negative --parallel
+          java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
+            io.synexia.chromellm.standalone.JniContractTestMain \
+            "$PWD/build/jni-abi-negative/libchromellm_llama_jni_fixture.so" \
+            --expect-abi-mismatch > abi-negative.log 2>&1
+          cat abi-negative.log
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' abi-negative.log; then
+            echo 'Incompatible JNI fixture produced a strict JNI warning' >&2
+            exit 1
+          fi
       - name: Verify JPMS closure and create JMOD
         run: |
           test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar)" = java.base
