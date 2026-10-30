@@ -9,6 +9,10 @@
 
 The legacy ChromeML runner, Node HTTP server, Windows PowerShell launchers, ChromeML/Dawn DLLs, generated Dawn headers/procs, Chromium ABI references, Chrome-managed model placeholder and Java ChromeAiConditioningClient are removed from the source tree, not from Git history. The diffusion CLI now takes an optional explicit 16-number `--condition-vector` rather than a Chrome-backed prompt or URL; its former `--prompt` and `--chrome-base` flags are unsupported.
 
+## Additional browser-only documentation retirement
+
+Three obsolete launch/rebuild documents were removed from the current product tree: `docs/OPENAI_COMPAT_API.md`, `docs/M3_REBUILD_AND_DISTILLATION.md` and `关键数据.md`. The active Chinese README and the active Java/native build guides were updated to describe standalone JNI. Earlier architecture/audit documentation carries a historical-snapshot warning rather than suggesting obsolete commands. The Synexia canonical deletion manifest must pin these three additional original Git blobs before receiver promotion.
+
 ## Verification
 
 - Java closure: `mvn -f standalone/pom.xml verify` and `jdeps` = java.base.

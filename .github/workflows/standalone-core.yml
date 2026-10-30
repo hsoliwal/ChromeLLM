@@ -34,6 +34,9 @@ jobs:
         run: |
           git ls-files runtime reference scripts/build_runner.ps1 scripts/m3_rebuild_runner.py src/main/java/io/synexia/chromellm/chrome | tee /tmp/legacy-browser-tracked.txt
           test ! -s /tmp/legacy-browser-tracked.txt
+          test ! -e docs/OPENAI_COMPAT_API.md
+          test ! -e docs/M3_REBUILD_AND_DISTILLATION.md
+          test ! -e '关键数据.md'
       - run: cmake -S standalone/native -B standalone/native/build -DCHROMELLM_SYNTHETIC_TEST=ON
       - run: cmake --build standalone/native/build --parallel 2
       - name: Verify no ChromeML/Dawn dynamic library linkage
