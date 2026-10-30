@@ -40,6 +40,26 @@ loads the GGUF model once per instance; synchronous `infer` and `close` calls
 are serialized. Deadline/interrupt checks run between native inference steps,
 not as OS-level preemption of a stalled kernel or slow model load.
 
+## ABI contract and negative test
+
+Java 21 expects JNI ABI version `1` before opening any external GGUF model.
+A native library exposing a different version or no version entrypoint is
+rejected without a browser or provider fallback. The negative test uses a
+synthetic library with ABI version 2 in a separate JVM:
+
+```sh
+cmake -S standalone/native -B build/jni-abi-negative \
+  -DCHROMELLM_JNI_CONTRACT_FIXTURE=ON \
+  '-DCMAKE_CXX_FLAGS=-DCHROMELLM_JNI_ABI_MISMATCH_FIXTURE=1'
+cmake --build build/jni-abi-negative
+java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
+  io.synexia.chromellm.standalone.JniContractTestMain \
+  "$PWD/build/jni-abi-negative/libchromellm_llama_jni_fixture.so" \
+  --expect-abi-mismatch
+```
+
+This proves fail-closed version negotiation, not actual model inference.
+
 ## Java JMOD
 
 ```sh
