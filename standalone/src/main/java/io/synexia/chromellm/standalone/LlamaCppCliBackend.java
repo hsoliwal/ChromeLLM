@@ -2,6 +2,10 @@
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,11 +58,15 @@ public final class LlamaCppCliBackend implements ModelBackend {
     @Override
     public ModelResponse infer(ModelRequest request) throws IOException, InterruptedException, TimeoutException {
         Objects.requireNonNull(request, "request");
+        byte[] promptBytes = strictUtf8(request.prompt());
+        if (promptBytes.length > 4 * 1024 * 1024) {
+            throw new IOException("prompt exceeds 4 MiB");
+        }
         Path promptFile = Files.createTempFile(scratch, "chromellm-prompt-", ".txt");
         Path stdoutFile = null;
         Path stderrFile = null;
         try {
-            Files.writeString(promptFile, request.prompt(), StandardCharsets.UTF_8);
+            Files.write(promptFile, promptBytes);
             stdoutFile = Files.createTempFile(scratch, "chromellm-stdout-", ".txt");
             stderrFile = Files.createTempFile(scratch, "chromellm-stderr-", ".txt");
             Process process = startProcess(request, promptFile, stdoutFile, stderrFile);
@@ -69,11 +77,11 @@ public final class LlamaCppCliBackend implements ModelBackend {
             if (Files.size(stdoutFile) > MAX_STDOUT_BYTES) {
                 throw new IOException("llama.cpp CLI output exceeds bounded limit");
             }
-            String text = Files.readString(stdoutFile, StandardCharsets.UTF_8).strip();
-            if (text.isEmpty()) {
+            String text = strictDecode(Files.readAllBytes(stdoutFile));
+            if (text.isBlank()) {
                 throw new IOException("llama.cpp CLI produced no candidate text");
             }
-            return new ModelResponse(text, id(), sha256(request.prompt()));
+            return new ModelResponse(text, id(), sha256(promptBytes));
         } finally {
             Files.deleteIfExists(promptFile);
             if (stdoutFile != null) Files.deleteIfExists(stdoutFile);
@@ -112,10 +120,35 @@ public final class LlamaCppCliBackend implements ModelBackend {
         // Child-process trees require a separate operating-system-specific containment policy.
     }
 
-    private static String sha256(String prompt) {
+    private static byte[] strictUtf8(String value) throws IOException {
+        try {
+            ByteBuffer encoded = StandardCharsets.UTF_8.newEncoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .encode(CharBuffer.wrap(value));
+            byte[] result = new byte[encoded.remaining()];
+            encoded.get(result);
+            return result;
+        } catch (CharacterCodingException malformed) {
+            throw new IOException("input is not well-formed UTF-8", malformed);
+        }
+    }
+
+    private static String strictDecode(byte[] value) throws IOException {
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(value)).toString();
+        } catch (CharacterCodingException malformed) {
+            throw new IOException("CLI runtime returned invalid UTF-8", malformed);
+        }
+    }
+
+    private static String sha256(byte[] prompt) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(prompt.getBytes(StandardCharsets.UTF_8)));
+                    .digest(prompt));
         } catch (NoSuchAlgorithmException impossibleOnJava21) {
             throw new IllegalStateException("SHA-256 unavailable", impossibleOnJava21);
         }

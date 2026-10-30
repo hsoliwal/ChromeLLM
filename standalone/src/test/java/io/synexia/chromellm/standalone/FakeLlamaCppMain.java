@@ -22,6 +22,18 @@ public final class FakeLlamaCppMain {
         if (a.contains(prompt)) System.exit(9); // Prompt must never be placed on argv.
         if (prompt.equals("sleep")) Thread.sleep(3000);
         if (prompt.equals("fail")) System.exit(4);
+        if (prompt.equals("fixture-whitespace")) {
+            System.out.print("\n  class Example {\n    void f() {}\n  }\n");
+            return;
+        }
+        if (prompt.equals("fixture-blank")) {
+            System.out.print(" \n\t");
+            return;
+        }
+        if (prompt.equals("fixture-bad-utf8")) {
+            System.out.write(new byte[] {(byte) 0xFF});
+            return;
+        }
         System.out.print("synthetic reply");
     }
 }

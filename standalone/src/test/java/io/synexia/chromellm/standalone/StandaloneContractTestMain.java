@@ -32,6 +32,28 @@ public final class StandaloneContractTestMain {
                 check(result.text().equals("synthetic reply"));
                 check(result.backendId().equals("llama.cpp-cli"));
                 check(result.promptSha256().length() == 64);
+                ModelResponse exact = backend.infer(
+                        new ModelRequest("fixture-whitespace", 16, Duration.ofSeconds(10)));
+                check(exact.text().equals("\n  class Example {\n    void f() {}\n  }\n"));
+                try {
+                    backend.infer(new ModelRequest("fixture-blank", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("blank output accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                try {
+                    backend.infer(new ModelRequest("fixture-bad-utf8", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("malformed UTF-8 output accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                try {
+                    backend.infer(new ModelRequest("bad-surrogate-" + (char) 0xD800,
+                            8, Duration.ofSeconds(10)));
+                    throw new AssertionError("malformed UTF-8 input accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
                 try {
                     backend.infer(new ModelRequest("fail", 8, Duration.ofSeconds(10)));
                     throw new AssertionError("failed process accepted");
