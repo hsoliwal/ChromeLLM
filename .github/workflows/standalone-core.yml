@@ -1,11 +1,11 @@
-name: Standalone inference core
+name: Standalone browser-free inference
 on:
   push:
     paths: ['standalone/**', '.github/workflows/standalone-core.yml']
   pull_request:
     paths: ['standalone/**', '.github/workflows/standalone-core.yml']
 jobs:
-  verify:
+  java:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,3 +17,17 @@ jobs:
           cache-dependency-path: standalone/pom.xml
       - run: mvn -B -ntp -f standalone/pom.xml verify
       - run: test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar)" = java.base
+  jni-synthetic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - run: cmake -S standalone/native -B standalone/native/build -DCHROMELLM_SYNTHETIC_TEST=ON
+      - run: cmake --build standalone/native/build --parallel 2
+      - run: mvn -B -ntp -f standalone/pom.xml test-compile
+      - run: java -cp standalone/target/classes:standalone/target/test-classes io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/standalone/native/build/libchromellm_llama_jni.so"
