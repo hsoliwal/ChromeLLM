@@ -118,7 +118,7 @@ std::string generate(JNIEnv * env, State * state, const std::string & prompt, in
             || timeoutMillis > 3600000 || maxOutputBytes < 1 || maxOutputBytes > 4194304) {
         throw std::invalid_argument("invalid bounded inference parameters");
     }
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMillis);
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMillis);
     const llama_vocab * vocab = llama_model_get_vocab(state->model);
     int32_t nPrompt = llama_tokenize(vocab, prompt.data(), static_cast<int32_t>(prompt.size()),
                                      nullptr, 0, true, true);
