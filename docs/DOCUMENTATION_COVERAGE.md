@@ -1,5 +1,7 @@
 # Documentation coverage and verification ledger
 
+> **Historical snapshot, not a runnable Chrome integration:** ChromeLLM draft PR #19 removes the old ChromeML/Dawn, Node and PowerShell execution files. Current text inference uses a separate llama.cpp JNI backend (see [START_HERE](START_HERE.md)). The legacy architectures, links and verification counts below are retained solely for provenance; do not follow them as build instructions. Real GGUF inference remains to be qualified.
+
 [Project index](ARCHITECTURE_AND_PROJECTS.md) · [Package contracts](JAVA_PACKAGE_CONTRACTS.md) · [Media contracts](MEDIA_PIPELINE_CONTRACTS.md) · [Native/runtime contracts](NATIVE_RUNTIME_CONTRACTS.md)
 
 ## Scope and evidence
