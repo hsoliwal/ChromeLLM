@@ -25,6 +25,15 @@ if(NOT CHROMELLM_JNI_CONTRACT_FIXTURE)
   if(NOT REV_RESULT EQUAL 0 OR NOT LLAMA_REV STREQUAL CHROMELLM_LLAMA_COMMIT)
     message(FATAL_ERROR "llama.cpp checkout must be exactly ${CHROMELLM_LLAMA_COMMIT}")
   endif()
+  # A matching HEAD does not certify modified or untracked donor source.
+  # Refuse silent source substitutions before the native library is compiled.
+  execute_process(
+    COMMAND git -C "${LLAMA_CPP_SOURCE_DIR}" status --porcelain --untracked-files=all --ignored
+    OUTPUT_VARIABLE LLAMA_TREE_CHANGES OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE LLAMA_TREE_STATUS ERROR_QUIET)
+  if(NOT LLAMA_TREE_STATUS EQUAL 0 OR NOT LLAMA_TREE_CHANGES STREQUAL "")
+    message(FATAL_ERROR "llama.cpp source tree must be clean at the pinned commit")
+  endif()
   set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
   set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
