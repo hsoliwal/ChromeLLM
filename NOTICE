@@ -1,33 +1,25 @@
-Chrome2api Notice
-=================
+ChromeLLM — notices and source lineage
+======================================
 
-This repository contains project-authored code plus reference files from
-Chromium and Dawn/WebGPU sources.
+ChromeLLM includes project-authored Java 21, C++ JNI and native media code.
+Project-authored sources retain their stated SPDX and repository licensing.
+This work is derived in part from the upstream Chrome2api project; its
+upstream provenance and contributors remain attributable through Git history.
 
-Project-authored code:
-- runtime/ChromeMLBareRunner.cpp
-- runtime/chromeml_api_server.cjs
-- PowerShell wrapper scripts
-- documentation authored for this project
+The legacy ChromeML/Chromium/Dawn reference headers, Node adapter, Windows
+runner and associated DLLs were removed from the current browserless source
+tree in the review candidate. Historical commits still contain prior files,
+including DLLs whose redistribution rights were not established. Ordinary
+file deletion does not erase those historical Git objects.
 
-Third-party reference files:
-- reference/chrome_ml_api.h
-- reference/chrome_ml_types.h
-- reference/on_device_model_executor.cc
-- runtime/tag_148_headers/dawn/*.h
+No rights to ship Google/Chrome model weights, proprietary ChromeML/Dawn
+runtime DLLs, or unrelated model data are granted by this repository.
+Treat all historic vendor-owned artifacts as restricted pending audit.
 
-Chromium reference files are copyright The Chromium Authors and governed by
-their BSD-style license headers.
+A separately installed, independently licensed llama.cpp checkout and
+lawfully supplied GGUF model may be used with the optional new JNI adapter.
+Those sources, model weights and any selected GPU libraries retain their
+own licenses and distribution requirements.
 
-Dawn/WebGPU generated headers are governed by their BSD 3-Clause license
-headers.
-
-This repository does not include and does not license:
-- Google model weights, including weights.bin
-- optimization_guide_internal.dll
-- webgpu_dawn.dll
-- Chrome binaries
-
-Users must obtain those files separately and comply with their applicable
-licenses and terms.
-
+See LICENSE and THIRD_PARTY.md. Do not infer model or runtime redistribution
+rights from historical presence in a Git repository.

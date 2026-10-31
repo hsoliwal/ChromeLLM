@@ -1,62 +1,88 @@
-# ChromeLLM standalone inference core (Java 21)
+<!-- SPDX-License-Identifier: MIT -->
+# Standalone Java 21 + JNI inference
 
-**Chrome is an optional adapter, not the owner of the inference contract.** This
-separately buildable JPMS module provides a browserless text-inference seam and a
-working `llama.cpp` CLI adapter. It does not import Chrome/Chromium, need Chrome,
-use Node/PowerShell, or depend on a third-party Java library. The module requires
-only `java.base`. It does **not** embed an inference model: the `llama-cli`
-executable and a compatible, lawfully supplied GGUF model must be installed by
-the operator. It neither extracts nor redistributes Chrome/Gemini Nano models.
+This module is **browserless**. There is no Chrome/Chromium browser integration,
+ChromeML or Dawn/WebGPU binary, Chrome Prompt API, Node server, PowerShell launcher,
+Chrome user profile, or Google model dependency in this runtime.
 
-The existing ChromeML runner and Chrome built-in AI APIs remain independent
-integration paths. A browser-free ChromeML subprocess still depends on ChromeML
-binaries; it is not the same achievement as independence from Google's runtime.
+The same Java 21 `ModelBackend` contract supports two explicitly selected providers:
 
-## Build and invoke
+- **`JniLlamaCppBackend`**: in-process native inference through the C++17 JNI
+  bridge in [native/](native/README.md), linked to the exact independently
+  licensed `llama.cpp` source revision documented there. The first release
+  candidate is CPU-only.
+- **`LlamaCppCliBackend`**: an optional independent `llama-cli` subprocess,
+  requiring an operator-supplied executable and a compatible local GGUF model.
+  It is not a hidden fallback for JNI failures.
+
+Neither provider downloads model weights. The user/operator must supply a
+compatible, legally usable GGUF model, and verify the model's license,
+checkpoint, tokenizer/config and provenance independently. No proprietary
+Chrome/Gemini Nano weights or DLLs may be redistributed.
+
+## Java and synthetic JNI verification
+
+JDK 21, Maven, CMake and a C++17 compiler are required to run all local checks.
 
 ```sh
 mvn -f standalone/pom.xml verify
 jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar
 
-java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
-  --module io.synexia.chromellm.standalone/io.synexia.chromellm.standalone.StandaloneMain \
-  --llama-bin /path/to/llama-cli --model /path/to/licensed-model.gguf \
-  --prompt-file /path/to/request.txt --max-tokens 256 --timeout-seconds 120
+cmake -S standalone/native -B build/jni-fixture -DCHROMELLM_JNI_CONTRACT_FIXTURE=ON
+cmake --build build/jni-fixture
+java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
+  io.synexia.chromellm.standalone.JniContractTestMain \
+  "$PWD/build/jni-fixture/libchromellm_llama_jni_fixture.so"
+
+jmod create --class-path standalone/target/classes io.synexia.chromellm.standalone.jmod
+jmod describe io.synexia.chromellm.standalone.jmod
 ```
 
-One invocation sends exactly one prompt to exactly one selected backend; file
-iteration, one-call-per-source-file enforcement, validation and promotion belong
-to the Synexia recipe pipeline. Output is *unverified model-generated candidate
-text*, not a source-of-truth replacement or a success claim for generated Java.
+The Java module depends on `java.base` only. Native library loading is explicit;
+a Java API instance need not load JNI until the JNI provider is constructed.
+The synthetic JNI fixture verifies encoding, byte-preserving output, lifecycle,
+timeouts/error propagation and closure. It is **not** a trained model, and must
+not be shipped as a real inference engine.
 
-The adapter uses an argv array (never a shell) and a temporary UTF-8 prompt file
-instead of exposing input text in process arguments. It captures stdout/stderr
-separately, bounds stdout, enforces the requested deadline around the child
-process, refuses nonzero exit and empty output, and deletes temporary files.
-Interruption destroys the direct child; full descendant process-tree containment
-is not established. Temp-file confidentiality depends on the host filesystem and
-user account. The prompt SHA-256 receipt binds the input, **not** model accuracy.
+## Running independently with a real licensed model
 
-The CLI flags are `-m`, `-f`, `-n`, `--no-display-prompt`, `--no-show-timings`,
-`--simple-io`, `--single-turn`; compare your installed llama.cpp version to
-[its CLI documentation](https://github.com/ggml-org/llama.cpp/blob/master/tools/cli/README.md).
-No real model or GPU execution has been qualified in this first slice. The
-synthetic subprocess contract test proves dispatch, error propagation, bounded
-waiting and cleanup only. Never treat a successful CLI exit as proof of semantic
-correctness; apply the normal compile/lint/test/diff acceptance gates.
+The following requires an externally checked-out, exact pinned `llama.cpp`
+revision, a compatible GGUF file and your own native build:
 
-## Ownership and next slices
+```sh
+cmake -S standalone/native -B build/jni-real \
+  -DLLAMA_CPP_SOURCE_DIR=/path/to/pinned/llama.cpp
+cmake --build build/jni-real --target chromellm_llama_jni --parallel
 
-1. **Core:** `ModelRequest`, `ModelResponse`, `ModelBackend`; no browser import.
-2. **First browserless provider:** `LlamaCppCliBackend`, externally supplied
-   executable and licensed model, independent of ChromeML binaries.
-3. **Compatibility adapters:** Chrome Prompt/Summarizer/Chrome2api stay outside
-   this module and must implement the same request/receipt boundary when migrated.
-4. **Future core:** per-session cancellation, streaming, model loading, strict
-   structured outputs, OpenAI-compatible API, stable JNI/C ABI, CPU/GPU dispatch,
-   comparative model tests and platform qualification. These are **not** claimed
-   implemented here.
+java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+  --module io.synexia.chromellm.standalone/io.synexia.chromellm.standalone.JniStandaloneMain \
+  --jni-library "$PWD/build/jni-real/libchromellm_llama_jni.so" \
+  --model /path/to/licensed-model.gguf \
+  --prompt-file /path/to/prompt.txt --max-tokens 256 --timeout-seconds 120
+```
 
-The canonical Synexia recipe workspace governs any recurring source-convergence
-or interface-generation transformations. Generated results may be transferred to
-M3JDK21 only after source, license, contract and receiver qualification.
+The `llama.cpp` revision is **889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b**,
+and CMake refuses a different HEAD. Adjust the platform-specific native
+library filename for Windows (`.dll`) or macOS (`.dylib`). Do not assume
+that a successful synthetic test establishes real GGUF compatibility.
+
+The older explicitly selected `StandaloneMain --llama-bin ...` interface
+remains available for subprocess compatibility; it does not use Chrome.
+Java prompt requests are bounded, ill-formed UTF-8 is refused, and model
+candidate output is preserved without trimming whitespace. No generated
+code is executed or promoted automatically. Native deadlines are cooperative
+during model evaluation; slow model loading and every blocking native kernel
+are **not** guaranteed to be preemptible.
+
+## Qualification and ownership
+
+This is a **draft implementation**, not a verified Gemini Nano replacement.
+Before release it requires actual canonical Synexia Maven/OpenRewrite recipe
+execution, fixed-point/source-drift refusal evidence, a pinned and licensed
+GGUF real-model CPU test, Java/JNI and OS-specific integration, distribution
+rights audit, and independent receiving-product tests. GPU/APU, model
+streaming, cancellation parity and throughput remain unqualified.
+
+The source-sealed recipe, donor comparison, fixtures and admission receipts
+belong exclusively in private `hsoliwal/com.synexia`. ChromeLLM receives only
+qualified implementation postimages, product tests, and passive provenance.

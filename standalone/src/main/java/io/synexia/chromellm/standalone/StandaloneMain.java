@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 package io.synexia.chromellm.standalone;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -19,7 +18,7 @@ public final class StandaloneMain {
             throw new IllegalArgumentException("prompt file does not exist");
         }
         ModelRequest request = new ModelRequest(
-                Files.readString(promptFile, StandardCharsets.UTF_8),
+                PromptFileReader.read(promptFile),
                 Integer.parseInt(options.getOrDefault("--max-tokens", "512")),
                 Duration.ofSeconds(Long.parseLong(options.getOrDefault("--timeout-seconds", "120"))));
         try (ModelBackend backend = new LlamaCppCliBackend(

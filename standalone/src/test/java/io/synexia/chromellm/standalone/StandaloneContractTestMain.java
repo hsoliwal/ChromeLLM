@@ -3,6 +3,7 @@ package io.synexia.chromellm.standalone;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
@@ -22,6 +23,30 @@ public final class StandaloneContractTestMain {
         Path model = temp.resolve("fixture.gguf");
         try {
             Files.writeString(model, "not a trained model");
+            Path promptFile = temp.resolve("bounded-prompt.txt");
+            try {
+                String exactPrompt = "  αβ 🌿 \n";
+                Files.writeString(promptFile, exactPrompt, StandardCharsets.UTF_8);
+                check(PromptFileReader.read(promptFile).equals(exactPrompt));
+                Files.write(promptFile, new byte[] {(byte) 0xff});
+                try {
+                    PromptFileReader.read(promptFile);
+                    throw new AssertionError("invalid prompt UTF-8 accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                Files.write(promptFile, new byte[PromptFileReader.MAX_UTF8_BYTES]);
+                check(PromptFileReader.read(promptFile).length() == PromptFileReader.MAX_UTF8_BYTES);
+                Files.write(promptFile, new byte[PromptFileReader.MAX_UTF8_BYTES + 1]);
+                try {
+                    PromptFileReader.read(promptFile);
+                    throw new AssertionError("oversize prompt file accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+            } finally {
+                Files.deleteIfExists(promptFile);
+            }
             String java = Path.of(System.getProperty("java.home"), "bin",
                     System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java").toString();
             String testClasses = Path.of(FakeLlamaCppMain.class.getProtectionDomain()
@@ -32,6 +57,40 @@ public final class StandaloneContractTestMain {
                 check(result.text().equals("synthetic reply"));
                 check(result.backendId().equals("llama.cpp-cli"));
                 check(result.promptSha256().length() == 64);
+                ModelResponse exact = backend.infer(
+                        new ModelRequest("fixture-whitespace", 16, Duration.ofSeconds(10)));
+                check(exact.text().equals("\n  class Example {\n    void f() {}\n  }\n"));
+                try {
+                    backend.infer(new ModelRequest("fixture-blank", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("blank output accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                try {
+                    backend.infer(new ModelRequest("fixture-bad-utf8", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("malformed UTF-8 output accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                try {
+                    backend.infer(new ModelRequest("bad-surrogate-" + (char) 0xD800,
+                            8, Duration.ofSeconds(10)));
+                    throw new AssertionError("malformed UTF-8 input accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                try {
+                    backend.infer(new ModelRequest("fixture-oversize", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("oversized stdout accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
+                try {
+                    backend.infer(new ModelRequest("fixture-stderr-overflow", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("oversized stderr accepted");
+                } catch (java.io.IOException expected) {
+                    checks++;
+                }
                 try {
                     backend.infer(new ModelRequest("fail", 8, Duration.ofSeconds(10)));
                     throw new AssertionError("failed process accepted");
