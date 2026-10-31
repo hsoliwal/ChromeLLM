@@ -33,7 +33,7 @@ src/main/java/io/synexia/chromellm/chrome/ChromeAiConditioningClient.java	-	dele
 src/main/java/io/synexia/chromellm/cli/Main.java	ccc9b3c255d0321f5843a2484dfead000cde7863	modified	20	PR version, not live; the git blob id is its content address
 src/test/java/io/synexia/chromellm/cli/BrowserlessConditionVectorTest.java	c3772a27f5c28d9b3b5a7904aef61cda28283735	added	20	PR version, not live; the git blob id is its content address
 standalone/README.md	60bd81f06a27607ad9463d843637f59bb43c713f	modified	20	PR version, not live; the git blob id is its content address
-standalone/native/CMakeLists.txt	d765df107e7c139757c113e93778c1bc054164b1	added	20	PR version, not live; the git blob id is its content address
+standalone/native/CMakeLists.txt	3c1c921b8bdd9ebc920e937cbd3b382984f89e36	added	20	PR version, not live; the git blob id is its content address
 standalone/native/README.md	c5d65b552c9019b4dd28e66bed327043267f4037	added	20	PR version, not live; the git blob id is its content address
 standalone/native/chromellm_llama_jni.cpp	394eee6f2a5e1db1df53770097dd3cea4bf6899d	added	20	PR version, not live; the git blob id is its content address
 standalone/src/main/java/io/synexia/chromellm/standalone/JniLlamaCppBackend.java	620a6bc588f0e2e37200938a91787f7fdc17a0f1	added	20	PR version, not live; the git blob id is its content address
