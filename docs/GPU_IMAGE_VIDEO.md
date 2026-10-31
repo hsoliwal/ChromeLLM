@@ -1,6 +1,6 @@
 # GPU Image and Video Runtime
 
-ChromeLLM includes a local pixel-processing runtime in addition to the existing ChromeML and diffusion layers.
+ChromeLLM includes a local pixel-processing runtime alongside independent Java/JNI diffusion and inference modules. It does not start or depend on a browser.
 
 ## Why this exists
 
@@ -8,7 +8,7 @@ Images and decoded video frames are arrays of RGBA pixels. Operations that are d
 
 The runtime therefore separates:
 
-1. **Intent / semantics** - optional Chrome AI or another model can decide what should happen.
+1. **Intent / semantics** - a user-provided plan or an explicitly selected independent local model can decide what should happen.
 2. **Masks / structure** - object masks, depth, regions and coordinates describe where it should happen.
 3. **Execution** - OpenCL kernels perform the pixel work locally on a GPU.
 4. **Generative repair** - diffusion/inpainting is reserved for areas that genuinely require new visual content.

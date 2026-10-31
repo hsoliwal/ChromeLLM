@@ -34,7 +34,7 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
   --model /path/to/licensed-model.gguf --prompt-file /path/to/prompt.txt
 ```
 
-This CMake project refuses a checkout whose HEAD is not the exact pinned commit.
+This CMake project refuses a checkout unless HEAD is exactly pinned and the complete donor worktree is clean (tracked changes, untracked files and Git-ignored files are all rejected). Build outside the donor checkout.
 It does not download model weights or Chrome binaries. The CPU-only adapter
 loads the GGUF model once per instance; synchronous `infer` and `close` calls
 are serialized. Deadline/interrupt checks run between native inference steps,
@@ -71,5 +71,4 @@ jmod describe io.synexia.chromellm.standalone.jmod
 A Java-only JMOD retains a provider-neutral API and loads a separate
 operator-supplied native library. A future distributable JMOD may include
 qualified platform-specific libraries via `jmod --libs`; no synthetic fixture
-or proprietary assets may be packaged. GPU/APU support, real inference,
-cancellation, cross-platform testing and performance proof remain pending.
+or proprietary assets may be packaged. Pinned Linux CPU inference against a separately licensed, hash-pinned GGUF has passed hosted Java/JNI CI (ChromeLLM run #41155469422 on an earlier commit). Release still requires latest-head verification, canonical recipe qualification, cross-platform parity, rights review and hard-cancellation analysis; GPU/APU performance is unqualified.
