@@ -18,6 +18,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Do not mask a failed Git index read behind Bash process substitution.
+          indexed_paths=$(mktemp)
+          trap 'rm -f -- "$indexed_paths"' EXIT
+          git ls-files -z > "$indexed_paths"
           violations=0
           while IFS= read -r -d '' tracked; do
             # Lowercase only for matching; preserve the original name in diagnostics.
@@ -28,7 +32,7 @@ jobs:
                 violations=1
                 ;;
             esac
-          done < <(git ls-files -z)
+          done < "$indexed_paths"
           if (( violations != 0 )); then
             echo 'ChromeLLM core must have no tracked browser/vendor/Node runtime artifacts' >&2
             exit 1
