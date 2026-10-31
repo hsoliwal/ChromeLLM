@@ -1,52 +1,7 @@
-# Third-Party Files
+# Third-party provenance
 
-This repository includes reference files from Chromium and Dawn/WebGPU.
+The fork's Chrome2api-derived work retains its original MIT LICENSE and copyright attribution/history. The former Chromium reference sources, Dawn generated headers, Windows ChromeML runner, DLLs and related executables have been removed from the current product tree. Git history remains intact; historical third-party rights and notices are not erased.
 
-## Chromium
+Independent text inference now links to a separately installed `hsoliwal/synexia-llmcpp` llama.cpp C API (observed revision 650ac3739d993e1d425f2d5db3c4205b3606cc30). No external llama.cpp source, engine binary, GGUF model or tokenizer is vendored here. The test-only llama.h is a first-party synthetic subset, not an upstream header. Operators must review licenses, version pins, ABI and all native transitive dependencies before packaging.
 
-Files:
-
-```text
-reference/chrome_ml_api.h
-reference/chrome_ml_types.h
-reference/on_device_model_executor.cc
-```
-
-These files are included for ABI and behavioral reference. They retain their
-original Chromium copyright and BSD-style license headers.
-
-## Dawn / WebGPU
-
-Files:
-
-```text
-runtime/tag_148_headers/dawn/dawn_proc_table_generated.h
-runtime/tag_148_headers/dawn/webgpu_generated.h
-```
-
-These files retain their original BSD 3-Clause license headers.
-
-## Not Included
-
-This repository does not include Google model weights, Chrome binaries, or
-Chrome proprietary runtime DLLs.
-
-
-
-## OpenCV / FFmpeg
-
-The native vision/media integration can link to locally installed OpenCV and FFmpeg libraries.
-
-- OpenCV 4.5 and later: Apache License 2.0.
-- FFmpeg: primarily LGPL-2.1-or-later; optional GPL components apply when FFmpeg is built with those components enabled.
-
-No OpenCV or FFmpeg binaries are vendored by this integration.
-
-## Design-Reference Repositories
-
-The following public repositories were inspected for architecture only:
-
-- jvl711/JavaFFmpegLibrary
-- tramvm/OpencvJni
-
-No source from those repositories is copied into ChromeLLM. Their inspected repository trees did not expose a repository-level license file, so they are treated strictly as design references.
+OpenCV, FFmpeg and OpenCL integrations for the unrelated image/video pipeline require separate build-specific license review. FFmpeg licensing can vary by compile options.

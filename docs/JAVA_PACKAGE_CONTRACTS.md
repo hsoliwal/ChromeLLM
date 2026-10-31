@@ -31,11 +31,9 @@ try (var engine = new io.synexia.chromellm.engine.JavaDiffusionEngine()) {
 
 [Source](../src/main/java/io/synexia/chromellm/batch) owns sorted image/video discovery, per-file transform creation, output-directory mapping and failure aggregation. `BatchImageProcessor` optionally uses a fixed thread pool; `BatchVideoProcessor` is sequential. `BatchProcessResult` copies its failure list and `BatchFailure` retains input/message. Output writes and processor ownership, supplier concurrency, overwrite behavior, interruption limits and tests are covered in the [batch contract](MEDIA_PIPELINE_CONTRACTS.md#batch-package).
 
-## chrome
+## standalone text inference
 
-[ChromeAiConditioningClient](../src/main/java/io/synexia/chromellm/chrome/ChromeAiConditioningClient.java) appends `/v1/chat/completions` to a base URI and synchronously sends system/user messages through Java `HttpClient`. Connect timeout is ten seconds; request timeout is two minutes. The request selects `chrome-gemini-nano` with temperature 0.2 and sends the user's prompt to that endpoint.
-
-`plan(String)` reads the first choice's message, strips an optional outer Markdown fence, parses JSON, clamps supplied vector values to 0..1, and prepends the low 16 bits of `class_id` normalized by 65535. Although the prompt asks for 16 vector values, code accepts any nonempty vector. Empty vectors, non-2xx status and JSON/I/O failures become `IllegalStateException`; interruption restores the interrupt flag before wrapping it. There is no built-in authentication header, retry, or endpoint allowlist. Choose the endpoint deliberately. No dedicated planner test is present.
+The former browser-specific ChromeAiConditioningClient package has been deleted. The independent Java 21 text API resides in the standalone JPMS module with ModelBackend, LlamaCppJniBackend, LlamaCppCliBackend, ModelRequest and ModelResponse; no browser import or model download is required.
 
 ## nativebridge
 
@@ -43,7 +41,7 @@ try (var engine = new io.synexia.chromellm.engine.JavaDiffusionEngine()) {
 
 ## cli
 
-[Main](../src/main/java/io/synexia/chromellm/cli/Main.java) selects `java`, `jna`, or `jni`, optionally calls the Chrome planner for `--prompt`, generates RGB output, and closes its engine. Defaults: 256×256, 40 steps, seed 1, guidance 7.5, eta 0, `diffusion.ppm`, local chat base `http://127.0.0.1:11435`. Missing values/unknown flags fail with `IllegalArgumentException`; numeric parsing errors propagate. Package-private `PpmWriter` writes a binary P6 header and RGB bytes with `Files.write`, creating/replacing the selected file without creating parent directories. The command is not a model downloader or packaged JAR launcher.
+[Main](../src/main/java/io/synexia/chromellm/cli/Main.java) selects Java, JNA or JNI diffusion engines and accepts optional --condition-vector with exactly 16 finite [0,1] values. The old --prompt and --chrome-base flags are unsupported. Defaults remain 256×256, 40 steps, seed 1, guidance 7.5, eta 0 and diffusion.ppm. It is not a text model runner.
 
 ## gpu
 
