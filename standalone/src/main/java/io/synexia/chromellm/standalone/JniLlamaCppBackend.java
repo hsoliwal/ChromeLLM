@@ -21,8 +21,8 @@ import java.util.concurrent.TimeoutException;
  * supplied by the operator; CPU execution is explicit.
  *
  * <p>The backend serializes inference and close to preserve the native model
- * lifetime. The native deadline is checked between model-evaluation calls; it
- * is not a hard preemption guarantee for a single blocking native call.</p>
+ * lifetime. Native CPU evaluation checks the deadline between batches and
+ * through its abort callback; model loading and non-CPU work are not hard-preemptible.</p>
  */
 public final class JniLlamaCppBackend implements ModelBackend {
     private static final int MAX_OUTPUT_BYTES = 4 * 1024 * 1024;

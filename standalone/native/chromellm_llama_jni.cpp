@@ -7,6 +7,10 @@
 #include <cstdint>
 #include <exception>
 #include <memory>
+#include <limits>
+#include <mutex>
+#include <unordered_map>
+#include <utility>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -200,6 +204,53 @@ std::string generate(JNIEnv * env, State *, const std::string & prompt,
     return response;
 }
 #endif
+
+// IDs are process-local opaque values, never pointers or authorization tokens.
+// Registry ownership is removed by close; an admitted inference keeps a lease.
+std::mutex handlesMutex;
+std::unordered_map<jlong, std::shared_ptr<State>> handles;
+jlong nextHandle = 1;
+
+jlong registerState(std::shared_ptr<State> state) {
+    std::lock_guard<std::mutex> lock(handlesMutex);
+    if (nextHandle == 0) throw std::overflow_error("native model handle space exhausted");
+    const jlong id = nextHandle;
+    if (!handles.emplace(id, std::move(state)).second)
+        throw std::logic_error("native model handle collision");
+    // Exhaust rather than wrap and accidentally revive a stale handle.
+    nextHandle = id == std::numeric_limits<jlong>::max() ? 0 : id + 1;
+    return id;
+}
+
+std::shared_ptr<State> retainState(jlong id) {
+    std::lock_guard<std::mutex> lock(handlesMutex);
+    const auto found = handles.find(id);
+    if (found == handles.end())
+        throw std::invalid_argument("closed or unknown native model handle");
+    return found->second;
+}
+
+void releaseState(jlong id) {
+    std::shared_ptr<State> retired;
+    {
+        std::lock_guard<std::mutex> lock(handlesMutex);
+        const auto found = handles.find(id);
+        if (found == handles.end()) return; // Zero, stale and repeated close are inert.
+        retired = std::move(found->second);
+        handles.erase(found);
+    }
+    // Potentially slow model destruction never holds the registry mutex.
+}
+
+void releaseAllStates() {
+    std::unordered_map<jlong, std::shared_ptr<State>> retired;
+    {
+        std::lock_guard<std::mutex> lock(handlesMutex);
+        retired.swap(handles);
+    }
+    // JNI_OnUnload runs after Java frames using this library are unreachable.
+    // Drain model ownership before llama_backend_free; never reset the ID epoch.
+}
 } // namespace
 
 // Negotiate native ABI before allocating a model handle.
@@ -221,7 +272,7 @@ Java_io_synexia_chromellm_standalone_JniLlamaCppBackend_nativeOpen(
         if (path.empty() || path.find('\0') != std::string::npos)
             throw std::invalid_argument("invalid model path");
 #ifdef CHROMELLM_JNI_CONTRACT_FIXTURE
-        return reinterpret_cast<jlong>(new State{path});
+        return registerState(std::make_shared<State>(State{path}));
 #else
         llama_model_params params = llama_model_default_params();
         params.n_gpu_layers = 0; // CPU is mandatory and no hidden accelerator fallback is permitted.
@@ -231,9 +282,9 @@ Java_io_synexia_chromellm_standalone_JniLlamaCppBackend_nativeOpen(
         if (!model) throw std::runtime_error("unable to load external GGUF model");
         if (llama_model_has_encoder(model.get()) || llama_model_is_diffusion(model.get()))
             throw std::runtime_error("this provider supports decoder-only text models");
-        State * state = new State(model.get());
+        auto state = std::make_shared<State>(model.get());
         model.release();
-        return reinterpret_cast<jlong>(state);
+        return registerState(std::move(state));
 #endif
     } catch (const std::exception & e) {
         raise(env, "java/io/IOException", e.what());
@@ -249,9 +300,9 @@ Java_io_synexia_chromellm_standalone_JniLlamaCppBackend_nativeInfer(
         JNIEnv * env, jclass, jlong handle, jbyteArray promptArray, jint maxTokens,
         jlong timeoutMillis, jint maxOutputBytes) {
     try {
-        if (!handle) throw std::invalid_argument("closed native model handle");
+        std::shared_ptr<State> state = retainState(handle);
         std::string prompt = bytes(env, promptArray, "prompt");
-        std::string response = generate(env, reinterpret_cast<State *>(handle), prompt,
+        std::string response = generate(env, state.get(), prompt,
                                         maxTokens, timeoutMillis, maxOutputBytes);
         return outputBytes(env, response);
     } catch (const std::exception & e) {
@@ -270,8 +321,14 @@ Java_io_synexia_chromellm_standalone_JniLlamaCppBackend_nativeInfer(
 
 extern "C" JNIEXPORT void JNICALL
 Java_io_synexia_chromellm_standalone_JniLlamaCppBackend_nativeClose(
-        JNIEnv *, jclass, jlong handle) {
-    delete reinterpret_cast<State *>(handle);
+        JNIEnv * env, jclass, jlong handle) {
+    try {
+        releaseState(handle);
+    } catch (const std::exception & e) {
+        raise(env, "java/lang/IllegalStateException", e.what());
+    } catch (...) {
+        raise(env, "java/lang/IllegalStateException", "unclassified native model-close failure");
+    }
 }
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *, void *) {
@@ -282,6 +339,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *, void *) {
 }
 
 extern "C" JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *, void *) {
+    releaseAllStates();
 #ifndef CHROMELLM_JNI_CONTRACT_FIXTURE
     llama_backend_free();
 #endif

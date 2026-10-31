@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
 /** Synthetic transport/lifecycle proof, not proof of real llama.cpp inference. */
 public final class JniContractTestMain {
@@ -26,7 +28,7 @@ public final class JniContractTestMain {
             if (args.length == 2) {
                 boolean refused = false;
                 try (JniLlamaCppBackend ignored = new JniLlamaCppBackend(Path.of(args[0]), model)) {
-                    throw new AssertionError("incompatible native ABI accepted");
+                    throw new AssertionError("incompatible native ABI accepted by " + ignored.id());
                 } catch (IOException expected) {
                     refused = expected.getMessage().contains("unsupported native JNI ABI version");
                 }
@@ -36,6 +38,7 @@ public final class JniContractTestMain {
             }
             JniLlamaCppBackend backend = new JniLlamaCppBackend(Path.of(args[0]), model);
             try {
+                nativeHandleChecks(model);
                 ModelRequest request = new ModelRequest("utf8 Ελληνικά 🌿", 8, Duration.ofSeconds(5));
                 ModelResponse result = backend.infer(request);
                 if (!Objects.equals(result.text(), "jni-fixture:utf8 Ελληνικά 🌿"))
@@ -105,6 +108,70 @@ public final class JniContractTestMain {
             System.out.println("PASS: JNI UTF-8, exact output, digest, interrupt/timeout, failure mapping, close/reuse");
         } finally {
             Files.deleteIfExists(model);
+        }
+    }
+
+    /** Exercise the native boundary directly; the ordinary Java monitor is not the oracle. */
+    private static void nativeHandleChecks(Path model) throws Exception {
+        Method open = JniLlamaCppBackend.class.getDeclaredMethod("nativeOpen", byte[].class);
+        Method infer = JniLlamaCppBackend.class.getDeclaredMethod("nativeInfer", long.class,
+                byte[].class, int.class, long.class, int.class);
+        Method close = JniLlamaCppBackend.class.getDeclaredMethod("nativeClose", long.class);
+        open.setAccessible(true);
+        infer.setAccessible(true);
+        close.setAccessible(true);
+        byte[] prompt = "handle-probe".getBytes(StandardCharsets.UTF_8);
+        int checks = 0;
+        // The synthetic baseline never dereferences State in generate, so this
+        // first refusal is a safe deterministic negative control for the old code.
+        for (long invalid : new long[] {Long.MAX_VALUE, Long.MIN_VALUE, -1, 0}) {
+            expectClosed(infer, invalid, prompt);
+            checks++;
+        }
+        invokeNative(close, 0L);
+        invokeNative(close, -1L);
+        invokeNative(close, Long.MAX_VALUE);
+        checks++;
+        long previous = 0;
+        for (int i = 0; i < 128; i++) {
+            long handle = (Long) invokeNative(open,
+                    model.toAbsolutePath().toString().getBytes(StandardCharsets.UTF_8));
+            try {
+                if (handle <= previous) throw new AssertionError("native handle was reused or wrapped");
+                previous = handle;
+                checks++;
+                byte[] output = (byte[]) invokeNative(infer, handle, prompt, 8, 5000L, 4096);
+                if (!new String(output, StandardCharsets.UTF_8).equals("jni-fixture:handle-probe"))
+                    throw new AssertionError("valid native handle failed");
+                checks++;
+            } finally {
+                invokeNative(close, handle);
+            }
+            invokeNative(close, handle);
+            expectClosed(infer, handle, prompt);
+            checks++;
+        }
+        System.out.println("PASS: native handle boundary checks=" + checks);
+    }
+
+    private static void expectClosed(Method infer, long handle, byte[] prompt) throws Exception {
+        try {
+            invokeNative(infer, handle, prompt, 8, 5000L, 4096);
+            throw new AssertionError("fabricated or stale native handle accepted: " + handle);
+        } catch (IOException expected) {
+            if (!expected.getMessage().equals("closed or unknown native model handle"))
+                throw new AssertionError("wrong native handle failure", expected);
+        }
+    }
+
+    private static Object invokeNative(Method method, Object... arguments) throws Exception {
+        try {
+            return method.invoke(null, arguments);
+        } catch (InvocationTargetException wrapped) {
+            Throwable cause = wrapped.getCause();
+            if (cause instanceof Exception exception) throw exception;
+            if (cause instanceof Error error) throw error;
+            throw new AssertionError("unexpected native throwable", cause);
         }
     }
 }
