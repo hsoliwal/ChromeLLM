@@ -1,5 +1,14 @@
 # ADR-0001: ChromeLLM is an independent product; Chrome is an optional donor
 
+> **Historical architectural decision (2026-10-30).** The browser-independent
+> Java 21/C++17 in-process JNI provider is implemented on draft ChromeLLM
+> PR #20, with pinned independent `llama.cpp` and a licensed GGUF model.
+> Legacy Chrome Prompt API, ChromeML/Dawn and optional-browser provider diagrams
+> below document alternatives considered in the original decision; they are
+> **not** active dependencies or supported product launch instructions.
+> For the actual build and inference commands use `standalone/README.md`.
+> Release remains qualified separately from source-level proof.
+
 - Status: **Accepted architectural direction; implementation in progress**
 - Scope: `hsoliwal/ChromeLLM` and subsequent qualified M3JDK21 receiving work
 - Date: 2026-10-30

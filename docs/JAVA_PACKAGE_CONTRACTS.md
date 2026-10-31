@@ -2,7 +2,7 @@
 
 [Project map](ARCHITECTURE_AND_PROJECTS.md) · [Media contracts](MEDIA_PIPELINE_CONTRACTS.md) · [Native/HTTP contracts](NATIVE_RUNTIME_CONTRACTS.md) · [Coverage](DOCUMENTATION_COVERAGE.md)
 
-Source snapshot: `26473e370c6d7cedace4a0b21e8ad56a35ff2dfc`. All names below are packages under `io.synexia.chromellm`, not separately published artifacts. The root Maven project owns 106 main Java files in 14 namespaces. Examples are source-derived and were not executed for this documentation change.
+Source snapshot: `ed908801fc1116bd607a49bac9f71ea138af6609` (browserless JNI draft). All names below refer to packages under `io.synexia.chromellm`, not separately published artifacts. The root Maven project owns 105 main Java files in 13 package directories; the independent `standalone/` module is separate. Examples are source-derived and require ordinary build/runtime qualification.
 
 ## api
 
@@ -31,11 +31,14 @@ try (var engine = new io.synexia.chromellm.engine.JavaDiffusionEngine()) {
 
 [Source](../src/main/java/io/synexia/chromellm/batch) owns sorted image/video discovery, per-file transform creation, output-directory mapping and failure aggregation. `BatchImageProcessor` optionally uses a fixed thread pool; `BatchVideoProcessor` is sequential. `BatchProcessResult` copies its failure list and `BatchFailure` retains input/message. Output writes and processor ownership, supplier concurrency, overwrite behavior, interruption limits and tests are covered in the [batch contract](MEDIA_PIPELINE_CONTRACTS.md#batch-package).
 
-## chrome
+## Removed Chrome conditioning client (history only)
 
-[ChromeAiConditioningClient](../src/main/java/io/synexia/chromellm/chrome/ChromeAiConditioningClient.java) appends `/v1/chat/completions` to a base URI and synchronously sends system/user messages through Java `HttpClient`. Connect timeout is ten seconds; request timeout is two minutes. The request selects `chrome-gemini-nano` with temperature 0.2 and sends the user's prompt to that endpoint.
-
-`plan(String)` reads the first choice's message, strips an optional outer Markdown fence, parses JSON, clamps supplied vector values to 0..1, and prepends the low 16 bits of `class_id` normalized by 65535. Although the prompt asks for 16 vector values, code accepts any nonempty vector. Empty vectors, non-2xx status and JSON/I/O failures become `IllegalStateException`; interruption restores the interrupt flag before wrapping it. There is no built-in authentication header, retry, or endpoint allowlist. Choose the endpoint deliberately. No dedicated planner test is present.
+The former `ChromeAiConditioningClient` browser/HTTP planner and its
+`chrome-gemini-nano` service dependency have been removed from the live
+source tree. They are not optional runtime providers in this release
+candidate. Their original implementation is preserved only in Git history.
+Text inference is independently provided by `standalone/` through an
+explicit Java 21/JNI `llama.cpp` provider and a licensed GGUF model.
 
 ## nativebridge
 
@@ -43,7 +46,7 @@ try (var engine = new io.synexia.chromellm.engine.JavaDiffusionEngine()) {
 
 ## cli
 
-[Main](../src/main/java/io/synexia/chromellm/cli/Main.java) selects `java`, `jna`, or `jni`, optionally calls the Chrome planner for `--prompt`, generates RGB output, and closes its engine. Defaults: 256×256, 40 steps, seed 1, guidance 7.5, eta 0, `diffusion.ppm`, local chat base `http://127.0.0.1:11435`. Missing values/unknown flags fail with `IllegalArgumentException`; numeric parsing errors propagate. Package-private `PpmWriter` writes a binary P6 header and RGB bytes with `Files.write`, creating/replacing the selected file without creating parent directories. The command is not a model downloader or packaged JAR launcher.
+[Main](../src/main/java/io/synexia/chromellm/cli/Main.java) selects `java`, `jna`, or `jni`, generates RGB output and closes its engine. The only text-independent optional CLI conditioning input is `--condition-vector` with **exactly 16** comma-separated finite floats in [0,1]; omitted conditioning uses `DiffusionCondition.none()`. Unsupported legacy `--prompt` and `--chrome-base` flags are rejected. Defaults: 256×256, 40 steps, seed 1, guidance 7.5, eta 0, and `diffusion.ppm`. Missing values/unknown flags fail with `IllegalArgumentException`; numeric parsing errors propagate. Package-private `PpmWriter` writes a binary P6 header and RGB bytes with `Files.write`, creating/replacing the selected file without creating parent directories. This CLI does not call a browser, model service, or downloader.
 
 ## gpu
 

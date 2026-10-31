@@ -2,7 +2,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # ChromeLLM: standalone inference architecture
 
-**Status:** draft architecture contract; not a completed standalone runtime.
+**Status:** historical pre-JNI architecture proposal (retained for provenance).
+Current draft product PR #20 implements a separate Java 21/C++17 `llama.cpp`
+JNI backend with verified Linux CPU GGUF inference, but release and recipe
+qualification remain independent gates. The ChromeML/Dawn/Node paths and
+browser/HTTP provider alternatives described below are historical, not live
+build targets or current release instructions. Use `standalone/README.md`
+for supported browser-free build commands.
 **Product owner:** `hsoliwal/ChromeLLM`. **Canonical recipe/evidence owner:**
 private `hsoliwal/com.synexia`. **Java SDK owner:** `hsoliwal/M3jdk21`.
 
@@ -22,7 +28,7 @@ ChromeML DLLs, browser profiles or Chrome-managed model assets. The second
 milestone is the actual standalone product acceptance. Neither follows from
 source compilation or a fake-model smoke test.
 
-## Existing source owners to extend
+## Historical browser-era source owners (removed from active tree)
 
 - `runtime/chromeml_api_server.cjs`: Node loopback HTTP adapter; converts
   supported chat requests, queues jobs and invokes the Windows PowerShell
