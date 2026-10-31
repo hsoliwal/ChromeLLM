@@ -52,11 +52,11 @@ jobs:
         run: |
           cmake -S standalone/native -B build/jni-abi-negative \
             -DCHROMELLM_JNI_CONTRACT_FIXTURE=ON \
-            '-DCMAKE_CXX_FLAGS=-DCHROMELLM_JNI_ABI_MISMATCH_FIXTURE=1'
+            -DCHROMELLM_JNI_ABI_MISMATCH_FIXTURE=ON
           cmake --build build/jni-abi-negative --parallel
           java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
             io.synexia.chromellm.standalone.JniContractTestMain \
-            "$PWD/build/jni-abi-negative/libchromellm_llama_jni_fixture.so" \
+            "$PWD/build/jni-abi-negative/libchromellm_llama_jni_abi_mismatch_fixture.so" \
             --expect-abi-mismatch > abi-negative.log 2>&1
           cat abi-negative.log
           if grep -E 'WARNING in native method|FATAL ERROR in native method' abi-negative.log; then
@@ -98,6 +98,23 @@ jobs:
           cmake --build build/jni-real --target chromellm_llama_jni --parallel 2
           test -s build/jni-real/libchromellm_llama_jni.so
           nm -D build/jni-real/libchromellm_llama_jni.so | grep -F 'Java_io_synexia_chromellm_standalone_JniLlamaCppBackend_nativeInfer'
+      - name: Test malformed GGUF refusal against real native engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -f standalone/pom.xml test-compile
+          java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
+            io.synexia.chromellm.standalone.InvalidGgufNativeTestMain \
+            "$PWD/build/jni-real/libchromellm_llama_jni.so" \
+            > build/jni-real/invalid-model-refusal.log 2>&1
+          cat build/jni-real/invalid-model-refusal.log
+          grep -F 'PASS: pinned real native JNI rejects invalid GGUF twice without crash' \
+            build/jni-real/invalid-model-refusal.log
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' \
+            build/jni-real/invalid-model-refusal.log; then
+            echo 'Strict JNI warning during malformed model refusal' >&2
+            exit 1
+          fi
       - name: Refuse ChromeML, Dawn and browser library dependencies
         shell: bash
         run: |
