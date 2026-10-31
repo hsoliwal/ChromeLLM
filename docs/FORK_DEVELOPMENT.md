@@ -1,100 +1,27 @@
-# Developing the ChromeLLM fork
+# Developing ChromeLLM without Chrome
 
-[Back to the README](../README.md)
+Use Java 21 and C++17. Standalone text inference lives in **standalone/** and is independent of browser installation, ChromeML DLLs, Dawn, Node, PowerShell and Chrome-managed model files. A separate licensed llama.cpp/GGUF runtime is an operator-supplied input.
 
-## Choose the component first
+## Two build units
 
-This fork contains two independent starting points. Building one does not validate
-the other.
-
-| Goal | Source entrypoints | Guide |
-| --- | --- | --- |
-| Call ChromeML through a local HTTP API | [Node server](../runtime/chromeml_api_server.cjs), [C++ runner](../runtime/ChromeMLBareRunner.cpp), [PowerShell launcher](../启动API服务.ps1) | [API contract](OPENAI_COMPAT_API.md) |
-| Explore the Java reference diffusion pipeline or native bridges | [Java engines](../src/main/java/io/synexia/chromellm/engine), [native ABI](../native/diffusion_native.h), [native bridges](../src/main/java/io/synexia/chromellm/nativebridge) | [Diffusion guide](DIFFUSION_JAVA_NATIVE.md) |
-| Process images and video | [GPU operations](../src/main/java/io/synexia/chromellm/gpu), [video pipeline](../src/main/java/io/synexia/chromellm/video), [presets](../src/main/java/io/synexia/chromellm/preset) | [GPU guide](GPU_IMAGE_VIDEO.md), [native vision/media](NATIVE_VISION_MEDIA.md), [pipeline](VIRTUALDUB_JAVA_PIPELINE.md), [presets and encoding](MEDIA_PRODUCTION_PIPELINE.md) |
-
-The bundled diffusion denoiser is a lightweight structural reference implementation,
-not a bundled trained photorealistic image model. The optional ChromeML planner
-supplies conditioning; it does not turn Gemini Nano into the diffusion backend.
-
-## Windows ChromeML path
-
-Use the README's [local model instructions](../README.md#add-local-model-file)
-and verify compatibility of the runner, Chrome runtime components, and model
-version before starting. This path needs Windows, PowerShell, Node.js available
-on `PATH`, and the separately obtained compatible model assets.
-
-From the repository root, the checked-in runner build script requires Zig and
-writes `runtime/ChromeMLBareRunner.exe`:
-
-```powershell
-.\scripts\build_runner.ps1
-.\启动API服务.ps1 -HostAddress 127.0.0.1 -Port 11435
-```
-
-In another terminal, `curl.exe http://127.0.0.1:11435/v1/models` checks that the
-HTTP service responds. It does not prove inference works; use the README's small
-chat-completion example for that.
-
-Keep the service on loopback. The server does not enforce API-key authentication;
-a Bearer header is not an access-control boundary. Check the
-[compatibility matrix](OPENAI_COMPAT_API.md#compatibility-matrix) before adopting
-an OpenAI client feature: tool calls, structured outputs, and other OpenAI
-endpoints are not implemented.
-
-## Java and native paths
-
-The [Maven configuration](../pom.xml) targets Java 21.
-For the Java test suite, run from the repository root:
+- Text inference: standalone/pom.xml, standalone/native/CMakeLists.txt, ModelBackend, LlamaCppJniBackend, StandaloneMain and the synthetic JNI contract test.
+- Diffusion/media: root pom.xml, root CMakeLists.txt and native/. Media has its own JNA/Jackson and native OpenCL/OpenCV/FFmpeg dependencies; they are not transitive Java runtime dependencies of standalone/.
 
 ```sh
-mvn -B test
+mvn -B -ntp -f standalone/pom.xml verify
+jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar
+cmake -S standalone/native -B standalone/native/build \
+ -DLLAMA_INCLUDE_DIR=/path/to/llama/include \
+ -DGGML_INCLUDE_DIR=/path/to/llama/ggml/include \
+ -DLLAMA_LIBRARY=/path/to/libllama.so
+cmake --build standalone/native/build
 ```
 
-The [CMake project](../CMakeLists.txt) requires CMake 3.20+, a C++17 compiler,
-and JNI headers from a JDK. The same native build commands appear in
-[CI](../.github/workflows/java-native-diffusion.yml):
 
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel 2
-```
+Select --backend jni with explicit --jni-lib and --model paths. The retained llama.cpp CLI provider is a separate browser-free subprocess adapter selected with --backend cli.
 
-OpenCV and FFmpeg development libraries enable additional JNI targets when
-detected; a successful CMake build alone does not mean those optional targets
-were built. Consult its configure output and the native media guide. GPU
-execution additionally depends on an available OpenCL runtime/device.
+## Acceptance and rights
 
-The OpenCV and FFmpeg JNI integration tests are opt-in. After building the
-optional libraries and installing the FFmpeg executable, the Linux CI invocation
-can be reproduced from the repository root:
+GitHub Actions performs Java-only closure, checks absence of deleted runtime files and ChromeML/Dawn native linkage, and builds the synthetic JNI fixture. This does not establish real licensed model inference, GPU, Windows or macOS qualification. Native binaries and model weights are not bundled. Maintain donor licenses and provenance. Canonical source transformations belong to [Synexia](https://github.com/hsoliwal/com.synexia/pull/14522).
 
-```sh
-LD_LIBRARY_PATH="$PWD/build" mvn -B -Dchromellm.native.integration=true \
-  -DargLine="-Djava.library.path=$PWD/build" test
-```
-
-Ordinary `mvn test` does not exercise those gated integrations or the Windows
-ChromeML inference chain. Report which backend, operating system, dependencies,
-and commands you actually tested.
-
-## Changes and provenance
-
-Propose fork-specific changes against
-[hsoliwal/ChromeLLM](https://github.com/hsoliwal/ChromeLLM/pulls). Upstream
-Chrome2api remains a separate project; this fork's Java/media additions do not
-imply upstream support.
-
-Read [LICENSE](../LICENSE), [NOTICE](../NOTICE), and
-[THIRD_PARTY.md](../THIRD_PARTY.md) before redistributing artifacts. Project
-source, Chromium/Dawn reference headers, runtime binaries, optional native
-dependencies, and Google model assets have different provenance. A file's
-presence in this tree does not by itself establish redistribution rights.
-Never commit model weights, credentials, browser profiles, or private prompts.
-
-## Source-contract reference
-
-The [project/module map](ARCHITECTURE_AND_PROJECTS.md), [Java package contracts](JAVA_PACKAGE_CONTRACTS.md),
-[media lifecycle guide](MEDIA_PIPELINE_CONTRACTS.md), and [native/HTTP contracts](NATIVE_RUNTIME_CONTRACTS.md)
-explain the inspected implementation boundaries. The [coverage ledger](DOCUMENTATION_COVERAGE.md)
-records source-set counts, special artifacts, unexecuted checks, and remaining documentation gaps.
+See [START_HERE](START_HERE.md), [diffusion/media](DIFFUSION_JAVA_NATIVE.md), [JNI source](../standalone/native/llama_jni.cpp) and [PR #19](https://github.com/hsoliwal/ChromeLLM/pull/19).

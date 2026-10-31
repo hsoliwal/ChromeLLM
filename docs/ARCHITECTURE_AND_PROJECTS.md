@@ -1,5 +1,7 @@
 # Architecture and project boundaries
 
+> **Historical snapshot, not a runnable Chrome integration:** ChromeLLM draft PR #19 removes the old ChromeML/Dawn, Node and PowerShell execution files. Current text inference uses a separate llama.cpp JNI backend (see [START_HERE](START_HERE.md)). The legacy architectures, links and verification counts below are retained solely for provenance; do not follow them as build instructions. Real GGUF inference remains to be qualified.
+
 [Development entry points](FORK_DEVELOPMENT.md) · [Java packages](JAVA_PACKAGE_CONTRACTS.md) · [Media lifecycle](MEDIA_PIPELINE_CONTRACTS.md) · [Native and HTTP contracts](NATIVE_RUNTIME_CONTRACTS.md) · [Coverage ledger](DOCUMENTATION_COVERAGE.md)
 
 This guide describes the public fork at source snapshot `26473e370c6d7cedace4a0b21e8ad56a35ff2dfc`. Its implementation is unchanged from the documentation branch's base `11d834102a56c1f8db2f7b658a233c212a62ac18`. Statements below are source observations, not execution results. The fork relationship is [hsoliwal/ChromeLLM](https://github.com/hsoliwal/ChromeLLM) → [xszwow/Chrome2api](https://github.com/xszwow/Chrome2api).

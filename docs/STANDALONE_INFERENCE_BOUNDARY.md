@@ -1,4 +1,6 @@
 <!-- SPDX-FileCopyrightText: 2026 Hitesh Soliwal and Contributors -->
+
+> **Historical snapshot, not a runnable Chrome integration:** ChromeLLM draft PR #19 removes the old ChromeML/Dawn, Node and PowerShell execution files. Current text inference uses a separate llama.cpp JNI backend (see [START_HERE](START_HERE.md)). The legacy architectures, links and verification counts below are retained solely for provenance; do not follow them as build instructions. Real GGUF inference remains to be qualified.
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # ChromeLLM: standalone inference architecture
 
