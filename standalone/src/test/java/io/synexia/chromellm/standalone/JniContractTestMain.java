@@ -60,6 +60,23 @@ public final class JniContractTestMain {
                 try { backend.infer(new ModelRequest("fixture-timeout", 8, Duration.ofSeconds(5))); }
                 catch (TimeoutException expectedException) { timeout = true; }
                 if (!timeout) throw new AssertionError("native deadline not mapped");
+                // A millisecond-only JNI ABI cannot round positive nanos up.
+                // The synthetic provider would otherwise return a candidate.
+                for (long nanos : new long[] {1L, 999L, 999_999L}) {
+                    boolean tooShort = false;
+                    try {
+                        backend.infer(new ModelRequest("fixture-whitespace", 8,
+                                Duration.ofNanos(nanos)));
+                    } catch (TimeoutException expectedException) {
+                        tooShort = true;
+                    }
+                    if (!tooShort) throw new AssertionError(
+                            "native ABI extended a sub-millisecond deadline: " + nanos);
+                }
+                ModelResponse boundary = backend.infer(new ModelRequest(
+                        "fixture-whitespace", 8, Duration.ofMillis(1)));
+                if (!boundary.text().equals(expectedSource))
+                    throw new AssertionError("whole-millisecond JNI request refused");
                 boolean nativeError = false;
                 try { backend.infer(new ModelRequest("fixture-native-error", 8, Duration.ofSeconds(5))); }
                 catch (IOException expectedException) { nativeError = true; }

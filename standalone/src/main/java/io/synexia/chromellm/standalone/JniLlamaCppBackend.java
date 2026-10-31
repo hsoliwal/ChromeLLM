@@ -81,7 +81,12 @@ public final class JniLlamaCppBackend implements ModelBackend {
         if (Thread.currentThread().isInterrupted()) throw new InterruptedException("interrupted before inference");
         byte[] prompt = strictUtf8(request.prompt());
         if (prompt.length > 4 * 1024 * 1024) throw new IOException("prompt exceeds 4 MiB");
-        long deadlineMillis = Math.max(1, request.timeout().toMillis());
+        // Native JNI uses integral milliseconds; rounding up a positive
+        // sub-millisecond limit would silently extend the caller's budget.
+        long deadlineMillis = request.timeout().toMillis();
+        if (deadlineMillis == 0) {
+            throw new TimeoutException("JNI cannot honor a sub-millisecond deadline");
+        }
         byte[] output = nativeInfer(handle, prompt, request.maxTokens(), deadlineMillis, MAX_OUTPUT_BYTES);
         if (output == null || output.length == 0 || output.length > MAX_OUTPUT_BYTES) {
             throw new IOException("native runtime returned an empty or oversized response");
