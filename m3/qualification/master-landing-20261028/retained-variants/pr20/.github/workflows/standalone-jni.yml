@@ -1,0 +1,125 @@
+name: Browserless JNI synthetic contract
+on:
+  push:
+    paths: ['standalone/**', '.github/workflows/standalone-jni.yml']
+  pull_request:
+    paths: ['standalone/**', '.github/workflows/standalone-jni.yml']
+jobs:
+  # Fail closed if any removed browser, ChromeML, Node or Windows launcher
+  # artifact returns to the tracked product tree.
+  no-browser-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify browserless product file inventory
+        shell: bash
+        run: |
+          git ls-files | grep -E '^(runtime/|reference/|scripts/|model/OptGuideOnDeviceModel/|src/main/java/io/synexia/chromellm/chrome/)|\.(dll|exe|cjs|ps1)$' > forbidden-browser-paths.txt || true
+          if test -s forbidden-browser-paths.txt; then
+            cat forbidden-browser-paths.txt
+            echo 'Browser/vendor runtime paths must remain absent' >&2
+            exit 1
+          fi
+
+  linux-jni-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - name: Compile and test standalone Java
+        run: mvn -B -ntp -f standalone/pom.xml verify
+      - name: Build native JNI synthetic fixture
+        run: |
+          cmake -S standalone/native -B build/jni-fixture -DCHROMELLM_JNI_CONTRACT_FIXTURE=ON
+          cmake --build build/jni-fixture --parallel
+      - name: Execute JNI lifecycle and UTF-8 contract
+        run: |
+          java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
+            io.synexia.chromellm.standalone.JniContractTestMain \
+            "$PWD/build/jni-fixture/libchromellm_llama_jni_fixture.so" > checkjni.log 2>&1
+          cat checkjni.log
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' checkjni.log; then
+            echo 'Failing JNI strict warning gate' >&2
+            exit 1
+          fi
+      - name: Reject incompatible native JNI ABI
+        shell: bash
+        run: |
+          cmake -S standalone/native -B build/jni-abi-negative \
+            -DCHROMELLM_JNI_CONTRACT_FIXTURE=ON \
+            -DCHROMELLM_JNI_ABI_MISMATCH_FIXTURE=ON
+          cmake --build build/jni-abi-negative --parallel
+          java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
+            io.synexia.chromellm.standalone.JniContractTestMain \
+            "$PWD/build/jni-abi-negative/libchromellm_llama_jni_abi_mismatch_fixture.so" \
+            --expect-abi-mismatch > abi-negative.log 2>&1
+          cat abi-negative.log
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' abi-negative.log; then
+            echo 'Incompatible JNI fixture produced a strict JNI warning' >&2
+            exit 1
+          fi
+      - name: Verify JPMS closure and create JMOD
+        run: |
+          test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar)" = java.base
+          jmod create --class-path standalone/target/classes io.synexia.chromellm.standalone.jmod
+          jmod describe io.synexia.chromellm.standalone.jmod
+      # The synthetic fixture intentionally provides no live llama.cpp or model proof.
+
+  # No GGUF/model is needed here: this catches drift in the actual pinned
+  # llama.cpp headers, symbols and native linker closure (unlike the fixture).
+  pinned-real-llama-abi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fetch exact independent llama.cpp source (no model weights)
+        shell: bash
+        run: |
+          mkdir -p external
+          git clone --filter=blob:none --no-checkout https://github.com/ggml-org/llama.cpp.git external/llama.cpp
+          git -C external/llama.cpp checkout --detach 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+          test "$(git -C external/llama.cpp rev-parse HEAD)" = "889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b"
+          test -f external/llama.cpp/LICENSE
+      - name: Compile against pinned real llama.cpp API
+        shell: bash
+        run: |
+          cmake -S standalone/native -B build/jni-real \
+            -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF \
+            -DLLAMA_CPP_SOURCE_DIR="$PWD/external/llama.cpp"
+          cmake --build build/jni-real --target chromellm_llama_jni --parallel 2
+          test -s build/jni-real/libchromellm_llama_jni.so
+          nm -D build/jni-real/libchromellm_llama_jni.so | grep -F 'Java_io_synexia_chromellm_standalone_JniLlamaCppBackend_nativeInfer'
+      - name: Test malformed GGUF refusal against real native engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -f standalone/pom.xml test-compile
+          java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
+            io.synexia.chromellm.standalone.InvalidGgufNativeTestMain \
+            "$PWD/build/jni-real/libchromellm_llama_jni.so" \
+            > build/jni-real/invalid-model-refusal.log 2>&1
+          cat build/jni-real/invalid-model-refusal.log
+          grep -F 'PASS: pinned real native JNI rejects invalid GGUF twice without crash' \
+            build/jni-real/invalid-model-refusal.log
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' \
+            build/jni-real/invalid-model-refusal.log; then
+            echo 'Strict JNI warning during malformed model refusal' >&2
+            exit 1
+          fi
+      - name: Refuse ChromeML, Dawn and browser library dependencies
+        shell: bash
+        run: |
+          ldd build/jni-real/libchromellm_llama_jni.so | tee build/jni-real/linked-libraries.txt
+          if grep -Ei '(optimization_guide_internal|webgpu_dawn|chromium|chrome_ml)' build/jni-real/linked-libraries.txt; then
+            echo 'Unexpected browser/vendor runtime linkage' >&2
+            exit 1
+          fi

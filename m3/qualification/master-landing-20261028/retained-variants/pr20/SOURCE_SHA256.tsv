@@ -1,0 +1,51 @@
+path	git_blob	status	pr	note
+.github/workflows/browserless-boundary.yml	8dc817040a99cc27c773f10d1f896ac8bc4b93b1	added	20	PR version, not live; the git blob id is its content address
+.github/workflows/standalone-jni.yml	3fff259b7bba2e72a390ed9df20f8652514b99e8	added	20	PR version, not live; the git blob id is its content address
+.github/workflows/standalone-portable-jni.yml	b38db6ce3fc67af0728de321109a10bee3cdc6f9	added	20	PR version, not live; the git blob id is its content address
+.github/workflows/standalone-real-gguf.yml	59d16d9129e93235f073a7a99a553075acf8cb6b	added	20	PR version, not live; the git blob id is its content address
+NOTICE	2a4f43e09fdefc71934a983f8659f0ea14994208	modified	20	PR version, not live; the git blob id is its content address
+README.md	75bcf8a3946147a09216d0264218269962d6d7f5	modified	20	PR version, not live; the git blob id is its content address
+README.zh-CN.md	-	deleted	20	deleted by the PR (landing file kept)
+THIRD_PARTY.md	2e9e79d9e54b4f151b95c46a09068adbe36761f9	modified	20	PR version, not live; the git blob id is its content address
+docs/ARCHITECTURE_AND_PROJECTS.md	-	deleted	20	deleted by the PR (landing file kept)
+docs/DOCUMENTATION_COVERAGE.md	-	deleted	20	deleted by the PR (landing file kept)
+docs/FORK_DEVELOPMENT.md	-	deleted	20	deleted by the PR (landing file kept)
+docs/NATIVE_RUNTIME_CONTRACTS.md	-	deleted	20	deleted by the PR (landing file kept)
+docs/OPENAI_COMPAT_API.md	-	deleted	20	deleted by the PR (landing file kept)
+docs/START_HERE.md	-	deleted	20	deleted by the PR (landing file kept)
+model/OptGuideOnDeviceModel/2025.8.8.1141/.gitkeep	-	deleted	20	deleted by the PR (landing file kept)
+model/README.md	-	deleted	20	deleted by the PR (landing file kept)
+reference/chrome_ml_api.h	-	deleted	20	deleted by the PR (landing file kept)
+reference/chrome_ml_types.h	-	deleted	20	deleted by the PR (landing file kept)
+reference/on_device_model_executor.cc	-	deleted	20	deleted by the PR (landing file kept)
+runtime/ChromeMLBareRunner.cpp	-	deleted	20	deleted by the PR (landing file kept)
+runtime/ChromeMLBareRunner.exe	-	deleted	20	deleted by the PR (landing file kept)
+runtime/chromeml_api_server.cjs	-	deleted	20	deleted by the PR (landing file kept)
+runtime/generated_dawn_proc_names.inc	-	deleted	20	deleted by the PR (landing file kept)
+runtime/generated_dawn_proc_names_actual.inc	-	deleted	20	deleted by the PR (landing file kept)
+runtime/optimization_guide_internal.dll	-	deleted	20	deleted by the PR (landing file kept)
+runtime/tag_148_headers/dawn/dawn_proc_table_generated.h	-	deleted	20	deleted by the PR (landing file kept)
+runtime/tag_148_headers/dawn/webgpu_generated.h	-	deleted	20	deleted by the PR (landing file kept)
+runtime/webgpu_dawn.dll	-	deleted	20	deleted by the PR (landing file kept)
+scripts/build_runner.ps1	-	deleted	20	deleted by the PR (landing file kept)
+scripts/m3_rebuild_runner.py	-	deleted	20	deleted by the PR (landing file kept)
+src/main/java/io/synexia/chromellm/chrome/ChromeAiConditioningClient.java	-	deleted	20	deleted by the PR (landing file kept)
+src/main/java/io/synexia/chromellm/cli/Main.java	ccc9b3c255d0321f5843a2484dfead000cde7863	modified	20	PR version, not live; the git blob id is its content address
+src/test/java/io/synexia/chromellm/cli/BrowserlessConditionVectorTest.java	c3772a27f5c28d9b3b5a7904aef61cda28283735	added	20	PR version, not live; the git blob id is its content address
+standalone/README.md	60bd81f06a27607ad9463d843637f59bb43c713f	modified	20	PR version, not live; the git blob id is its content address
+standalone/native/CMakeLists.txt	3c1c921b8bdd9ebc920e937cbd3b382984f89e36	added	20	PR version, not live; the git blob id is its content address
+standalone/native/README.md	c5d65b552c9019b4dd28e66bed327043267f4037	added	20	PR version, not live; the git blob id is its content address
+standalone/native/chromellm_llama_jni.cpp	394eee6f2a5e1db1df53770097dd3cea4bf6899d	added	20	PR version, not live; the git blob id is its content address
+standalone/src/main/java/io/synexia/chromellm/standalone/JniLlamaCppBackend.java	620a6bc588f0e2e37200938a91787f7fdc17a0f1	added	20	PR version, not live; the git blob id is its content address
+standalone/src/main/java/io/synexia/chromellm/standalone/JniStandaloneMain.java	539237e5e4e3554fdae1ca82d7a3bada90865ec2	added	20	PR version, not live; the git blob id is its content address
+standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppCliBackend.java	6f9e09d3c2e5d9dfe32c120476f6aedd864c8eb7	modified	20	PR version, not live; the git blob id is its content address
+standalone/src/main/java/io/synexia/chromellm/standalone/PromptFileReader.java	186bdbb50df01068867b338a0a52d2d6abda8406	added	20	PR version, not live; the git blob id is its content address
+standalone/src/main/java/io/synexia/chromellm/standalone/StandaloneMain.java	193bddbbed3bd286b233f6b632ac460bfe3a7a4e	modified	20	PR version, not live; the git blob id is its content address
+standalone/src/test/java/io/synexia/chromellm/standalone/FakeLlamaCppMain.java	49089cf084bb090606347630881bba2bd43e4612	modified	20	PR version, not live; the git blob id is its content address
+standalone/src/test/java/io/synexia/chromellm/standalone/InvalidGgufNativeTestMain.java	3b10863b8cf48aa48111a198c9a642bffc165b16	added	20	PR version, not live; the git blob id is its content address
+standalone/src/test/java/io/synexia/chromellm/standalone/JniContractTestMain.java	5f72b0cb6926b2af891a7b62ac55243d8cb84e60	added	20	PR version, not live; the git blob id is its content address
+standalone/src/test/java/io/synexia/chromellm/standalone/RealGgufContractTestMain.java	6b0222354fd4690d344731e6b54583bd80b91171	added	20	PR version, not live; the git blob id is its content address
+standalone/src/test/java/io/synexia/chromellm/standalone/StandaloneContractTestMain.java	1ab468089fb5c3add8aad5d9bdee6476f621de14	modified	20	PR version, not live; the git blob id is its content address
+关键数据.md	-	deleted	20	deleted by the PR (landing file kept)
+启动API服务.ps1	-	deleted	20	deleted by the PR (landing file kept)
+运行裸Runner.ps1	-	deleted	20	deleted by the PR (landing file kept)

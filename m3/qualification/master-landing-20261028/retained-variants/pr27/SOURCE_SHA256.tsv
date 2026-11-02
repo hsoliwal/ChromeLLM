@@ -1,0 +1,8 @@
+path	git_blob	status	pr	note
+docs/ADR-0001-BROWSER-INDEPENDENCE.md	83957964c695831b12125b2cd4948f8db5d19fd5	modified	27	PR version, not live; the git blob id is its content address
+docs/DIFFUSION_JAVA_NATIVE.md	223580727425ad64e54b8ffeb89a4d350dfd3664	modified	27	PR version, not live; the git blob id is its content address
+docs/GPU_IMAGE_VIDEO.md	d05a77ab5c2eb79c637850243af4c89dcdd636f2	modified	27	PR version, not live; the git blob id is its content address
+docs/JAVA_PACKAGE_CONTRACTS.md	5654bd01626b6e44e4c84cbed3413cbff78bad88	modified	27	PR version, not live; the git blob id is its content address
+docs/M3_REBUILD_AND_DISTILLATION.md	-	deleted	27	deleted by the PR (landing file kept)
+docs/STANDALONE_INFERENCE_BOUNDARY.md	a794c0fd3adbc8131f364ac35cbd919e0675d167	modified	27	PR version, not live; the git blob id is its content address
+standalone/native/README.md	fd267680ce7ecb1e2c8c22643cff8b0d5751a7b6	modified	27	PR version, not live; the git blob id is its content address

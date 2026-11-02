@@ -1,5 +1,7 @@
 # ADR-0001: ChromeLLM is an independent product; Chrome is an optional donor
 
+> **Historical snapshot, not a runnable Chrome integration:** ChromeLLM draft PR #19 removes the old ChromeML/Dawn, Node and PowerShell execution files. Current text inference uses a separate llama.cpp JNI backend (see [START_HERE](START_HERE.md)). The legacy architectures, links and verification counts below are retained solely for provenance; do not follow them as build instructions. Real GGUF inference remains to be qualified.
+
 - Status: **Accepted architectural direction; implementation in progress**
 - Scope: `hsoliwal/ChromeLLM` and subsequent qualified M3JDK21 receiving work
 - Date: 2026-10-30
