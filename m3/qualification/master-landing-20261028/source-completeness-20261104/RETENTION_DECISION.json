@@ -1,0 +1,26 @@
+{
+  "schema": "CHROMELLM_RETAINED_VARIANT_PATTERN_REUSE_V1",
+  "classification": "DIRECT_IMPORT_VERBATIM_EXISTING_LICENSED_SOURCE",
+  "existing_pattern": "m3/qualification/master-landing-20261028/retained-variants/pr20",
+  "existing_behavior_atoms": [
+    "Retain exact original blob and file mode",
+    "Refuse occupied destinations",
+    "Keep current active owners and build wiring",
+    "Bind historical execution to exact source identities"
+  ],
+  "current_missing_images_before": 5,
+  "new_active_architecture": false,
+  "new_repository_implementation_generated": false,
+  "canonical_private_recipe_owner": "hsoliwal/com.synexia",
+  "canonical_Maven_recipe_execution_claimed": false,
+  "new_public_recipe_or_generator_source": false,
+  "licenses_retained_in_place": [
+    "LICENSE",
+    "m3/qualification/master-landing-20261028/retained-variants/pr27/LICENSE.Apache-2.0.txt"
+  ],
+  "limits": [
+    "Exact source/blob custody is not semantic containment or current runtime acceptance.",
+    "Historical workflow is retained under an inactive variant prefix;it is not installed as an active workflow.",
+    "No model weights,native binary,vendor runtime,private session text or private recipe source is added."
+  ]
+}
