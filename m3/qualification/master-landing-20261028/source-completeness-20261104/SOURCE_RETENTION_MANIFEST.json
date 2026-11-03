@@ -1,0 +1,4157 @@
+{
+  "schema": "CHROMELLM_PR19_PR20_EXACT_BLOB_MODE_COMPLETENESS_V1",
+  "base_main": "114a51e0dd3a29f12df8bfe24ecb76a8c8b9924c",
+  "base_tree": "8916cd7ccd07c79e68b95145c6d47853540f5508",
+  "status": "FIVE_EXACT_PR20_IMAGES_RETAINED_WITHOUT_ACTIVE_OWNER_CHANGES",
+  "head19": {
+    "commit": "c63657e92e6e348d9222748b45193c413352af65",
+    "tree": "2431e93fac0746e8d150b1a7a0c8653486465d39",
+    "blob_paths": 184,
+    "all184_same_active_path_retained": true,
+    "ancestor_of_base_main": true
+  },
+  "head20": {
+    "commit": "ed908801fc1116bd607a49bac9f71ea138af6609",
+    "tree": "8195c584dbb7c89f8f643722e1273c463b049e6e",
+    "blob_paths": 185,
+    "already_exact_anywhere": 180,
+    "added_exact_images": 5,
+    "all185_exact_blob_mode_retained_after": true,
+    "ancestor_of_base_main": true
+  },
+  "new_source_files": 5,
+  "new_source_bytes": 34749,
+  "source_rows": [
+    {
+      "source_path": ".github/workflows/standalone-core.yml",
+      "source_commit": "ed908801fc1116bd607a49bac9f71ea138af6609",
+      "source_git_blob": "c406a665ee31a0b2050b4de25ba67277d653c58c",
+      "bytes": 647,
+      "sha256": "256896814419809f334ecf716dad2587a7943f0cb98ef451408c237d74b28207",
+      "mode": "100644",
+      "destination": "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/.github/workflows/standalone-core.yml",
+      "license": "MIT",
+      "license_basis": "LICENSE",
+      "disposition": "VERBATIM_INACTIVE_HISTORICAL_DOCUMENT_OR_WORKFLOW"
+    },
+    {
+      "source_path": "docs/ADR-0001-BROWSER-INDEPENDENCE.md",
+      "source_commit": "ed908801fc1116bd607a49bac9f71ea138af6609",
+      "source_git_blob": "a55be161296060e4511e3514a2778c3ed04b6c08",
+      "bytes": 7962,
+      "sha256": "a59a1dfaec3d696bfd79b7d58cb188d234a24973bdb4dc45ec75b6cbd277b426",
+      "mode": "100644",
+      "destination": "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/docs/ADR-0001-BROWSER-INDEPENDENCE.md",
+      "license": "MIT",
+      "license_basis": "LICENSE",
+      "disposition": "VERBATIM_INACTIVE_HISTORICAL_DOCUMENT_OR_WORKFLOW"
+    },
+    {
+      "source_path": "docs/DIFFUSION_JAVA_NATIVE.md",
+      "source_commit": "ed908801fc1116bd607a49bac9f71ea138af6609",
+      "source_git_blob": "9f75f5714560756cb737e0840f21a585048e0b7f",
+      "bytes": 2220,
+      "sha256": "cc9c6786f80a85aea67d77a8a616e77d4c0476d8e018a341327dcee6e08bfc81",
+      "mode": "100644",
+      "destination": "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/docs/DIFFUSION_JAVA_NATIVE.md",
+      "license": "MIT",
+      "license_basis": "LICENSE",
+      "disposition": "VERBATIM_INACTIVE_HISTORICAL_DOCUMENT_OR_WORKFLOW"
+    },
+    {
+      "source_path": "docs/JAVA_PACKAGE_CONTRACTS.md",
+      "source_commit": "ed908801fc1116bd607a49bac9f71ea138af6609",
+      "source_git_blob": "1a62a09220c9215922af43c3ea3d05aed7b5eb00",
+      "bytes": 14641,
+      "sha256": "708b4a438db2908085543d44d301bf8555999332fbbf04d43ccfd2d826a66234",
+      "mode": "100644",
+      "destination": "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/docs/JAVA_PACKAGE_CONTRACTS.md",
+      "license": "MIT",
+      "license_basis": "LICENSE",
+      "disposition": "VERBATIM_INACTIVE_HISTORICAL_DOCUMENT_OR_WORKFLOW"
+    },
+    {
+      "source_path": "docs/STANDALONE_INFERENCE_BOUNDARY.md",
+      "source_commit": "ed908801fc1116bd607a49bac9f71ea138af6609",
+      "source_git_blob": "218b551fed6da7e5346530fad558b55561e3d443",
+      "bytes": 9279,
+      "sha256": "4ddb9029d02e85a0f39c8600eb939d020636cca773f6d0f1400113fd81222818",
+      "mode": "100644",
+      "destination": "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/docs/STANDALONE_INFERENCE_BOUNDARY.md",
+      "license": "Apache-2.0",
+      "license_basis": "m3/qualification/master-landing-20261028/retained-variants/pr27/LICENSE.Apache-2.0.txt",
+      "disposition": "VERBATIM_INACTIVE_HISTORICAL_DOCUMENT_OR_WORKFLOW"
+    }
+  ],
+  "all_original_blob_mode_bindings": [
+    {
+      "head": "head19",
+      "source_path": ".github/workflows/java-native-diffusion.yml",
+      "mode": "100644",
+      "original_git_blob": "7f28467c3b40bba71dddbe072bb3e263f96f4451",
+      "bytes": 1397,
+      "exact_after_paths": [
+        ".github/workflows/java-native-diffusion.yml"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": ".github/workflows/standalone-core.yml",
+      "mode": "100644",
+      "original_git_blob": "c06d0256386e3c53921017c2378af03f05b4604f",
+      "bytes": 2161,
+      "exact_after_paths": [
+        ".github/workflows/standalone-core.yml"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": ".gitignore",
+      "mode": "100644",
+      "original_git_blob": "00bbe811c35ed4131bfddbda332513e1128dca51",
+      "bytes": 428,
+      "exact_after_paths": [
+        ".gitignore"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": ".m3/atom-pattern/README.md",
+      "mode": "100644",
+      "original_git_blob": "2324a8a46ab5549242d918118e4a4ef180d392e2",
+      "bytes": 3451,
+      "exact_after_paths": [
+        ".m3/atom-pattern/README.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": ".m3/atom-pattern/policy.properties",
+      "mode": "100644",
+      "original_git_blob": "7eccf3f8d3a5efb1152659baa8ee8851853d0119",
+      "bytes": 1252,
+      "exact_after_paths": [
+        ".m3/atom-pattern/policy.properties"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": ".m3/atom-pattern/pom.xml",
+      "mode": "100644",
+      "original_git_blob": "50e6ab771bad7f16701d3b8015d8ac1fb9c554e8",
+      "bytes": 1412,
+      "exact_after_paths": [
+        ".m3/atom-pattern/pom.xml"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": ".m3/atomize-patternize/README.md",
+      "mode": "100644",
+      "original_git_blob": "e761bdd37260bf2f0a720b496441185cc2c0656c",
+      "bytes": 3038,
+      "exact_after_paths": [
+        ".m3/atomize-patternize/README.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": ".m3/atomize-patternize/bootstrap.sh",
+      "mode": "100644",
+      "original_git_blob": "b221d21a3ff9083f374beb9d306636e68ae2a34d",
+      "bytes": 5017,
+      "exact_after_paths": [
+        ".m3/atomize-patternize/bootstrap.sh"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": ".m3/atomize-patternize/run.sh",
+      "mode": "100644",
+      "original_git_blob": "7a90e23bb1bfce9fd9737f5f885e3ffefae21c5b",
+      "bytes": 6378,
+      "exact_after_paths": [
+        ".m3/atomize-patternize/run.sh"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "CMakeLists.txt",
+      "mode": "100644",
+      "original_git_blob": "ed69f86c1a1f4b29052598209cac2dd90d167c62",
+      "bytes": 2151,
+      "exact_after_paths": [
+        "CMakeLists.txt"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "LICENSE",
+      "mode": "100644",
+      "original_git_blob": "19c5f0b0cfd0a7ceccf58abf013b32f96e17d174",
+      "bytes": 1081,
+      "exact_after_paths": [
+        "LICENSE"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "M3-SYNEXIA-RIGHTS.md",
+      "mode": "100644",
+      "original_git_blob": "e67200aa56d289e7014433882fab8a4d6916b671",
+      "bytes": 4786,
+      "exact_after_paths": [
+        "M3-SYNEXIA-RIGHTS.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "NOTICE",
+      "mode": "100644",
+      "original_git_blob": "48a3486f1d0bc0dba536515141d91c2f97701786",
+      "bytes": 930,
+      "exact_after_paths": [
+        "NOTICE"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "README.md",
+      "mode": "100644",
+      "original_git_blob": "216eeb98f0b99644f7e6573af2feecd8e59923eb",
+      "bytes": 1759,
+      "exact_after_paths": [
+        "README.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "README.zh-CN.md",
+      "mode": "100644",
+      "original_git_blob": "1d2889c4ce1beb9b91e069d843db6d2745a8c822",
+      "bytes": 1758,
+      "exact_after_paths": [
+        "README.zh-CN.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "SYNEXIA_CONVERGENCE_MODEL.md",
+      "mode": "100644",
+      "original_git_blob": "41f41f88b20d6f5493add373a62c71c4415c74cc",
+      "bytes": 2694,
+      "exact_after_paths": [
+        "SYNEXIA_CONVERGENCE_MODEL.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "THIRD_PARTY.md",
+      "mode": "100644",
+      "original_git_blob": "c861eac9cefa6e1d69d2ced5162819ae0feb43ed",
+      "bytes": 997,
+      "exact_after_paths": [
+        "THIRD_PARTY.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "data/audio_test.wav",
+      "mode": "100644",
+      "original_git_blob": "2e884fc1a3743f8f38c993be3de6cbbd2978cc82",
+      "bytes": 118186,
+      "exact_after_paths": [
+        "data/audio_test.wav"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "data/blue_test.png",
+      "mode": "100644",
+      "original_git_blob": "ddea807901dfbac090048f3b1b10ab58851b898e",
+      "bytes": 421,
+      "exact_after_paths": [
+        "data/blue_test.png"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "data/red_test.png",
+      "mode": "100644",
+      "original_git_blob": "15f170d58b611ff3b823aa74f4bbaf1d99334e05",
+      "bytes": 438,
+      "exact_after_paths": [
+        "data/red_test.png"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/ADR-0001-BROWSER-INDEPENDENCE.md",
+      "mode": "100644",
+      "original_git_blob": "fc85bc0f87fec52927526cc49ff88f218482d36c",
+      "bytes": 8397,
+      "exact_after_paths": [
+        "docs/ADR-0001-BROWSER-INDEPENDENCE.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/ARCHITECTURE_AND_PROJECTS.md",
+      "mode": "100644",
+      "original_git_blob": "5f740b803ed37dc04dbb8d82f63314a8bfa7966a",
+      "bytes": 9231,
+      "exact_after_paths": [
+        "docs/ARCHITECTURE_AND_PROJECTS.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/BROWSER_REMOVAL_MIGRATION.md",
+      "mode": "100644",
+      "original_git_blob": "ef940887e1734b2da95d3e1cf898c2b32b668cd0",
+      "bytes": 2067,
+      "exact_after_paths": [
+        "docs/BROWSER_REMOVAL_MIGRATION.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/DIFFUSION_JAVA_NATIVE.md",
+      "mode": "100644",
+      "original_git_blob": "053cdb85000e92a0b54f4a6fd9e3fb15c5d4dc74",
+      "bytes": 1178,
+      "exact_after_paths": [
+        "docs/DIFFUSION_JAVA_NATIVE.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/DOCUMENTATION_COVERAGE.md",
+      "mode": "100644",
+      "original_git_blob": "11a4a365eb3c3d44129b5593e89dd9028e224e4b",
+      "bytes": 11268,
+      "exact_after_paths": [
+        "docs/DOCUMENTATION_COVERAGE.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/FORK_DEVELOPMENT.md",
+      "mode": "100644",
+      "original_git_blob": "377d48dabac38eb4254a2cdb8f0d5fdd9bf3f40e",
+      "bytes": 1889,
+      "exact_after_paths": [
+        "docs/FORK_DEVELOPMENT.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/GPU_IMAGE_VIDEO.md",
+      "mode": "100644",
+      "original_git_blob": "1cd5f8f6e05bfb753717913b1edda3478adc88fd",
+      "bytes": 5064,
+      "exact_after_paths": [
+        "docs/GPU_IMAGE_VIDEO.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/JAVA_PACKAGE_CONTRACTS.md",
+      "mode": "100644",
+      "original_git_blob": "4f3bba001cfef2344c022d72096164f9096190cf",
+      "bytes": 13694,
+      "exact_after_paths": [
+        "docs/JAVA_PACKAGE_CONTRACTS.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/MEDIA_PIPELINE_CONTRACTS.md",
+      "mode": "100644",
+      "original_git_blob": "bc07e62e9ce5dbb5623cbc4eb2b027434b39400c",
+      "bytes": 16003,
+      "exact_after_paths": [
+        "docs/MEDIA_PIPELINE_CONTRACTS.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/MEDIA_PRODUCTION_PIPELINE.md",
+      "mode": "100644",
+      "original_git_blob": "f6f4a7cd4051f31e7fa9ffb5927a1bc4da78e9dc",
+      "bytes": 5431,
+      "exact_after_paths": [
+        "docs/MEDIA_PRODUCTION_PIPELINE.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/NATIVE_RUNTIME_CONTRACTS.md",
+      "mode": "100644",
+      "original_git_blob": "02bb363eabbbed8a04d9acfbb5b9b72013234ed0",
+      "bytes": 8254,
+      "exact_after_paths": [
+        "docs/NATIVE_RUNTIME_CONTRACTS.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/NATIVE_VISION_MEDIA.md",
+      "mode": "100644",
+      "original_git_blob": "203a2bea5cb049d5c2e99f9449fdb4f17fcd221a",
+      "bytes": 5543,
+      "exact_after_paths": [
+        "docs/NATIVE_VISION_MEDIA.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/STANDALONE_INFERENCE_BOUNDARY.md",
+      "mode": "100644",
+      "original_git_blob": "a4f3a38555c1f61b1a7d2794a14646619ab1ec61",
+      "bytes": 9714,
+      "exact_after_paths": [
+        "docs/STANDALONE_INFERENCE_BOUNDARY.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/START_HERE.md",
+      "mode": "100644",
+      "original_git_blob": "59f7b93f254432696f97b68e4acdb746770e7c47",
+      "bytes": 2396,
+      "exact_after_paths": [
+        "docs/START_HERE.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/VIRTUALDUB_JAVA_PIPELINE.md",
+      "mode": "100644",
+      "original_git_blob": "bf2199565914f624beab9212f24182861c52109f",
+      "bytes": 6608,
+      "exact_after_paths": [
+        "docs/VIRTUALDUB_JAVA_PIPELINE.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "docs/media-preset-v1.example.json",
+      "mode": "100644",
+      "original_git_blob": "38dfce24edfc93c07dea38f195e902213973e75c",
+      "bytes": 964,
+      "exact_after_paths": [
+        "docs/media-preset-v1.example.json"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "model/README.md",
+      "mode": "100644",
+      "original_git_blob": "07f7a11f88e54c1360adf2bdc24e37dc5ca3013a",
+      "bytes": 403,
+      "exact_after_paths": [
+        "model/README.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "native/diffusion_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "91e1c2ad902258e19214d97cf1d95101232c1187",
+      "bytes": 1622,
+      "exact_after_paths": [
+        "native/diffusion_jni.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "native/diffusion_native.cpp",
+      "mode": "100644",
+      "original_git_blob": "ab1bb5c7fc9d070a479288cebc56c3c951dc1a2e",
+      "bytes": 5343,
+      "exact_after_paths": [
+        "native/diffusion_native.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "native/diffusion_native.h",
+      "mode": "100644",
+      "original_git_blob": "155b7702794907124497b15f29e29e3f50bd6b2b",
+      "bytes": 718,
+      "exact_after_paths": [
+        "native/diffusion_native.h"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "native/ffmpeg_decoder_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "e02c92a3a751785c2ce533b1aff8bef301e5dbc4",
+      "bytes": 11735,
+      "exact_after_paths": [
+        "native/ffmpeg_decoder_jni.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "native/gpu_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "c80767281695e028382bee594cc7bdca7b579b16",
+      "bytes": 5370,
+      "exact_after_paths": [
+        "native/gpu_jni.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "native/gpu_opencl.cpp",
+      "mode": "100644",
+      "original_git_blob": "cba10471eea4a6220698bdb141696a3de0cc0095",
+      "bytes": 24243,
+      "exact_after_paths": [
+        "native/gpu_opencl.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "native/gpu_opencl.h",
+      "mode": "100644",
+      "original_git_blob": "3cff23193925222dbdec9ddda976714505a44794",
+      "bytes": 1037,
+      "exact_after_paths": [
+        "native/gpu_opencl.h"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "native/opencv_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "c128fba8505953196dda4c70ac725e64100e957a",
+      "bytes": 13268,
+      "exact_after_paths": [
+        "native/opencv_jni.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "pom.xml",
+      "mode": "100644",
+      "original_git_blob": "3fc9b5d61ca7684d46cf556a7c1a229c8cfe7a21",
+      "bytes": 1692,
+      "exact_after_paths": [
+        "pom.xml"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/api/DiffusionCondition.java",
+      "mode": "100644",
+      "original_git_blob": "7f28d6a162dfaa1ac42ab9914ab1f6a46be0d1fe",
+      "bytes": 1607,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/api/DiffusionCondition.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/api/DiffusionMode.java",
+      "mode": "100644",
+      "original_git_blob": "cffee174fefab70caacbfc65b008f0501aecc981",
+      "bytes": 113,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/api/DiffusionMode.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/api/DiffusionRequest.java",
+      "mode": "100644",
+      "original_git_blob": "bd91026a4bcc7fdab555361447cb9b559639bfb7",
+      "bytes": 1247,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/api/DiffusionRequest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/api/DiffusionResult.java",
+      "mode": "100644",
+      "original_git_blob": "32b71ef5d66525c928de824ea3c8a31e21e3257e",
+      "bytes": 1095,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/api/DiffusionResult.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/batch/BatchFailure.java",
+      "mode": "100644",
+      "original_git_blob": "265d544805d28bebc91a80c1ea481d42e73a1a23",
+      "bytes": 282,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/batch/BatchFailure.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/batch/BatchImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "c4d6d6c3bc8623e91978224703fb033a5701625a",
+      "bytes": 6159,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/batch/BatchImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/batch/BatchProcessResult.java",
+      "mode": "100644",
+      "original_git_blob": "612919b4b7937220edad7fc6ed838929d0918b19",
+      "bytes": 381,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/batch/BatchProcessResult.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/batch/BatchVideoProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "6eb0554399b33db8e3175474697823b33e3bd423",
+      "bytes": 4509,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/batch/BatchVideoProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/cli/Main.java",
+      "mode": "100644",
+      "original_git_blob": "ccc9b3c255d0321f5843a2484dfead000cde7863",
+      "bytes": 4165,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/src/main/java/io/synexia/chromellm/cli/Main.java",
+        "src/main/java/io/synexia/chromellm/cli/Main.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/cli/PpmWriter.java",
+      "mode": "100644",
+      "original_git_blob": "040918aac4e7a7604cfbb6b181fc967da2e4d9f1",
+      "bytes": 708,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/cli/PpmWriter.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/Denoiser.java",
+      "mode": "100644",
+      "original_git_blob": "299998e628115bcc3003427cb7bfbfabccae6652",
+      "bytes": 296,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/Denoiser.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/DiffusionEngine.java",
+      "mode": "100644",
+      "original_git_blob": "66add472c0bed26594646e5a17acf5526a08578d",
+      "bytes": 289,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/DiffusionEngine.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/DiffusionScheduler.java",
+      "mode": "100644",
+      "original_git_blob": "10c41450177492439083c28fcbe63cc1af19b507",
+      "bytes": 1937,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/DiffusionScheduler.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/JavaDiffusionEngine.java",
+      "mode": "100644",
+      "original_git_blob": "acf70711e6968d140546caa079596b9546b98517",
+      "bytes": 2286,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/JavaDiffusionEngine.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/ReferenceDenoiser.java",
+      "mode": "100644",
+      "original_git_blob": "feda250eec80284f53c6c85388a6e70370bb3176",
+      "bytes": 3199,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/ReferenceDenoiser.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/AlphaMask.java",
+      "mode": "100644",
+      "original_git_blob": "3d8a302a187af650504542b59c4b6c0cd7260cdb",
+      "bytes": 1408,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/AlphaMask.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/AlphaMasks.java",
+      "mode": "100644",
+      "original_git_blob": "872e460901b996924dd9778f9104bd505cd9bb3d",
+      "bytes": 3063,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/AlphaMasks.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/CpuImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "30e85ff62fa84c3632c0ed46db454c56d012f144",
+      "bytes": 8348,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/CpuImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/GpuProcessorFactory.java",
+      "mode": "100644",
+      "original_git_blob": "c1efbc86cf118611649eed773793b696f6a1600b",
+      "bytes": 967,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/GpuProcessorFactory.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/ImageIoFrames.java",
+      "mode": "100644",
+      "original_git_blob": "be013a6fd1c3dd4e2e6bd8539441ab5b2253af2c",
+      "bytes": 2009,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/ImageIoFrames.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/ImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "cc2e17bbb40f7e4e4ed218f51e051d1fda63b2d4",
+      "bytes": 469,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/ImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/MaskOps.java",
+      "mode": "100644",
+      "original_git_blob": "9e2adffdf7988cced403469761c50ea5176ce68b",
+      "bytes": 1143,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/MaskOps.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/ObjectComposer.java",
+      "mode": "100644",
+      "original_git_blob": "82b6021138abc325410ca1940ac882b56de232c8",
+      "bytes": 1358,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/ObjectComposer.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/PixelGenerator.java",
+      "mode": "100644",
+      "original_git_blob": "2cbec94719234bfed355a776f420581b75c9fb75",
+      "bytes": 302,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/PixelGenerator.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/PixelOperation.java",
+      "mode": "100644",
+      "original_git_blob": "f340d38718b30e5f5766cc8848ae0421a743817f",
+      "bytes": 385,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/PixelOperation.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/PixelParameters.java",
+      "mode": "100644",
+      "original_git_blob": "1243cc3619e591c1cb3b73e09c8282cdcf38d05d",
+      "bytes": 1086,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/PixelParameters.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/RgbaFrame.java",
+      "mode": "100644",
+      "original_git_blob": "c3ddee42c5c76d195c58b213b5aea6a5f2650089",
+      "bytes": 1044,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/RgbaFrame.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/cli/GpuMain.java",
+      "mode": "100644",
+      "original_git_blob": "4ac96f5515c6c62d2b79482583d097c31cdf9934",
+      "bytes": 27041,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/cli/GpuMain.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/nativebridge/JnaOpenClImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "6b45a63cb67e1f6e1787cdfe205258db7f5b0fa5",
+      "bytes": 3184,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/nativebridge/JnaOpenClImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/nativebridge/JniGpu.java",
+      "mode": "100644",
+      "original_git_blob": "73ae6fdb30ddd6a9f3d04a016d497373667856e4",
+      "bytes": 881,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/nativebridge/JniGpu.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/nativebridge/JniOpenClImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "a1cc21bdc1ed8a5bc756c8ef1c54d034f6bc3b64",
+      "bytes": 2321,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/nativebridge/JniOpenClImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/nativebridge/NativeGpuLibrary.java",
+      "mode": "100644",
+      "original_git_blob": "0514fb0c3adead4e11b032e15efa8c7bc6eddf5e",
+      "bytes": 1048,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/nativebridge/NativeGpuLibrary.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/nativebridge/JnaDiffusionEngine.java",
+      "mode": "100644",
+      "original_git_blob": "839e703d932acb6f620ebebdc47042409a2ae318",
+      "bytes": 1818,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/nativebridge/JnaDiffusionEngine.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/nativebridge/JniDiffusion.java",
+      "mode": "100644",
+      "original_git_blob": "b6c60405c1beb9a05aa37858c5fd5fd21fc21111",
+      "bytes": 532,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/nativebridge/JniDiffusion.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/nativebridge/JniDiffusionEngine.java",
+      "mode": "100644",
+      "original_git_blob": "c7718ea70b3c66803eb1bc071f86589532fbfb1c",
+      "bytes": 933,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/nativebridge/JniDiffusionEngine.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/nativebridge/NativeDiffusionLibrary.java",
+      "mode": "100644",
+      "original_git_blob": "2b0be2b1cf9e6b26a0fb562933039d629e04ef62",
+      "bytes": 812,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/nativebridge/NativeDiffusionLibrary.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/AutomationPreset.java",
+      "mode": "100644",
+      "original_git_blob": "7e257ad115a8a074db1a56811af530e3b11d267b",
+      "bytes": 256,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/AutomationPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/CompiledMediaPreset.java",
+      "mode": "100644",
+      "original_git_blob": "5a575d114c27c2b37d58ad0b9229dc01d08ded61",
+      "bytes": 655,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/CompiledMediaPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/EncodingPreset.java",
+      "mode": "100644",
+      "original_git_blob": "dcd5dcfb98c04fd7ce882c664b322ae45f66bbb6",
+      "bytes": 317,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/EncodingPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/KeyframePreset.java",
+      "mode": "100644",
+      "original_git_blob": "d374e10dcc52fde4f45bbd6a158068b28af0f583",
+      "bytes": 111,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/KeyframePreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/LutPreset.java",
+      "mode": "100644",
+      "original_git_blob": "8b03a80b4887100ef35be483477d8d38b277a828",
+      "bytes": 96,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/LutPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/MediaPreset.java",
+      "mode": "100644",
+      "original_git_blob": "ed524443a3912482e35f6dc5773f51b5ed85c002",
+      "bytes": 317,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/MediaPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/MediaPresetLoader.java",
+      "mode": "100644",
+      "original_git_blob": "f9688d2ab6261754b071ee82ca64203497c86f94",
+      "bytes": 6794,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/MediaPresetLoader.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/OverlayPreset.java",
+      "mode": "100644",
+      "original_git_blob": "20193750b3685807047a5adf83b8fa3a604710fa",
+      "bytes": 201,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/OverlayPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/AudioMode.java",
+      "mode": "100644",
+      "original_git_blob": "1266bfce128c7e60633f8f0aff7ea6f2beb7770a",
+      "bytes": 91,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/AudioMode.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/BlockMatchingTranslationEstimator.java",
+      "mode": "100644",
+      "original_git_blob": "58bace1da32c8285611b34b7a676ca5893bcc0b2",
+      "bytes": 2782,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/BlockMatchingTranslationEstimator.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ColorMatrixTransform.java",
+      "mode": "100644",
+      "original_git_blob": "737ec394d5ed85bd8720ba00ef54b98a72d3e608",
+      "bytes": 2095,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ColorMatrixTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/CropTransform.java",
+      "mode": "100644",
+      "original_git_blob": "1a8e9991ef756b58058b711341065e967bb63c09",
+      "bytes": 750,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/CropTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/CubeLut.java",
+      "mode": "100644",
+      "original_git_blob": "342ad2e13941e4147db76b05de7092f62d669b8f",
+      "bytes": 3521,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/CubeLut.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/CubeLutParser.java",
+      "mode": "100644",
+      "original_git_blob": "87d05f302eef9420f299b25911cdd2afe5662f54",
+      "bytes": 3917,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/CubeLutParser.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/DecoderBackend.java",
+      "mode": "100644",
+      "original_git_blob": "7a906d5279b1fbf7a222eb77aa21d7501c08c1ef",
+      "bytes": 99,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/DecoderBackend.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/Easing.java",
+      "mode": "100644",
+      "original_git_blob": "f46129f87375d2be1634d2e04d50b0f4a48fb2d9",
+      "bytes": 773,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/Easing.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FfmpegProbe.java",
+      "mode": "100644",
+      "original_git_blob": "cfd1b1993faefb388e5dfad8fd41f77902bb97ab",
+      "bytes": 2179,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FfmpegProbe.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FfmpegRgbaEncoder.java",
+      "mode": "100644",
+      "original_git_blob": "a36a22ccbfaeda7aaa99038e1de6190cd216f8f4",
+      "bytes": 6208,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FfmpegRgbaEncoder.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FfmpegVideoInterpolator.java",
+      "mode": "100644",
+      "original_git_blob": "94428e7e2b1556c58f276a050ba35c0477862dbc",
+      "bytes": 5675,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FfmpegVideoInterpolator.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FfmpegVideoProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "80675eeb8db638a3e9cfa30fa6de191effcd2505",
+      "bytes": 5718,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FfmpegVideoProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameMaskProvider.java",
+      "mode": "100644",
+      "original_git_blob": "1a97917046cfd5fa97c24757a1face6076ef6fb0",
+      "bytes": 241,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameMaskProvider.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameRangeTransform.java",
+      "mode": "100644",
+      "original_git_blob": "a8792275a16df6bd2ce0c750e36b2b39f97978bc",
+      "bytes": 2015,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameRangeTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameRegion.java",
+      "mode": "100644",
+      "original_git_blob": "7fdafebdfb26acba6ca42edccbc668c477d83569",
+      "bytes": 731,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameRegion.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameRegions.java",
+      "mode": "100644",
+      "original_git_blob": "06ffc613bf886fd886e861c6de21467c22377f17",
+      "bytes": 1673,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameRegions.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameStatistics.java",
+      "mode": "100644",
+      "original_git_blob": "b2498896af70f7bf8fedcb40408d022fafaa0804",
+      "bytes": 2953,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameStatistics.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameTransform.java",
+      "mode": "100644",
+      "original_git_blob": "0fc00541af2ac34cd8466cb3cc38406ac618b1d4",
+      "bytes": 193,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameTransformLifecycle.java",
+      "mode": "100644",
+      "original_git_blob": "0c2636ae442b6f844f7bf3666d258944b445ca4a",
+      "bytes": 223,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameTransformLifecycle.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameTransformShape.java",
+      "mode": "100644",
+      "original_git_blob": "58aa52b1d40672cc57e243943dffec11e2c942bd",
+      "bytes": 160,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameTransformShape.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameTranslation.java",
+      "mode": "100644",
+      "original_git_blob": "221928ceb9870c972f5e9c654932ef36a0c9e99a",
+      "bytes": 290,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameTranslation.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameWarp.java",
+      "mode": "100644",
+      "original_git_blob": "c6ec0ee32bb4ef32aafef771e6cf015eaa216e70",
+      "bytes": 1001,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameWarp.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/GeometryOperation.java",
+      "mode": "100644",
+      "original_git_blob": "d544d21319237780693889991f279dcca54e9a8e",
+      "bytes": 183,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/GeometryOperation.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/GeometryTransform.java",
+      "mode": "100644",
+      "original_git_blob": "e24a78a585fd46a2df359af1d482f71cc4b669e0",
+      "bytes": 3133,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/GeometryTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/GpuFrameTransform.java",
+      "mode": "100644",
+      "original_git_blob": "55a940cd124cf6314b2efa1b67a5a414aefcda6f",
+      "bytes": 979,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/GpuFrameTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/Keyframe.java",
+      "mode": "100644",
+      "original_git_blob": "bc84d433afe5c5cc48759e03789a59e5717c2959",
+      "bytes": 476,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/Keyframe.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/KeyframeCurve.java",
+      "mode": "100644",
+      "original_git_blob": "9a7b963a94eaee6a404dc2d5e57f2840e13461cc",
+      "bytes": 2030,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/KeyframeCurve.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/KeyframedPixelTransform.java",
+      "mode": "100644",
+      "original_git_blob": "054a74a81f67ce0570434813493793ef3650b70c",
+      "bytes": 1552,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/KeyframedPixelTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/Lut3dTransform.java",
+      "mode": "100644",
+      "original_git_blob": "561ff0754c3a8e832eadce66321da4bd1fd2a8f3",
+      "bytes": 1531,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/Lut3dTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/MaskedTransform.java",
+      "mode": "100644",
+      "original_git_blob": "07fc59065c4cb1d7f587cae9d645820dc8d5dcd3",
+      "bytes": 2796,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/MaskedTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/OverlayImageTransform.java",
+      "mode": "100644",
+      "original_git_blob": "3d018e1a807fb869ea288a2bb90b5ec0d34c5582",
+      "bytes": 1156,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/OverlayImageTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessFfmpegFrameSource.java",
+      "mode": "100644",
+      "original_git_blob": "5c0f024184c7e58fcd0aba9e20f2b005e969c353",
+      "bytes": 3044,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessFfmpegFrameSource.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessingCancelledException.java",
+      "mode": "100644",
+      "original_git_blob": "57a0a569fe18c44e0994851ef6d16bce02f324dd",
+      "bytes": 202,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessingCancelledException.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessingControl.java",
+      "mode": "100644",
+      "original_git_blob": "9011d5c856d48bfad23c2b2cd38f667dc1cae9a2",
+      "bytes": 366,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessingControl.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessingProgress.java",
+      "mode": "100644",
+      "original_git_blob": "37585174decc01be4de5391574a2087df2740ff3",
+      "bytes": 731,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessingProgress.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessingProgressListener.java",
+      "mode": "100644",
+      "original_git_blob": "d3808203090e91bc1a710725d3c14d5db1a4af77",
+      "bytes": 212,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessingProgressListener.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/RegionTransform.java",
+      "mode": "100644",
+      "original_git_blob": "a3018d018159efc788296844d7fe0731f35637f1",
+      "bytes": 2387,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/RegionTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ResizeTransform.java",
+      "mode": "100644",
+      "original_git_blob": "e9fbde96fc8c52e76a256d81a7b83a7a6d0dc7a4",
+      "bytes": 2390,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ResizeTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/SceneCut.java",
+      "mode": "100644",
+      "original_git_blob": "bc961e1fb3308d4ba05899f8f2a1aa69aae2a61d",
+      "bytes": 399,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/SceneCut.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/SceneCutDetector.java",
+      "mode": "100644",
+      "original_git_blob": "5d644f26a9241a97cccdfcfd41469b48a041fef4",
+      "bytes": 1322,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/SceneCutDetector.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/StabilizationTransform.java",
+      "mode": "100644",
+      "original_git_blob": "cce979c53cc3d3bf0add989510f4d12ece49c610",
+      "bytes": 2007,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/StabilizationTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/TemporalDenoiseTransform.java",
+      "mode": "100644",
+      "original_git_blob": "753e24bdaba520709eba6227accba7a90d20943a",
+      "bytes": 1909,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/TemporalDenoiseTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/TransformChain.java",
+      "mode": "100644",
+      "original_git_blob": "d6813dd829182acb183441464122fb2f884f7f3e",
+      "bytes": 2672,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/TransformChain.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/TransformSpecParser.java",
+      "mode": "100644",
+      "original_git_blob": "ec24a247f1ad13ca57914f781b5b11bbc6448e1f",
+      "bytes": 6727,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/TransformSpecParser.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/TranslationEstimator.java",
+      "mode": "100644",
+      "original_git_blob": "979ef9dad27bd7bac09d476eb6eb213f28d25793",
+      "bytes": 215,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/TranslationEstimator.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/UnsharpMaskTransform.java",
+      "mode": "100644",
+      "original_git_blob": "8438250cc25e234013c60387ea612109455bc109",
+      "bytes": 2160,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/UnsharpMaskTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoAnalysisResult.java",
+      "mode": "100644",
+      "original_git_blob": "975c2f1df813c664fdae8cac0f2aab8bcd8cb98b",
+      "bytes": 446,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoAnalysisResult.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoAnalyzer.java",
+      "mode": "100644",
+      "original_git_blob": "ee2e43ced8e818fba3f65b3938b7bea272411ca1",
+      "bytes": 2978,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoAnalyzer.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoCodec.java",
+      "mode": "100644",
+      "original_git_blob": "599b24f6d90763bfe868ca069ea3ac5509d0500c",
+      "bytes": 338,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoCodec.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoEncodingOptions.java",
+      "mode": "100644",
+      "original_git_blob": "fc03506ad28591f7a8d42a2d71ff0cb41a6f2eb9",
+      "bytes": 2048,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoEncodingOptions.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoFrameSource.java",
+      "mode": "100644",
+      "original_git_blob": "714e67998ed1f2e33c2f614d4e1a9ac395de950c",
+      "bytes": 330,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoFrameSource.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoFrameSources.java",
+      "mode": "100644",
+      "original_git_blob": "fa381ff1b0780a5ad12914bf26f41f1f442ae04a",
+      "bytes": 1047,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoFrameSources.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoProcessResult.java",
+      "mode": "100644",
+      "original_git_blob": "517dc703dcad9d783f4fb9a8fce72f4a35d289a0",
+      "bytes": 636,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoProcessResult.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoStreamInfo.java",
+      "mode": "100644",
+      "original_git_blob": "e3e92ef74030b95c8fb9490b58bb92abc717210a",
+      "bytes": 571,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoStreamInfo.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/nativebridge/JniFfmpegFrameSource.java",
+      "mode": "100644",
+      "original_git_blob": "54c9c17f00329bbea27fe6298bcf2c3abd634dd7",
+      "bytes": 2224,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/nativebridge/JniFfmpegFrameSource.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/video/nativebridge/NativeFfmpegDecoder.java",
+      "mode": "100644",
+      "original_git_blob": "ec2587acef1f133ad0a8f93ea3e7752bde7b4ca8",
+      "bytes": 641,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/nativebridge/NativeFfmpegDecoder.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/JavaVisionProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "d105c60c5dce6e0283c2c3d64c9c1c552b07f00a",
+      "bytes": 2047,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/JavaVisionProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/VisionProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "76bd76110a05c04e4aa21dc26e88c6db1bedd91b",
+      "bytes": 599,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/VisionProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/VisionProcessorFactory.java",
+      "mode": "100644",
+      "original_git_blob": "d6c96a7312bc1b7ddcad3f04b8e905e5473810b6",
+      "bytes": 734,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/VisionProcessorFactory.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/nativebridge/OpenCvJni.java",
+      "mode": "100644",
+      "original_git_blob": "14044052d4f14f2aaee25f22ebea2dee401708a9",
+      "bytes": 1119,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/nativebridge/OpenCvJni.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/nativebridge/OpenCvVisionProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "572e9498449475a901062b036cc92ddae4c99fef",
+      "bytes": 3046,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/nativebridge/OpenCvVisionProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/batch/BatchImageProcessorTest.java",
+      "mode": "100644",
+      "original_git_blob": "a6a7027c7ecc6cfb40f16335ceec27a401ebce6c",
+      "bytes": 2229,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/batch/BatchImageProcessorTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/batch/BatchVideoProcessorTest.java",
+      "mode": "100644",
+      "original_git_blob": "4dcf6d3a2486b48ccb8bfd7b9e7a62ca78a196db",
+      "bytes": 988,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/batch/BatchVideoProcessorTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/engine/JavaDiffusionEngineTest.java",
+      "mode": "100644",
+      "original_git_blob": "eb0354d20debf54a82f87b643023fb3ff330c2db",
+      "bytes": 1019,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/engine/JavaDiffusionEngineTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/gpu/CpuImageProcessorTest.java",
+      "mode": "100644",
+      "original_git_blob": "c263c1ce38676a76ad4de3ad2acbc985daf9a996",
+      "bytes": 2560,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/gpu/CpuImageProcessorTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/preset/MediaPresetLoaderTest.java",
+      "mode": "100644",
+      "original_git_blob": "dfcb144fc9355866f6747a95db154dad970954c2",
+      "bytes": 2736,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/preset/MediaPresetLoaderTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/CompositingTransformsTest.java",
+      "mode": "100644",
+      "original_git_blob": "58f0b7b4719ad61707910955e0658b7673cac508",
+      "bytes": 2724,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/CompositingTransformsTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/CubeLutParserTest.java",
+      "mode": "100644",
+      "original_git_blob": "da958835363748c932d30aa33687ae6ab1edaf92",
+      "bytes": 2213,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/CubeLutParserTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/FfmpegProbeTest.java",
+      "mode": "100644",
+      "original_git_blob": "06caf3ec7467677a77d7eac4d4a44d6e9977a3ef",
+      "bytes": 766,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/FfmpegProbeTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/GeometryTransformTest.java",
+      "mode": "100644",
+      "original_git_blob": "7fd962c8bedd9e67e843dae02335383a1aa53476",
+      "bytes": 1871,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/GeometryTransformTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/JniFfmpegFrameSourceIntegrationTest.java",
+      "mode": "100644",
+      "original_git_blob": "386dd1d4008a0d194938656477ca2556767d6e8a",
+      "bytes": 1724,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/JniFfmpegFrameSourceIntegrationTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/KeyframeCurveTest.java",
+      "mode": "100644",
+      "original_git_blob": "9bd8d2534477f0ee842fc09334f3b48828d40fa6",
+      "bytes": 1361,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/KeyframeCurveTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/TemporalPipelineTest.java",
+      "mode": "100644",
+      "original_git_blob": "cfe9086cbf0342148ac47305f9cadcf9c230c6a8",
+      "bytes": 2837,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/TemporalPipelineTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/TransformChainTest.java",
+      "mode": "100644",
+      "original_git_blob": "125c14623e8027871a16db13fb962a0da4fbec9f",
+      "bytes": 900,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/TransformChainTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/TransformSpecParserTest.java",
+      "mode": "100644",
+      "original_git_blob": "57a8d6ecb7eee739433f9b74f70777fb9c9a6cef",
+      "bytes": 1186,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/TransformSpecParserTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/video/VideoEncodingOptionsTest.java",
+      "mode": "100644",
+      "original_git_blob": "883e29c88e5a69b529f74d3651037e2bbe048b7d",
+      "bytes": 2797,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/VideoEncodingOptionsTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/vision/JavaVisionProcessorTest.java",
+      "mode": "100644",
+      "original_git_blob": "06f64fd473fbbc979c90100c7b421c523ccca36b",
+      "bytes": 1858,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/vision/JavaVisionProcessorTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "src/test/java/io/synexia/chromellm/vision/OpenCvVisionProcessorIntegrationTest.java",
+      "mode": "100644",
+      "original_git_blob": "93d8839115ae5b2c26fd2fcc8f24d18415e12d70",
+      "bytes": 2018,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/vision/OpenCvVisionProcessorIntegrationTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/README.md",
+      "mode": "100644",
+      "original_git_blob": "8c55165e5297d3dc21f998b3723dd83d9a26adef",
+      "bytes": 2896,
+      "exact_after_paths": [
+        "standalone/README.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/native/CMakeLists.txt",
+      "mode": "100644",
+      "original_git_blob": "687783acb482cdeec55bc589ec1a026bbf2c9c91",
+      "bytes": 1271,
+      "exact_after_paths": [
+        "standalone/native/CMakeLists.txt"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/native/llama_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "10fba1208bf9b7bc02c825604340319e69f9b15d",
+      "bytes": 10339,
+      "exact_after_paths": [
+        "standalone/native/llama_jni.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/native/tests/llama.h",
+      "mode": "100644",
+      "original_git_blob": "e6d6085466976406262d32afd809ca554924d8eb",
+      "bytes": 1919,
+      "exact_after_paths": [
+        "standalone/native/tests/llama.h"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/native/tests/llama_stub.cpp",
+      "mode": "100644",
+      "original_git_blob": "39a2b6b56b37b0d284a81d809dae733f6d024fc3",
+      "bytes": 3288,
+      "exact_after_paths": [
+        "standalone/native/tests/llama_stub.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/pom.xml",
+      "mode": "100644",
+      "original_git_blob": "c4bfab68d7ee6c54abc489fc179387939ea72fb7",
+      "bytes": 1364,
+      "exact_after_paths": [
+        "standalone/pom.xml"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppCliBackend.java",
+      "mode": "100644",
+      "original_git_blob": "9b3f7b7956c521c5e64f2f301a8be48a60c4bc45",
+      "bytes": 5688,
+      "exact_after_paths": [
+        "standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppCliBackend.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppJniBackend.java",
+      "mode": "100644",
+      "original_git_blob": "14514131c4dd2d466654dca231d590b68e79d4ec",
+      "bytes": 4233,
+      "exact_after_paths": [
+        "standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppJniBackend.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/ModelBackend.java",
+      "mode": "100644",
+      "original_git_blob": "78a1f5c11fc0180de08a84f7786a182cf3594622",
+      "bytes": 462,
+      "exact_after_paths": [
+        "standalone/src/main/java/io/synexia/chromellm/standalone/ModelBackend.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/ModelRequest.java",
+      "mode": "100644",
+      "original_git_blob": "3a2ea2d0040c1abfeab8c4619a01043d850fa183",
+      "bytes": 876,
+      "exact_after_paths": [
+        "standalone/src/main/java/io/synexia/chromellm/standalone/ModelRequest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/ModelResponse.java",
+      "mode": "100644",
+      "original_git_blob": "3ae459f6b1ad6407808cce6b067b79a0045eb222",
+      "bytes": 692,
+      "exact_after_paths": [
+        "standalone/src/main/java/io/synexia/chromellm/standalone/ModelResponse.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/StandaloneMain.java",
+      "mode": "100644",
+      "original_git_blob": "0370f7c04d3a6246da7564736825c4b27c1534e7",
+      "bytes": 3253,
+      "exact_after_paths": [
+        "standalone/src/main/java/io/synexia/chromellm/standalone/StandaloneMain.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/main/java/module-info.java",
+      "mode": "100644",
+      "original_git_blob": "f45410fd205554e554a0d110720f49ac90ac6e37",
+      "bytes": 120,
+      "exact_after_paths": [
+        "standalone/src/main/java/module-info.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/test/java/io/synexia/chromellm/standalone/FakeLlamaCppMain.java",
+      "mode": "100644",
+      "original_git_blob": "e0a269f60715b7449ed8d17088e0804d98e48a5b",
+      "bytes": 1015,
+      "exact_after_paths": [
+        "standalone/src/test/java/io/synexia/chromellm/standalone/FakeLlamaCppMain.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/test/java/io/synexia/chromellm/standalone/JniSyntheticContractTestMain.java",
+      "mode": "100644",
+      "original_git_blob": "e374242305c2ca9362edeb721bfcc2e6385fa371",
+      "bytes": 4096,
+      "exact_after_paths": [
+        "standalone/src/test/java/io/synexia/chromellm/standalone/JniSyntheticContractTestMain.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head19",
+      "source_path": "standalone/src/test/java/io/synexia/chromellm/standalone/StandaloneContractTestMain.java",
+      "mode": "100644",
+      "original_git_blob": "bd28e4264a5c54a9e81e12a63f4e69ab57c46ba3",
+      "bytes": 3129,
+      "exact_after_paths": [
+        "standalone/src/test/java/io/synexia/chromellm/standalone/StandaloneContractTestMain.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": ".github/workflows/browserless-boundary.yml",
+      "mode": "100644",
+      "original_git_blob": "8dc817040a99cc27c773f10d1f896ac8bc4b93b1",
+      "bytes": 1749,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/.github/workflows/browserless-boundary.yml"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": ".github/workflows/java-native-diffusion.yml",
+      "mode": "100644",
+      "original_git_blob": "7f28467c3b40bba71dddbe072bb3e263f96f4451",
+      "bytes": 1397,
+      "exact_after_paths": [
+        ".github/workflows/java-native-diffusion.yml"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": ".github/workflows/standalone-core.yml",
+      "mode": "100644",
+      "original_git_blob": "c406a665ee31a0b2050b4de25ba67277d653c58c",
+      "bytes": 647,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/.github/workflows/standalone-core.yml"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": ".github/workflows/standalone-jni.yml",
+      "mode": "100644",
+      "original_git_blob": "3fff259b7bba2e72a390ed9df20f8652514b99e8",
+      "bytes": 6096,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/.github/workflows/standalone-jni.yml"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": ".github/workflows/standalone-portable-jni.yml",
+      "mode": "100644",
+      "original_git_blob": "b38db6ce3fc67af0728de321109a10bee3cdc6f9",
+      "bytes": 5364,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/.github/workflows/standalone-portable-jni.yml"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": ".github/workflows/standalone-real-gguf.yml",
+      "mode": "100644",
+      "original_git_blob": "59d16d9129e93235f073a7a99a553075acf8cb6b",
+      "bytes": 4263,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/.github/workflows/standalone-real-gguf.yml"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": ".gitignore",
+      "mode": "100644",
+      "original_git_blob": "00bbe811c35ed4131bfddbda332513e1128dca51",
+      "bytes": 428,
+      "exact_after_paths": [
+        ".gitignore"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": ".m3/atom-pattern/README.md",
+      "mode": "100644",
+      "original_git_blob": "2324a8a46ab5549242d918118e4a4ef180d392e2",
+      "bytes": 3451,
+      "exact_after_paths": [
+        ".m3/atom-pattern/README.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": ".m3/atom-pattern/policy.properties",
+      "mode": "100644",
+      "original_git_blob": "7eccf3f8d3a5efb1152659baa8ee8851853d0119",
+      "bytes": 1252,
+      "exact_after_paths": [
+        ".m3/atom-pattern/policy.properties"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": ".m3/atom-pattern/pom.xml",
+      "mode": "100644",
+      "original_git_blob": "50e6ab771bad7f16701d3b8015d8ac1fb9c554e8",
+      "bytes": 1412,
+      "exact_after_paths": [
+        ".m3/atom-pattern/pom.xml"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": ".m3/atomize-patternize/README.md",
+      "mode": "100644",
+      "original_git_blob": "e761bdd37260bf2f0a720b496441185cc2c0656c",
+      "bytes": 3038,
+      "exact_after_paths": [
+        ".m3/atomize-patternize/README.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": ".m3/atomize-patternize/bootstrap.sh",
+      "mode": "100644",
+      "original_git_blob": "b221d21a3ff9083f374beb9d306636e68ae2a34d",
+      "bytes": 5017,
+      "exact_after_paths": [
+        ".m3/atomize-patternize/bootstrap.sh"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": ".m3/atomize-patternize/run.sh",
+      "mode": "100644",
+      "original_git_blob": "7a90e23bb1bfce9fd9737f5f885e3ffefae21c5b",
+      "bytes": 6378,
+      "exact_after_paths": [
+        ".m3/atomize-patternize/run.sh"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "CMakeLists.txt",
+      "mode": "100644",
+      "original_git_blob": "ed69f86c1a1f4b29052598209cac2dd90d167c62",
+      "bytes": 2151,
+      "exact_after_paths": [
+        "CMakeLists.txt"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "LICENSE",
+      "mode": "100644",
+      "original_git_blob": "19c5f0b0cfd0a7ceccf58abf013b32f96e17d174",
+      "bytes": 1081,
+      "exact_after_paths": [
+        "LICENSE"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "M3-SYNEXIA-RIGHTS.md",
+      "mode": "100644",
+      "original_git_blob": "e67200aa56d289e7014433882fab8a4d6916b671",
+      "bytes": 4786,
+      "exact_after_paths": [
+        "M3-SYNEXIA-RIGHTS.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "NOTICE",
+      "mode": "100644",
+      "original_git_blob": "2a4f43e09fdefc71934a983f8659f0ea14994208",
+      "bytes": 1353,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/NOTICE"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "README.md",
+      "mode": "100644",
+      "original_git_blob": "75bcf8a3946147a09216d0264218269962d6d7f5",
+      "bytes": 3300,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/README.md"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "SYNEXIA_CONVERGENCE_MODEL.md",
+      "mode": "100644",
+      "original_git_blob": "41f41f88b20d6f5493add373a62c71c4415c74cc",
+      "bytes": 2694,
+      "exact_after_paths": [
+        "SYNEXIA_CONVERGENCE_MODEL.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "THIRD_PARTY.md",
+      "mode": "100644",
+      "original_git_blob": "2e9e79d9e54b4f151b95c46a09068adbe36761f9",
+      "bytes": 1582,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/THIRD_PARTY.md"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "data/audio_test.wav",
+      "mode": "100644",
+      "original_git_blob": "2e884fc1a3743f8f38c993be3de6cbbd2978cc82",
+      "bytes": 118186,
+      "exact_after_paths": [
+        "data/audio_test.wav"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "data/blue_test.png",
+      "mode": "100644",
+      "original_git_blob": "ddea807901dfbac090048f3b1b10ab58851b898e",
+      "bytes": 421,
+      "exact_after_paths": [
+        "data/blue_test.png"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "data/red_test.png",
+      "mode": "100644",
+      "original_git_blob": "15f170d58b611ff3b823aa74f4bbaf1d99334e05",
+      "bytes": 438,
+      "exact_after_paths": [
+        "data/red_test.png"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/ADR-0001-BROWSER-INDEPENDENCE.md",
+      "mode": "100644",
+      "original_git_blob": "a55be161296060e4511e3514a2778c3ed04b6c08",
+      "bytes": 7962,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/docs/ADR-0001-BROWSER-INDEPENDENCE.md"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/DIFFUSION_JAVA_NATIVE.md",
+      "mode": "100644",
+      "original_git_blob": "9f75f5714560756cb737e0840f21a585048e0b7f",
+      "bytes": 2220,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/docs/DIFFUSION_JAVA_NATIVE.md"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/GPU_IMAGE_VIDEO.md",
+      "mode": "100644",
+      "original_git_blob": "1cd5f8f6e05bfb753717913b1edda3478adc88fd",
+      "bytes": 5064,
+      "exact_after_paths": [
+        "docs/GPU_IMAGE_VIDEO.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/JAVA_PACKAGE_CONTRACTS.md",
+      "mode": "100644",
+      "original_git_blob": "1a62a09220c9215922af43c3ea3d05aed7b5eb00",
+      "bytes": 14641,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/docs/JAVA_PACKAGE_CONTRACTS.md"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/M3_REBUILD_AND_DISTILLATION.md",
+      "mode": "100644",
+      "original_git_blob": "a8d52790ed0032c8378b50c902665d712b217f4c",
+      "bytes": 1845,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr27/docs/M3_REBUILD_AND_DISTILLATION.md"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/MEDIA_PIPELINE_CONTRACTS.md",
+      "mode": "100644",
+      "original_git_blob": "bc07e62e9ce5dbb5623cbc4eb2b027434b39400c",
+      "bytes": 16003,
+      "exact_after_paths": [
+        "docs/MEDIA_PIPELINE_CONTRACTS.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/MEDIA_PRODUCTION_PIPELINE.md",
+      "mode": "100644",
+      "original_git_blob": "f6f4a7cd4051f31e7fa9ffb5927a1bc4da78e9dc",
+      "bytes": 5431,
+      "exact_after_paths": [
+        "docs/MEDIA_PRODUCTION_PIPELINE.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/NATIVE_VISION_MEDIA.md",
+      "mode": "100644",
+      "original_git_blob": "203a2bea5cb049d5c2e99f9449fdb4f17fcd221a",
+      "bytes": 5543,
+      "exact_after_paths": [
+        "docs/NATIVE_VISION_MEDIA.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/STANDALONE_INFERENCE_BOUNDARY.md",
+      "mode": "100644",
+      "original_git_blob": "218b551fed6da7e5346530fad558b55561e3d443",
+      "bytes": 9279,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/source-at-ed908801/docs/STANDALONE_INFERENCE_BOUNDARY.md"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/VIRTUALDUB_JAVA_PIPELINE.md",
+      "mode": "100644",
+      "original_git_blob": "bf2199565914f624beab9212f24182861c52109f",
+      "bytes": 6608,
+      "exact_after_paths": [
+        "docs/VIRTUALDUB_JAVA_PIPELINE.md"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "docs/media-preset-v1.example.json",
+      "mode": "100644",
+      "original_git_blob": "38dfce24edfc93c07dea38f195e902213973e75c",
+      "bytes": 964,
+      "exact_after_paths": [
+        "docs/media-preset-v1.example.json"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "native/diffusion_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "91e1c2ad902258e19214d97cf1d95101232c1187",
+      "bytes": 1622,
+      "exact_after_paths": [
+        "native/diffusion_jni.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "native/diffusion_native.cpp",
+      "mode": "100644",
+      "original_git_blob": "ab1bb5c7fc9d070a479288cebc56c3c951dc1a2e",
+      "bytes": 5343,
+      "exact_after_paths": [
+        "native/diffusion_native.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "native/diffusion_native.h",
+      "mode": "100644",
+      "original_git_blob": "155b7702794907124497b15f29e29e3f50bd6b2b",
+      "bytes": 718,
+      "exact_after_paths": [
+        "native/diffusion_native.h"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "native/ffmpeg_decoder_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "e02c92a3a751785c2ce533b1aff8bef301e5dbc4",
+      "bytes": 11735,
+      "exact_after_paths": [
+        "native/ffmpeg_decoder_jni.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "native/gpu_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "c80767281695e028382bee594cc7bdca7b579b16",
+      "bytes": 5370,
+      "exact_after_paths": [
+        "native/gpu_jni.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "native/gpu_opencl.cpp",
+      "mode": "100644",
+      "original_git_blob": "cba10471eea4a6220698bdb141696a3de0cc0095",
+      "bytes": 24243,
+      "exact_after_paths": [
+        "native/gpu_opencl.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "native/gpu_opencl.h",
+      "mode": "100644",
+      "original_git_blob": "3cff23193925222dbdec9ddda976714505a44794",
+      "bytes": 1037,
+      "exact_after_paths": [
+        "native/gpu_opencl.h"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "native/opencv_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "c128fba8505953196dda4c70ac725e64100e957a",
+      "bytes": 13268,
+      "exact_after_paths": [
+        "native/opencv_jni.cpp"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "pom.xml",
+      "mode": "100644",
+      "original_git_blob": "3fc9b5d61ca7684d46cf556a7c1a229c8cfe7a21",
+      "bytes": 1692,
+      "exact_after_paths": [
+        "pom.xml"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/api/DiffusionCondition.java",
+      "mode": "100644",
+      "original_git_blob": "7f28d6a162dfaa1ac42ab9914ab1f6a46be0d1fe",
+      "bytes": 1607,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/api/DiffusionCondition.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/api/DiffusionMode.java",
+      "mode": "100644",
+      "original_git_blob": "cffee174fefab70caacbfc65b008f0501aecc981",
+      "bytes": 113,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/api/DiffusionMode.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/api/DiffusionRequest.java",
+      "mode": "100644",
+      "original_git_blob": "bd91026a4bcc7fdab555361447cb9b559639bfb7",
+      "bytes": 1247,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/api/DiffusionRequest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/api/DiffusionResult.java",
+      "mode": "100644",
+      "original_git_blob": "32b71ef5d66525c928de824ea3c8a31e21e3257e",
+      "bytes": 1095,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/api/DiffusionResult.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/batch/BatchFailure.java",
+      "mode": "100644",
+      "original_git_blob": "265d544805d28bebc91a80c1ea481d42e73a1a23",
+      "bytes": 282,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/batch/BatchFailure.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/batch/BatchImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "c4d6d6c3bc8623e91978224703fb033a5701625a",
+      "bytes": 6159,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/batch/BatchImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/batch/BatchProcessResult.java",
+      "mode": "100644",
+      "original_git_blob": "612919b4b7937220edad7fc6ed838929d0918b19",
+      "bytes": 381,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/batch/BatchProcessResult.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/batch/BatchVideoProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "6eb0554399b33db8e3175474697823b33e3bd423",
+      "bytes": 4509,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/batch/BatchVideoProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/cli/Main.java",
+      "mode": "100644",
+      "original_git_blob": "ccc9b3c255d0321f5843a2484dfead000cde7863",
+      "bytes": 4165,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/src/main/java/io/synexia/chromellm/cli/Main.java",
+        "src/main/java/io/synexia/chromellm/cli/Main.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/cli/PpmWriter.java",
+      "mode": "100644",
+      "original_git_blob": "040918aac4e7a7604cfbb6b181fc967da2e4d9f1",
+      "bytes": 708,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/cli/PpmWriter.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/Denoiser.java",
+      "mode": "100644",
+      "original_git_blob": "299998e628115bcc3003427cb7bfbfabccae6652",
+      "bytes": 296,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/Denoiser.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/DiffusionEngine.java",
+      "mode": "100644",
+      "original_git_blob": "66add472c0bed26594646e5a17acf5526a08578d",
+      "bytes": 289,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/DiffusionEngine.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/DiffusionScheduler.java",
+      "mode": "100644",
+      "original_git_blob": "10c41450177492439083c28fcbe63cc1af19b507",
+      "bytes": 1937,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/DiffusionScheduler.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/JavaDiffusionEngine.java",
+      "mode": "100644",
+      "original_git_blob": "acf70711e6968d140546caa079596b9546b98517",
+      "bytes": 2286,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/JavaDiffusionEngine.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/engine/ReferenceDenoiser.java",
+      "mode": "100644",
+      "original_git_blob": "feda250eec80284f53c6c85388a6e70370bb3176",
+      "bytes": 3199,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/engine/ReferenceDenoiser.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/AlphaMask.java",
+      "mode": "100644",
+      "original_git_blob": "3d8a302a187af650504542b59c4b6c0cd7260cdb",
+      "bytes": 1408,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/AlphaMask.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/AlphaMasks.java",
+      "mode": "100644",
+      "original_git_blob": "872e460901b996924dd9778f9104bd505cd9bb3d",
+      "bytes": 3063,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/AlphaMasks.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/CpuImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "30e85ff62fa84c3632c0ed46db454c56d012f144",
+      "bytes": 8348,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/CpuImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/GpuProcessorFactory.java",
+      "mode": "100644",
+      "original_git_blob": "c1efbc86cf118611649eed773793b696f6a1600b",
+      "bytes": 967,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/GpuProcessorFactory.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/ImageIoFrames.java",
+      "mode": "100644",
+      "original_git_blob": "be013a6fd1c3dd4e2e6bd8539441ab5b2253af2c",
+      "bytes": 2009,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/ImageIoFrames.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/ImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "cc2e17bbb40f7e4e4ed218f51e051d1fda63b2d4",
+      "bytes": 469,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/ImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/MaskOps.java",
+      "mode": "100644",
+      "original_git_blob": "9e2adffdf7988cced403469761c50ea5176ce68b",
+      "bytes": 1143,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/MaskOps.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/ObjectComposer.java",
+      "mode": "100644",
+      "original_git_blob": "82b6021138abc325410ca1940ac882b56de232c8",
+      "bytes": 1358,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/ObjectComposer.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/PixelGenerator.java",
+      "mode": "100644",
+      "original_git_blob": "2cbec94719234bfed355a776f420581b75c9fb75",
+      "bytes": 302,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/PixelGenerator.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/PixelOperation.java",
+      "mode": "100644",
+      "original_git_blob": "f340d38718b30e5f5766cc8848ae0421a743817f",
+      "bytes": 385,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/PixelOperation.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/PixelParameters.java",
+      "mode": "100644",
+      "original_git_blob": "1243cc3619e591c1cb3b73e09c8282cdcf38d05d",
+      "bytes": 1086,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/PixelParameters.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/RgbaFrame.java",
+      "mode": "100644",
+      "original_git_blob": "c3ddee42c5c76d195c58b213b5aea6a5f2650089",
+      "bytes": 1044,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/RgbaFrame.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/cli/GpuMain.java",
+      "mode": "100644",
+      "original_git_blob": "4ac96f5515c6c62d2b79482583d097c31cdf9934",
+      "bytes": 27041,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/cli/GpuMain.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/nativebridge/JnaOpenClImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "6b45a63cb67e1f6e1787cdfe205258db7f5b0fa5",
+      "bytes": 3184,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/nativebridge/JnaOpenClImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/nativebridge/JniGpu.java",
+      "mode": "100644",
+      "original_git_blob": "73ae6fdb30ddd6a9f3d04a016d497373667856e4",
+      "bytes": 881,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/nativebridge/JniGpu.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/nativebridge/JniOpenClImageProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "a1cc21bdc1ed8a5bc756c8ef1c54d034f6bc3b64",
+      "bytes": 2321,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/nativebridge/JniOpenClImageProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/gpu/nativebridge/NativeGpuLibrary.java",
+      "mode": "100644",
+      "original_git_blob": "0514fb0c3adead4e11b032e15efa8c7bc6eddf5e",
+      "bytes": 1048,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/gpu/nativebridge/NativeGpuLibrary.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/nativebridge/JnaDiffusionEngine.java",
+      "mode": "100644",
+      "original_git_blob": "839e703d932acb6f620ebebdc47042409a2ae318",
+      "bytes": 1818,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/nativebridge/JnaDiffusionEngine.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/nativebridge/JniDiffusion.java",
+      "mode": "100644",
+      "original_git_blob": "b6c60405c1beb9a05aa37858c5fd5fd21fc21111",
+      "bytes": 532,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/nativebridge/JniDiffusion.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/nativebridge/JniDiffusionEngine.java",
+      "mode": "100644",
+      "original_git_blob": "c7718ea70b3c66803eb1bc071f86589532fbfb1c",
+      "bytes": 933,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/nativebridge/JniDiffusionEngine.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/nativebridge/NativeDiffusionLibrary.java",
+      "mode": "100644",
+      "original_git_blob": "2b0be2b1cf9e6b26a0fb562933039d629e04ef62",
+      "bytes": 812,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/nativebridge/NativeDiffusionLibrary.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/AutomationPreset.java",
+      "mode": "100644",
+      "original_git_blob": "7e257ad115a8a074db1a56811af530e3b11d267b",
+      "bytes": 256,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/AutomationPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/CompiledMediaPreset.java",
+      "mode": "100644",
+      "original_git_blob": "5a575d114c27c2b37d58ad0b9229dc01d08ded61",
+      "bytes": 655,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/CompiledMediaPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/EncodingPreset.java",
+      "mode": "100644",
+      "original_git_blob": "dcd5dcfb98c04fd7ce882c664b322ae45f66bbb6",
+      "bytes": 317,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/EncodingPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/KeyframePreset.java",
+      "mode": "100644",
+      "original_git_blob": "d374e10dcc52fde4f45bbd6a158068b28af0f583",
+      "bytes": 111,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/KeyframePreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/LutPreset.java",
+      "mode": "100644",
+      "original_git_blob": "8b03a80b4887100ef35be483477d8d38b277a828",
+      "bytes": 96,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/LutPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/MediaPreset.java",
+      "mode": "100644",
+      "original_git_blob": "ed524443a3912482e35f6dc5773f51b5ed85c002",
+      "bytes": 317,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/MediaPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/MediaPresetLoader.java",
+      "mode": "100644",
+      "original_git_blob": "f9688d2ab6261754b071ee82ca64203497c86f94",
+      "bytes": 6794,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/MediaPresetLoader.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/preset/OverlayPreset.java",
+      "mode": "100644",
+      "original_git_blob": "20193750b3685807047a5adf83b8fa3a604710fa",
+      "bytes": 201,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/preset/OverlayPreset.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/AudioMode.java",
+      "mode": "100644",
+      "original_git_blob": "1266bfce128c7e60633f8f0aff7ea6f2beb7770a",
+      "bytes": 91,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/AudioMode.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/BlockMatchingTranslationEstimator.java",
+      "mode": "100644",
+      "original_git_blob": "58bace1da32c8285611b34b7a676ca5893bcc0b2",
+      "bytes": 2782,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/BlockMatchingTranslationEstimator.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ColorMatrixTransform.java",
+      "mode": "100644",
+      "original_git_blob": "737ec394d5ed85bd8720ba00ef54b98a72d3e608",
+      "bytes": 2095,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ColorMatrixTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/CropTransform.java",
+      "mode": "100644",
+      "original_git_blob": "1a8e9991ef756b58058b711341065e967bb63c09",
+      "bytes": 750,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/CropTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/CubeLut.java",
+      "mode": "100644",
+      "original_git_blob": "342ad2e13941e4147db76b05de7092f62d669b8f",
+      "bytes": 3521,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/CubeLut.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/CubeLutParser.java",
+      "mode": "100644",
+      "original_git_blob": "87d05f302eef9420f299b25911cdd2afe5662f54",
+      "bytes": 3917,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/CubeLutParser.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/DecoderBackend.java",
+      "mode": "100644",
+      "original_git_blob": "7a906d5279b1fbf7a222eb77aa21d7501c08c1ef",
+      "bytes": 99,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/DecoderBackend.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/Easing.java",
+      "mode": "100644",
+      "original_git_blob": "f46129f87375d2be1634d2e04d50b0f4a48fb2d9",
+      "bytes": 773,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/Easing.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FfmpegProbe.java",
+      "mode": "100644",
+      "original_git_blob": "cfd1b1993faefb388e5dfad8fd41f77902bb97ab",
+      "bytes": 2179,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FfmpegProbe.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FfmpegRgbaEncoder.java",
+      "mode": "100644",
+      "original_git_blob": "a36a22ccbfaeda7aaa99038e1de6190cd216f8f4",
+      "bytes": 6208,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FfmpegRgbaEncoder.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FfmpegVideoInterpolator.java",
+      "mode": "100644",
+      "original_git_blob": "94428e7e2b1556c58f276a050ba35c0477862dbc",
+      "bytes": 5675,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FfmpegVideoInterpolator.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FfmpegVideoProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "80675eeb8db638a3e9cfa30fa6de191effcd2505",
+      "bytes": 5718,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FfmpegVideoProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameMaskProvider.java",
+      "mode": "100644",
+      "original_git_blob": "1a97917046cfd5fa97c24757a1face6076ef6fb0",
+      "bytes": 241,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameMaskProvider.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameRangeTransform.java",
+      "mode": "100644",
+      "original_git_blob": "a8792275a16df6bd2ce0c750e36b2b39f97978bc",
+      "bytes": 2015,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameRangeTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameRegion.java",
+      "mode": "100644",
+      "original_git_blob": "7fdafebdfb26acba6ca42edccbc668c477d83569",
+      "bytes": 731,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameRegion.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameRegions.java",
+      "mode": "100644",
+      "original_git_blob": "06ffc613bf886fd886e861c6de21467c22377f17",
+      "bytes": 1673,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameRegions.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameStatistics.java",
+      "mode": "100644",
+      "original_git_blob": "b2498896af70f7bf8fedcb40408d022fafaa0804",
+      "bytes": 2953,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameStatistics.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameTransform.java",
+      "mode": "100644",
+      "original_git_blob": "0fc00541af2ac34cd8466cb3cc38406ac618b1d4",
+      "bytes": 193,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameTransformLifecycle.java",
+      "mode": "100644",
+      "original_git_blob": "0c2636ae442b6f844f7bf3666d258944b445ca4a",
+      "bytes": 223,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameTransformLifecycle.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameTransformShape.java",
+      "mode": "100644",
+      "original_git_blob": "58aa52b1d40672cc57e243943dffec11e2c942bd",
+      "bytes": 160,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameTransformShape.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameTranslation.java",
+      "mode": "100644",
+      "original_git_blob": "221928ceb9870c972f5e9c654932ef36a0c9e99a",
+      "bytes": 290,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameTranslation.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/FrameWarp.java",
+      "mode": "100644",
+      "original_git_blob": "c6ec0ee32bb4ef32aafef771e6cf015eaa216e70",
+      "bytes": 1001,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/FrameWarp.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/GeometryOperation.java",
+      "mode": "100644",
+      "original_git_blob": "d544d21319237780693889991f279dcca54e9a8e",
+      "bytes": 183,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/GeometryOperation.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/GeometryTransform.java",
+      "mode": "100644",
+      "original_git_blob": "e24a78a585fd46a2df359af1d482f71cc4b669e0",
+      "bytes": 3133,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/GeometryTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/GpuFrameTransform.java",
+      "mode": "100644",
+      "original_git_blob": "55a940cd124cf6314b2efa1b67a5a414aefcda6f",
+      "bytes": 979,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/GpuFrameTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/Keyframe.java",
+      "mode": "100644",
+      "original_git_blob": "bc84d433afe5c5cc48759e03789a59e5717c2959",
+      "bytes": 476,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/Keyframe.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/KeyframeCurve.java",
+      "mode": "100644",
+      "original_git_blob": "9a7b963a94eaee6a404dc2d5e57f2840e13461cc",
+      "bytes": 2030,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/KeyframeCurve.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/KeyframedPixelTransform.java",
+      "mode": "100644",
+      "original_git_blob": "054a74a81f67ce0570434813493793ef3650b70c",
+      "bytes": 1552,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/KeyframedPixelTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/Lut3dTransform.java",
+      "mode": "100644",
+      "original_git_blob": "561ff0754c3a8e832eadce66321da4bd1fd2a8f3",
+      "bytes": 1531,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/Lut3dTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/MaskedTransform.java",
+      "mode": "100644",
+      "original_git_blob": "07fc59065c4cb1d7f587cae9d645820dc8d5dcd3",
+      "bytes": 2796,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/MaskedTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/OverlayImageTransform.java",
+      "mode": "100644",
+      "original_git_blob": "3d018e1a807fb869ea288a2bb90b5ec0d34c5582",
+      "bytes": 1156,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/OverlayImageTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessFfmpegFrameSource.java",
+      "mode": "100644",
+      "original_git_blob": "5c0f024184c7e58fcd0aba9e20f2b005e969c353",
+      "bytes": 3044,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessFfmpegFrameSource.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessingCancelledException.java",
+      "mode": "100644",
+      "original_git_blob": "57a0a569fe18c44e0994851ef6d16bce02f324dd",
+      "bytes": 202,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessingCancelledException.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessingControl.java",
+      "mode": "100644",
+      "original_git_blob": "9011d5c856d48bfad23c2b2cd38f667dc1cae9a2",
+      "bytes": 366,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessingControl.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessingProgress.java",
+      "mode": "100644",
+      "original_git_blob": "37585174decc01be4de5391574a2087df2740ff3",
+      "bytes": 731,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessingProgress.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ProcessingProgressListener.java",
+      "mode": "100644",
+      "original_git_blob": "d3808203090e91bc1a710725d3c14d5db1a4af77",
+      "bytes": 212,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ProcessingProgressListener.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/RegionTransform.java",
+      "mode": "100644",
+      "original_git_blob": "a3018d018159efc788296844d7fe0731f35637f1",
+      "bytes": 2387,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/RegionTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/ResizeTransform.java",
+      "mode": "100644",
+      "original_git_blob": "e9fbde96fc8c52e76a256d81a7b83a7a6d0dc7a4",
+      "bytes": 2390,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/ResizeTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/SceneCut.java",
+      "mode": "100644",
+      "original_git_blob": "bc961e1fb3308d4ba05899f8f2a1aa69aae2a61d",
+      "bytes": 399,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/SceneCut.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/SceneCutDetector.java",
+      "mode": "100644",
+      "original_git_blob": "5d644f26a9241a97cccdfcfd41469b48a041fef4",
+      "bytes": 1322,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/SceneCutDetector.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/StabilizationTransform.java",
+      "mode": "100644",
+      "original_git_blob": "cce979c53cc3d3bf0add989510f4d12ece49c610",
+      "bytes": 2007,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/StabilizationTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/TemporalDenoiseTransform.java",
+      "mode": "100644",
+      "original_git_blob": "753e24bdaba520709eba6227accba7a90d20943a",
+      "bytes": 1909,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/TemporalDenoiseTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/TransformChain.java",
+      "mode": "100644",
+      "original_git_blob": "d6813dd829182acb183441464122fb2f884f7f3e",
+      "bytes": 2672,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/TransformChain.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/TransformSpecParser.java",
+      "mode": "100644",
+      "original_git_blob": "ec24a247f1ad13ca57914f781b5b11bbc6448e1f",
+      "bytes": 6727,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/TransformSpecParser.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/TranslationEstimator.java",
+      "mode": "100644",
+      "original_git_blob": "979ef9dad27bd7bac09d476eb6eb213f28d25793",
+      "bytes": 215,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/TranslationEstimator.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/UnsharpMaskTransform.java",
+      "mode": "100644",
+      "original_git_blob": "8438250cc25e234013c60387ea612109455bc109",
+      "bytes": 2160,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/UnsharpMaskTransform.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoAnalysisResult.java",
+      "mode": "100644",
+      "original_git_blob": "975c2f1df813c664fdae8cac0f2aab8bcd8cb98b",
+      "bytes": 446,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoAnalysisResult.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoAnalyzer.java",
+      "mode": "100644",
+      "original_git_blob": "ee2e43ced8e818fba3f65b3938b7bea272411ca1",
+      "bytes": 2978,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoAnalyzer.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoCodec.java",
+      "mode": "100644",
+      "original_git_blob": "599b24f6d90763bfe868ca069ea3ac5509d0500c",
+      "bytes": 338,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoCodec.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoEncodingOptions.java",
+      "mode": "100644",
+      "original_git_blob": "fc03506ad28591f7a8d42a2d71ff0cb41a6f2eb9",
+      "bytes": 2048,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoEncodingOptions.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoFrameSource.java",
+      "mode": "100644",
+      "original_git_blob": "714e67998ed1f2e33c2f614d4e1a9ac395de950c",
+      "bytes": 330,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoFrameSource.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoFrameSources.java",
+      "mode": "100644",
+      "original_git_blob": "fa381ff1b0780a5ad12914bf26f41f1f442ae04a",
+      "bytes": 1047,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoFrameSources.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoProcessResult.java",
+      "mode": "100644",
+      "original_git_blob": "517dc703dcad9d783f4fb9a8fce72f4a35d289a0",
+      "bytes": 636,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoProcessResult.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/VideoStreamInfo.java",
+      "mode": "100644",
+      "original_git_blob": "e3e92ef74030b95c8fb9490b58bb92abc717210a",
+      "bytes": 571,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/VideoStreamInfo.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/nativebridge/JniFfmpegFrameSource.java",
+      "mode": "100644",
+      "original_git_blob": "54c9c17f00329bbea27fe6298bcf2c3abd634dd7",
+      "bytes": 2224,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/nativebridge/JniFfmpegFrameSource.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/video/nativebridge/NativeFfmpegDecoder.java",
+      "mode": "100644",
+      "original_git_blob": "ec2587acef1f133ad0a8f93ea3e7752bde7b4ca8",
+      "bytes": 641,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/video/nativebridge/NativeFfmpegDecoder.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/JavaVisionProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "d105c60c5dce6e0283c2c3d64c9c1c552b07f00a",
+      "bytes": 2047,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/JavaVisionProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/VisionProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "76bd76110a05c04e4aa21dc26e88c6db1bedd91b",
+      "bytes": 599,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/VisionProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/VisionProcessorFactory.java",
+      "mode": "100644",
+      "original_git_blob": "d6c96a7312bc1b7ddcad3f04b8e905e5473810b6",
+      "bytes": 734,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/VisionProcessorFactory.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/nativebridge/OpenCvJni.java",
+      "mode": "100644",
+      "original_git_blob": "14044052d4f14f2aaee25f22ebea2dee401708a9",
+      "bytes": 1119,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/nativebridge/OpenCvJni.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/main/java/io/synexia/chromellm/vision/nativebridge/OpenCvVisionProcessor.java",
+      "mode": "100644",
+      "original_git_blob": "572e9498449475a901062b036cc92ddae4c99fef",
+      "bytes": 3046,
+      "exact_after_paths": [
+        "src/main/java/io/synexia/chromellm/vision/nativebridge/OpenCvVisionProcessor.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/batch/BatchImageProcessorTest.java",
+      "mode": "100644",
+      "original_git_blob": "a6a7027c7ecc6cfb40f16335ceec27a401ebce6c",
+      "bytes": 2229,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/batch/BatchImageProcessorTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/batch/BatchVideoProcessorTest.java",
+      "mode": "100644",
+      "original_git_blob": "4dcf6d3a2486b48ccb8bfd7b9e7a62ca78a196db",
+      "bytes": 988,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/batch/BatchVideoProcessorTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/cli/BrowserlessConditionVectorTest.java",
+      "mode": "100644",
+      "original_git_blob": "c3772a27f5c28d9b3b5a7904aef61cda28283735",
+      "bytes": 3716,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/src/test/java/io/synexia/chromellm/cli/BrowserlessConditionVectorTest.java",
+        "src/test/java/io/synexia/chromellm/cli/BrowserlessConditionVectorTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/engine/JavaDiffusionEngineTest.java",
+      "mode": "100644",
+      "original_git_blob": "eb0354d20debf54a82f87b643023fb3ff330c2db",
+      "bytes": 1019,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/engine/JavaDiffusionEngineTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/gpu/CpuImageProcessorTest.java",
+      "mode": "100644",
+      "original_git_blob": "c263c1ce38676a76ad4de3ad2acbc985daf9a996",
+      "bytes": 2560,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/gpu/CpuImageProcessorTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/preset/MediaPresetLoaderTest.java",
+      "mode": "100644",
+      "original_git_blob": "dfcb144fc9355866f6747a95db154dad970954c2",
+      "bytes": 2736,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/preset/MediaPresetLoaderTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/CompositingTransformsTest.java",
+      "mode": "100644",
+      "original_git_blob": "58f0b7b4719ad61707910955e0658b7673cac508",
+      "bytes": 2724,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/CompositingTransformsTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/CubeLutParserTest.java",
+      "mode": "100644",
+      "original_git_blob": "da958835363748c932d30aa33687ae6ab1edaf92",
+      "bytes": 2213,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/CubeLutParserTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/FfmpegProbeTest.java",
+      "mode": "100644",
+      "original_git_blob": "06caf3ec7467677a77d7eac4d4a44d6e9977a3ef",
+      "bytes": 766,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/FfmpegProbeTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/GeometryTransformTest.java",
+      "mode": "100644",
+      "original_git_blob": "7fd962c8bedd9e67e843dae02335383a1aa53476",
+      "bytes": 1871,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/GeometryTransformTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/JniFfmpegFrameSourceIntegrationTest.java",
+      "mode": "100644",
+      "original_git_blob": "386dd1d4008a0d194938656477ca2556767d6e8a",
+      "bytes": 1724,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/JniFfmpegFrameSourceIntegrationTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/KeyframeCurveTest.java",
+      "mode": "100644",
+      "original_git_blob": "9bd8d2534477f0ee842fc09334f3b48828d40fa6",
+      "bytes": 1361,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/KeyframeCurveTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/TemporalPipelineTest.java",
+      "mode": "100644",
+      "original_git_blob": "cfe9086cbf0342148ac47305f9cadcf9c230c6a8",
+      "bytes": 2837,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/TemporalPipelineTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/TransformChainTest.java",
+      "mode": "100644",
+      "original_git_blob": "125c14623e8027871a16db13fb962a0da4fbec9f",
+      "bytes": 900,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/TransformChainTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/TransformSpecParserTest.java",
+      "mode": "100644",
+      "original_git_blob": "57a8d6ecb7eee739433f9b74f70777fb9c9a6cef",
+      "bytes": 1186,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/TransformSpecParserTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/video/VideoEncodingOptionsTest.java",
+      "mode": "100644",
+      "original_git_blob": "883e29c88e5a69b529f74d3651037e2bbe048b7d",
+      "bytes": 2797,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/video/VideoEncodingOptionsTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/vision/JavaVisionProcessorTest.java",
+      "mode": "100644",
+      "original_git_blob": "06f64fd473fbbc979c90100c7b421c523ccca36b",
+      "bytes": 1858,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/vision/JavaVisionProcessorTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "src/test/java/io/synexia/chromellm/vision/OpenCvVisionProcessorIntegrationTest.java",
+      "mode": "100644",
+      "original_git_blob": "93d8839115ae5b2c26fd2fcc8f24d18415e12d70",
+      "bytes": 2018,
+      "exact_after_paths": [
+        "src/test/java/io/synexia/chromellm/vision/OpenCvVisionProcessorIntegrationTest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/README.md",
+      "mode": "100644",
+      "original_git_blob": "60bd81f06a27607ad9463d843637f59bb43c713f",
+      "bytes": 4399,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/README.md"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/native/CMakeLists.txt",
+      "mode": "100644",
+      "original_git_blob": "3c1c921b8bdd9ebc920e937cbd3b382984f89e36",
+      "bytes": 3083,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/native/CMakeLists.txt"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/native/README.md",
+      "mode": "100644",
+      "original_git_blob": "c5d65b552c9019b4dd28e66bed327043267f4037",
+      "bytes": 3292,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/native/README.md"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/native/chromellm_llama_jni.cpp",
+      "mode": "100644",
+      "original_git_blob": "394eee6f2a5e1db1df53770097dd3cea4bf6899d",
+      "bytes": 16004,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/native/chromellm_llama_jni.cpp"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/pom.xml",
+      "mode": "100644",
+      "original_git_blob": "c4bfab68d7ee6c54abc489fc179387939ea72fb7",
+      "bytes": 1364,
+      "exact_after_paths": [
+        "standalone/pom.xml"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/JniLlamaCppBackend.java",
+      "mode": "100644",
+      "original_git_blob": "620a6bc588f0e2e37200938a91787f7fdc17a0f1",
+      "bytes": 6329,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/main/java/io/synexia/chromellm/standalone/JniLlamaCppBackend.java"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/JniStandaloneMain.java",
+      "mode": "100644",
+      "original_git_blob": "539237e5e4e3554fdae1ca82d7a3bada90865ec2",
+      "bytes": 2212,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/main/java/io/synexia/chromellm/standalone/JniStandaloneMain.java"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppCliBackend.java",
+      "mode": "100644",
+      "original_git_blob": "6f9e09d3c2e5d9dfe32c120476f6aedd864c8eb7",
+      "bytes": 9780,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppCliBackend.java"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/ModelBackend.java",
+      "mode": "100644",
+      "original_git_blob": "78a1f5c11fc0180de08a84f7786a182cf3594622",
+      "bytes": 462,
+      "exact_after_paths": [
+        "standalone/src/main/java/io/synexia/chromellm/standalone/ModelBackend.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/ModelRequest.java",
+      "mode": "100644",
+      "original_git_blob": "3a2ea2d0040c1abfeab8c4619a01043d850fa183",
+      "bytes": 876,
+      "exact_after_paths": [
+        "standalone/src/main/java/io/synexia/chromellm/standalone/ModelRequest.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/ModelResponse.java",
+      "mode": "100644",
+      "original_git_blob": "3ae459f6b1ad6407808cce6b067b79a0045eb222",
+      "bytes": 692,
+      "exact_after_paths": [
+        "standalone/src/main/java/io/synexia/chromellm/standalone/ModelResponse.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/PromptFileReader.java",
+      "mode": "100644",
+      "original_git_blob": "186bdbb50df01068867b338a0a52d2d6abda8406",
+      "bytes": 1631,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/main/java/io/synexia/chromellm/standalone/PromptFileReader.java"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/main/java/io/synexia/chromellm/standalone/StandaloneMain.java",
+      "mode": "100644",
+      "original_git_blob": "193bddbbed3bd286b233f6b632ac460bfe3a7a4e",
+      "bytes": 2290,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/main/java/io/synexia/chromellm/standalone/StandaloneMain.java"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/main/java/module-info.java",
+      "mode": "100644",
+      "original_git_blob": "f45410fd205554e554a0d110720f49ac90ac6e37",
+      "bytes": 120,
+      "exact_after_paths": [
+        "standalone/src/main/java/module-info.java"
+      ],
+      "current_same_path_exact": true
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/test/java/io/synexia/chromellm/standalone/FakeLlamaCppMain.java",
+      "mode": "100644",
+      "original_git_blob": "49089cf084bb090606347630881bba2bd43e4612",
+      "bytes": 1704,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/test/java/io/synexia/chromellm/standalone/FakeLlamaCppMain.java"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/test/java/io/synexia/chromellm/standalone/InvalidGgufNativeTestMain.java",
+      "mode": "100644",
+      "original_git_blob": "3b10863b8cf48aa48111a198c9a642bffc165b16",
+      "bytes": 1758,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/test/java/io/synexia/chromellm/standalone/InvalidGgufNativeTestMain.java"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/test/java/io/synexia/chromellm/standalone/JniContractTestMain.java",
+      "mode": "100644",
+      "original_git_blob": "5f72b0cb6926b2af891a7b62ac55243d8cb84e60",
+      "bytes": 9697,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/test/java/io/synexia/chromellm/standalone/JniContractTestMain.java"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/test/java/io/synexia/chromellm/standalone/RealGgufContractTestMain.java",
+      "mode": "100644",
+      "original_git_blob": "6b0222354fd4690d344731e6b54583bd80b91171",
+      "bytes": 3279,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/test/java/io/synexia/chromellm/standalone/RealGgufContractTestMain.java"
+      ],
+      "current_same_path_exact": false
+    },
+    {
+      "head": "head20",
+      "source_path": "standalone/src/test/java/io/synexia/chromellm/standalone/StandaloneContractTestMain.java",
+      "mode": "100644",
+      "original_git_blob": "1ab468089fb5c3add8aad5d9bdee6476f621de14",
+      "bytes": 6223,
+      "exact_after_paths": [
+        "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/test/java/io/synexia/chromellm/standalone/StandaloneContractTestMain.java"
+      ],
+      "current_same_path_exact": false
+    }
+  ],
+  "active_runtime_or_workflow_changed": false,
+  "root_POM_or_standalone_CMake_changed": false,
+  "private_recipe_or_template_source_added": false,
+  "new_model_or_vendor_binary_files": 0,
+  "semantic_superset_proved": false,
+  "current_runtime_acceptance_proved": false,
+  "whole_Synexia_goal_complete": false
+}
