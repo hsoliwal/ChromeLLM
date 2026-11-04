@@ -1,0 +1,174 @@
+{
+  "schema": "CHROMELLM_ACTIVE_BUILD_AND_HISTORICAL_GGUF_SOURCE_BINDING_V1",
+  "base_main": "114a51e0dd3a29f12df8bfe24ecb76a8c8b9924c",
+  "active_backend": {
+    "Java_path": "standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppJniBackend.java",
+    "Java_git_blob": "14514131c4dd2d466654dca231d590b68e79d4ec",
+    "native_path": "standalone/native/llama_jni.cpp",
+    "native_git_blob": "10fba1208bf9b7bc02c825604340319e69f9b15d",
+    "CMake_git_blob": "687783acb482cdeec55bc589ec1a026bbf2c9c91",
+    "POM_git_blob": "c4bfab68d7ee6c54abc489fc179387939ea72fb7",
+    "root_path_family": "PR19 current active module",
+    "real_GGUF_inference_qualified_by_this_work": false
+  },
+  "historically_qualified_retained_backend": {
+    "Java_class": "JniLlamaCppBackend",
+    "source_commit": "ed908801fc1116bd607a49bac9f71ea138af6609",
+    "source_tree": "8195c584dbb7c89f8f643722e1273c463b049e6e",
+    "CI_test_merge": "97f4b7de4a5d1d75b781b294840dc418ccd67650",
+    "CI_test_merge_tree": "8195c584dbb7c89f8f643722e1273c463b049e6e",
+    "test_merge_parents": [
+      "17a27eaeee83cc0bb7004d5191aca890a5c1d4f4",
+      "ed908801fc1116bd607a49bac9f71ea138af6609"
+    ],
+    "job_id": 124430161967,
+    "run_id": 41164875682,
+    "job_name": "pinned-licensed-model-cpu",
+    "job_status": "completed",
+    "job_conclusion": "success",
+    "job_url": "https://github.com/hsoliwal/ChromeLLM/actions/runs/41164875682/job/124430161967",
+    "completed_steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/setup-java@v4",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Verify independent Java 21 provider",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Checkout exact llama.cpp source with no vendor binaries or model weights",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Build pinned real llama.cpp plus JNI on CPU only",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Download exactly pinned Apache-2.0 GGUF (test-only, no redistribution)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Execute real model through Java 21 JNI with strict native checks",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Remove test model from workspace",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/setup-java@v4",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "exact_current_source_bindings": [
+      {
+        "path": "standalone/src/main/java/io/synexia/chromellm/standalone/JniLlamaCppBackend.java",
+        "git_blob": "620a6bc588f0e2e37200938a91787f7fdc17a0f1",
+        "bytes": 6329,
+        "mode": "100644",
+        "exact_current_paths": [
+          "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/main/java/io/synexia/chromellm/standalone/JniLlamaCppBackend.java"
+        ]
+      },
+      {
+        "path": "standalone/native/chromellm_llama_jni.cpp",
+        "git_blob": "394eee6f2a5e1db1df53770097dd3cea4bf6899d",
+        "bytes": 16004,
+        "mode": "100644",
+        "exact_current_paths": [
+          "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/native/chromellm_llama_jni.cpp"
+        ]
+      },
+      {
+        "path": "standalone/native/CMakeLists.txt",
+        "git_blob": "3c1c921b8bdd9ebc920e937cbd3b382984f89e36",
+        "bytes": 3083,
+        "mode": "100644",
+        "exact_current_paths": [
+          "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/native/CMakeLists.txt"
+        ]
+      },
+      {
+        "path": "standalone/src/test/java/io/synexia/chromellm/standalone/RealGgufContractTestMain.java",
+        "git_blob": "6b0222354fd4690d344731e6b54583bd80b91171",
+        "bytes": 3279,
+        "mode": "100644",
+        "exact_current_paths": [
+          "m3/qualification/master-landing-20261028/retained-variants/pr20/standalone/src/test/java/io/synexia/chromellm/standalone/RealGgufContractTestMain.java"
+        ]
+      },
+      {
+        "path": ".github/workflows/standalone-real-gguf.yml",
+        "git_blob": "59d16d9129e93235f073a7a99a553075acf8cb6b",
+        "bytes": 4263,
+        "mode": "100644",
+        "exact_current_paths": [
+          "m3/qualification/master-landing-20261028/retained-variants/pr20/.github/workflows/standalone-real-gguf.yml"
+        ]
+      }
+    ],
+    "engine_commit": "889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b",
+    "model": {
+      "format": "GGUF",
+      "bytes": 105454144,
+      "sha256": "8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684",
+      "test_only_external_input": true,
+      "model_file_distributed": false
+    },
+    "proof_scope": "Historical selected Linux CPU/GGUF JNI contract at exact PR20 source/test-merge tree. Does not qualify active PR19 JNI image or local Windows."
+  },
+  "current_main_checks": [
+    {
+      "name": "native (windows-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/hsoliwal/ChromeLLM/actions/runs/41591336698/job/125768521566"
+    },
+    {
+      "name": "native (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/hsoliwal/ChromeLLM/actions/runs/41591336698/job/125768521484"
+    },
+    {
+      "name": "java",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/hsoliwal/ChromeLLM/actions/runs/41591336698/job/125768521270"
+    }
+  ],
+  "original_PR20_head_check_records": 20,
+  "raw_workflow_logs_fetched": false,
+  "new_JVM_JNI_Maven_model_download_or_generation_calls": 0,
+  "local_output_files": 0,
+  "whole_goal_complete": false
+}

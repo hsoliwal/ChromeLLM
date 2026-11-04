@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MIT
+name: Browserless JNI portable ABI contracts
+
+on:
+  push:
+    paths:
+      - 'standalone/**'
+      - '.github/workflows/standalone-portable-jni.yml'
+  pull_request:
+    paths:
+      - 'standalone/**'
+      - '.github/workflows/standalone-portable-jni.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chromellm-portable-jni-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-synthetic-abi:
+    name: Portable JNI synthetic ABI on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - name: Compile Java 21 and positive synthetic native fixture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & mvn -B -ntp -f standalone/pom.xml verify
+          if ($LASTEXITCODE -ne 0) { throw 'Standalone Java 21 verification failed' }
+          & cmake -S standalone/native -B build/jni-portable -DCHROMELLM_JNI_CONTRACT_FIXTURE=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Positive CMake configuration failed' }
+          & cmake --build build/jni-portable --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Positive JNI fixture build failed' }
+          $suffix = if ($IsWindows) { 'dll' } else { 'dylib' }
+          $name = if ($IsWindows) { 'chromellm_llama_jni_fixture.dll' } else { 'libchromellm_llama_jni_fixture.dylib' }
+          $library = Get-ChildItem build/jni-portable -Recurse -File | Where-Object { $_.Name -eq $name } | Select-Object -First 1
+          if ($null -eq $library) { throw "Positive native library missing: $name" }
+          $classPath = 'standalone/target/classes' + [IO.Path]::PathSeparator + 'standalone/target/test-classes'
+          & java -Xcheck:jni -cp $classPath io.synexia.chromellm.standalone.JniContractTestMain $library.FullName *> portable-positive.log
+          if ($LASTEXITCODE -ne 0) { Get-Content portable-positive.log; throw 'Positive JNI contract failed' }
+          Get-Content portable-positive.log
+          if (-not (Select-String -Path portable-positive.log -SimpleMatch 'PASS: JNI UTF-8, exact output')) {
+            throw 'Positive JNI receipt missing'
+          }
+          if (Select-String -Path portable-positive.log -Pattern 'WARNING in native method|FATAL ERROR in native method') {
+            throw 'Strict positive JNI warning'
+          }
+      - name: Reject incompatible native ABI on the same operating system
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & cmake -S standalone/native -B build/jni-portable-bad -DCHROMELLM_JNI_CONTRACT_FIXTURE=ON -DCHROMELLM_JNI_ABI_MISMATCH_FIXTURE=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Negative CMake configuration failed' }
+          & cmake --build build/jni-portable-bad --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Negative JNI fixture build failed' }
+          $name = if ($IsWindows) { 'chromellm_llama_jni_abi_mismatch_fixture.dll' } else { 'libchromellm_llama_jni_abi_mismatch_fixture.dylib' }
+          $library = Get-ChildItem build/jni-portable-bad -Recurse -File | Where-Object { $_.Name -eq $name } | Select-Object -First 1
+          if ($null -eq $library) { throw "Negative native library missing: $name" }
+          $classPath = 'standalone/target/classes' + [IO.Path]::PathSeparator + 'standalone/target/test-classes'
+          # This is a new JVM so classloader-global native library state cannot contaminate the positive test.
+          & java -Xcheck:jni -cp $classPath io.synexia.chromellm.standalone.JniContractTestMain $library.FullName --expect-abi-mismatch *> portable-negative.log
+          if ($LASTEXITCODE -ne 0) { Get-Content portable-negative.log; throw 'Negative JNI contract failed' }
+          Get-Content portable-negative.log
+          if (-not (Select-String -Path portable-negative.log -SimpleMatch 'PASS: mismatched native JNI ABI rejected')) {
+            throw 'Negative JNI refusal receipt missing'
+          }
+          if (Select-String -Path portable-negative.log -Pattern 'WARNING in native method|FATAL ERROR in native method') {
+            throw 'Strict negative JNI warning'
+          }
+      - name: Prove java.base-only JPMS closure and JMOD
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dependencySet = (& jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar)
+          if ($LASTEXITCODE -ne 0 -or $dependencySet.Trim() -ne 'java.base') {
+            throw "Unexpected module dependencies: $dependencySet"
+          }
+          & jmod create --class-path standalone/target/classes io.synexia.chromellm.standalone.jmod
+          if ($LASTEXITCODE -ne 0) { throw 'JMOD creation failed' }
+          & jmod describe io.synexia.chromellm.standalone.jmod
+          if ($LASTEXITCODE -ne 0) { throw 'JMOD description failed' }
+
+# No GGUF weights are used or distributed. Windows and macOS verify synthetic
+# transport, JNI symbol binding, explicit ABI refusal and module packaging only.

@@ -1,0 +1,44 @@
+{
+  "schema": "M3_EXACT_DELETED_DOCUMENT_CUSTODY_V1",
+  "date": "2026-11-03",
+  "repository": "hsoliwal/ChromeLLM",
+  "base_commit": "9aa3499e882d081ac0d98ac93ba72ac9fe6e668f",
+  "deletion_commit": "03f9789324ff6930d4aba230cd8e9212594f591a",
+  "source_parent": "ed908801fc1116bd607a49bac9f71ea138af6609",
+  "source_path": "docs/M3_REBUILD_AND_DISTILLATION.md",
+  "original_git_blob": "a8d52790ed0032c8378b50c902665d712b217f4c",
+  "bytes": 1845,
+  "sha256": "f77b7ac5a4ad12851eaf243fd7ad2a382365311e3bc39c061bbc9e27dfa57fe4",
+  "retained_path": "m3/qualification/master-landing-20261028/retained-variants/pr27/docs/M3_REBUILD_AND_DISTILLATION.md",
+  "source_license": "Apache-2.0 as explicitly retained in original file SPDX header",
+  "license_copy": {
+    "path": "m3/qualification/master-landing-20261028/retained-variants/pr27/LICENSE.Apache-2.0.txt",
+    "source_repository": "hsoliwal/com.synexia",
+    "source_commit": "fb188bb99edd724fca826a135c2498e76db2a50d",
+    "source_path": "LICENSE",
+    "git_blob": "29f81d812f3e768fa89638d1f72920dbfd1413a8",
+    "bytes": 11558,
+    "sha256": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6"
+  },
+  "root_MIT_license_and_NOTICE": "Preserved unchanged; file-specific Apache header retained",
+  "reuse": {
+    "classification": "DIRECT_IMPORT",
+    "pattern": "EXACT_HISTORICAL_DOCUMENT_CUSTODY_V1",
+    "existing_owner": "m3/qualification/master-landing-20261028/retained-variants/pr27/SOURCE_SHA256.tsv",
+    "effects": "Archive bytes and source-address record only; no active code or live documentation reinstatement"
+  },
+  "comparison_scope": {
+    "exact_firstparent_pairs": 2,
+    "production_or_test_source_removals": 0,
+    "current_recursive_tree_entries": 318,
+    "current_tree_truncated": false,
+    "exact_original_doc_blob_present_anywhere_at_base": false
+  },
+  "code_build_tests": "NOT_RUN_DOCUMENTATION_ONLY",
+  "production_activation": false,
+  "new_repository_source_generation": 0,
+  "private_original_log_reads": 0,
+  "SQLite_import_or_connection": false,
+  "whole_repository_history_complete": false,
+  "whole_goal_complete": false
+}

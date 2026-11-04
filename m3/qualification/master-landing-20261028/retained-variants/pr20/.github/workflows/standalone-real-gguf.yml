@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: MIT
+name: Browserless JNI real GGUF inference
+on:
+  pull_request:
+    paths:
+      - 'standalone/**'
+      - '.github/workflows/standalone-real-gguf.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chromellm-real-gguf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pinned-licensed-model-cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - name: Verify independent Java 21 provider
+        run: |
+          mvn -B -ntp -f standalone/pom.xml verify
+          test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar)" = java.base
+      - name: Checkout exact llama.cpp source with no vendor binaries or model weights
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external
+          git clone --filter=blob:none --no-checkout https://github.com/ggml-org/llama.cpp.git external/llama.cpp
+          git -C external/llama.cpp checkout --detach 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+          test "$(git -C external/llama.cpp rev-parse HEAD)" = 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+          test -f external/llama.cpp/LICENSE
+      - name: Build pinned real llama.cpp plus JNI on CPU only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S standalone/native -B build/jni-real -DCMAKE_BUILD_TYPE=Release \
+            -DGGML_NATIVE=OFF -DLLAMA_CPP_SOURCE_DIR="$PWD/external/llama.cpp"
+          cmake --build build/jni-real --target chromellm_llama_jni --parallel 2
+          test -s build/jni-real/libchromellm_llama_jni.so
+          if ldd build/jni-real/libchromellm_llama_jni.so | grep -Ei '(optimization_guide_internal|webgpu_dawn|chromium|chrome_ml)'; then
+            echo "Refused a browser/vendor runtime dependency" >&2
+            exit 1
+          fi
+      - name: Download exactly pinned Apache-2.0 GGUF (test-only, no redistribution)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/licensed-model-test
+          model=build/licensed-model-test/SmolLM2-135M-Instruct.Q4_K_M.gguf
+          # QuantFactory/SmolLM2-135M-Instruct-GGUF, immutable model revision;
+          # see linked source model card and git-LFS object SHA in donor receipt.
+          curl --fail --location --silent --show-error --retry 3 --retry-all-errors \
+            --retry-delay 5 --connect-timeout 30 --max-time 300 \
+            --max-filesize 120000000 \
+            'https://huggingface.co/QuantFactory/SmolLM2-135M-Instruct-GGUF/resolve/a6b7826ed969c3926a98359e39912af137b464cb/SmolLM2-135M-Instruct.Q4_K_M.gguf' \
+            --output "$model"
+          printf '8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684  %s\n' "$model" | sha256sum --check
+          test "$(stat -c %s "$model")" = 105454144
+      - name: Execute real model through Java 21 JNI with strict native checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
+            io.synexia.chromellm.standalone.RealGgufContractTestMain \
+            "$PWD/build/jni-real/libchromellm_llama_jni.so" \
+            "$PWD/build/licensed-model-test/SmolLM2-135M-Instruct.Q4_K_M.gguf" \
+            > build/jni-real/real-gguf-receipt.log 2>&1
+          cat build/jni-real/real-gguf-receipt.log
+          grep -F 'PASS: licensed GGUF CPU inference, deterministic repeat, receipts and close' \
+            build/jni-real/real-gguf-receipt.log
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' build/jni-real/real-gguf-receipt.log; then
+            echo 'Failing real-model CheckJNI warning gate' >&2
+            exit 1
+          fi
+      - name: Remove test model from workspace
+        if: always()
+        shell: bash
+        run: rm -rf build/licensed-model-test
+
+# The model is a licensed, externally fetched, SHA-pinned CI input only.
+# No model, tokenizer or binary is committed or published as a workflow artifact.
