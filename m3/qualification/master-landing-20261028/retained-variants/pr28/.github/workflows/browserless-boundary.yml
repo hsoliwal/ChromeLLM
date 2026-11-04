@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MIT
+# Browser-independent product boundary; do not add path filters.
+name: ChromeLLM browser-independent product boundary
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  no-browser-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Refuse tracked browser, Node, ChromeML or vendor runtime artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Do not mask a failed Git index read behind Bash process substitution.
+          indexed_paths=$(mktemp)
+          trap 'rm -f -- "$indexed_paths"' EXIT
+          git ls-files -z > "$indexed_paths"
+          violations=0
+          while IFS= read -r -d '' tracked; do
+            # Lowercase only for matching; preserve the original name in diagnostics.
+            normalized="${tracked,,}"
+            case "$normalized" in
+              runtime/*|reference/*|scripts/*|browser/*|chromium/*|chrome-extension/*|extension/*|*/browser/*|*/chromium/*|*/chrome-extension/*|model/optguideondevicemodel/*|src/main/java/io/synexia/chromellm/chrome/*|*.dll|*.exe|*.cjs|*.ps1|*.node|*.crx|*.xpi|*.gguf|*.safetensors|*.onnx|*.tflite|*optimization_guide_internal*.so|*optimization_guide_internal*.dylib|*webgpu_dawn*.so|*webgpu_dawn*.dylib|*chrome_ml*.so|*chrome_ml*.dylib|*chromeml*.so|*chromeml*.dylib|*chrome_ml_api.h|*chrome_ml_types.h|*chromeml_api_server.cjs|*chromemlbarerunner*|*on_device_model_executor.cc)
+                printf 'FORBIDDEN_BROWSER_ARTIFACT: %q\n' "$tracked" >&2
+                violations=1
+                ;;
+            esac
+          done < "$indexed_paths"
+          if (( violations != 0 )); then
+            echo 'ChromeLLM core must have no tracked browser/vendor/Node runtime artifacts' >&2
+            exit 1
+          fi
+          echo 'PASS: no tracked browser/vendor/Node runtime artifacts'

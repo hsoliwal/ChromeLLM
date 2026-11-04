@@ -1,0 +1,944 @@
+{
+  "schema": "CPULLM_CHROMELLM_SUPERSET_AUDIT_V1",
+  "audit_date": "2026-10-31",
+  "observation_time_utc": "2026-10-31 06:35:27 UTC",
+  "repository": "hsoliwal/ChromeLLM",
+  "authority": "candidate_only",
+  "purpose": "Preserve file-level retention evidence and unfinished integration work; this evidence document does not authorize automatic merging.",
+  "task_status": "INCOMPLETE",
+  "source_changes_in_this_candidate": [],
+  "binary_uploads_in_this_candidate": [],
+  "publication_candidate": {
+    "path": "docs/cpullm-chromellm-superset-audit-20261031.json",
+    "branch": "codex/chromellm-superset-audit-20261031-8030f045",
+    "base": "17a27eaeee83cc0bb7004d5191aca890a5c1d4f4",
+    "observed_main_same_as_base": true,
+    "target_branch_observed": "404_NOT_FOUND",
+    "publish_stage_recheck_required": true
+  },
+  "scope": {
+    "modules": "CpuLLM and ChromeLLM consolidation only",
+    "runtime_selected_by_user": "Standalone Java/JNI with project-specific GGUF artifact",
+    "source_generation": "No generated repository interface or implementation in this candidate",
+    "private_transcripts_included": false,
+    "raw_prompts_or_logs_included": false,
+    "matched_secret_values_included": false,
+    "source_task_complete": false,
+    "priority_log_capture_frontier": {
+      "covered": 108,
+      "remaining_unvisited": 320,
+      "total_frontier_positions": 428,
+      "broader_log_scope_complete": false,
+      "advanced_by_this_audit": false,
+      "scope": "Priority frontier positions only; not the total population of logs",
+      "canonical_checkpoint": "016",
+      "canonical_checkpoint_sha256": "0f713acc7fa9ed1e40a57c7858b97b2726c4eeccf1cd4fee3ae736a766dbe354"
+    }
+  },
+  "pull_requests": {
+    "receiver": {
+      "number": 20,
+      "url": "https://github.com/hsoliwal/ChromeLLM/pull/20",
+      "head": "ed908801fc1116bd607a49bac9f71ea138af6609",
+      "base": "17a27eaeee83cc0bb7004d5191aca890a5c1d4f4",
+      "state": "open",
+      "draft": true,
+      "mergeable": true,
+      "mergeable_state": "blocked",
+      "merged": false,
+      "changed_files": 50,
+      "test_merge": "97f4b7de4a5d1d75b781b294840dc418ccd67650",
+      "hosted_checks": {
+        "completed_success": 18,
+        "runtime_scope": "Portable Java/JNI contracts and actual hosted GGUF CPU inference; separate from whole-patch CPU approval and alternate-branch retention",
+        "real_gguf_run": "https://github.com/hsoliwal/ChromeLLM/actions/runs/41164875682",
+        "real_gguf_job": 124430161967,
+        "local_inference_for_downloaded_asset": "NOT_RUN"
+      }
+    },
+    "alternate": {
+      "number": 19,
+      "url": "https://github.com/hsoliwal/ChromeLLM/pull/19",
+      "head": "c63657e92e6e348d9222748b45193c413352af65",
+      "base": "17a27eaeee83cc0bb7004d5191aca890a5c1d4f4",
+      "state": "open",
+      "draft": true,
+      "merged": false,
+      "changed_files": 45,
+      "retention": "Preserve this branch and its variants pending explicit donor disposition"
+    },
+    "relationship": {
+      "status": "diverged",
+      "merge_base": "17a27eaeee83cc0bb7004d5191aca890a5c1d4f4",
+      "pr19_ancestor_of_pr20": false,
+      "pr20_is_proven_superset_of_pr19": false,
+      "tip_blob_differences": 41
+    }
+  },
+  "cpu_review": {
+    "decision": "FULL_SCOPE_HOLD",
+    "full_50": {
+      "exit_code": 1,
+      "gate": "BINARY_DIFF",
+      "patch_bytes": 440079,
+      "patch_sha256": "8a6d757de8ea804599fcba1d9ebd3ce45fbd2d45756b8468bcc80efa64ed11fb",
+      "omitted_removed_paths": [
+        "runtime/ChromeMLBareRunner.exe",
+        "runtime/optimization_guide_internal.dll",
+        "runtime/tag_148_headers/dawn/webgpu_generated.h",
+        "runtime/webgpu_dawn.dll"
+      ],
+      "omission_detail": "Three binary removals and one oversized text header lack API patch bodies; no full-scope approval"
+    },
+    "explicit_46_text_subset": {
+      "exit_code": 1,
+      "gate": "SECRET_PATTERN",
+      "patch_bytes": 438990,
+      "patch_sha256": "f55cef8daa253f9c45d2390f1622445f3efeb9f0a052b2bb903d79d05bfe3881",
+      "guard": "Unchanged; HOLD not waived",
+      "flagged_scope": "Old removed content only",
+      "flagged_old_removed_paths": [
+        "docs/OPENAI_COMPAT_API.md",
+        "reference/on_device_model_executor.cc"
+      ],
+      "new_bodies_flagged": 0,
+      "metadata_flagged": 0,
+      "matched_values_disclosed": false,
+      "credential_leak_or_false_positive_classification": "NOT_ESTABLISHED"
+    },
+    "file_coverage": {
+      "added": 14,
+      "modified": 9,
+      "removed": 27,
+      "active_text_patches_inspected": 23,
+      "added_afterimages_git_blob_verified": 14,
+      "removed_generated_or_vendor_text_semantics": "NOT_EVALUATED",
+      "local_runtime_suite": "NOT_RUN"
+    },
+    "execution": {
+      "engine": "cpu",
+      "models": "DISABLED",
+      "network": "DISABLED",
+      "bytecode_disabled": true,
+      "audit_events": 0,
+      "writes": 0,
+      "external_processes": 0,
+      "native_wrapper_exit": 0
+    },
+    "frozen_receipts": {
+      "compact_receipt_bytes": 3111,
+      "compact_receipt_sha256": "e4d18b4f5f76da1056c735d15440aa4e3a7ae4e179bd05b76a0c5a06010237ad",
+      "full_result_bytes": 21423,
+      "full_result_sha256": "6548d33e88d24eea862cdb75e5890290ebed359c4b2120a490d4a134aa2e9cfd",
+      "secret_diagnostic_bytes": 889,
+      "secret_diagnostic_sha256": "02c155d44bac3b47775084e561a6f1e11a54f691e00cf10b6627574b214a66f7"
+    }
+  },
+  "unresolved_integration": {
+    "mechanical_status": "Not admitted by this audit",
+    "variants_requiring_proof": [
+      "Alternate JNI owner and synthetic native fixture owners",
+      "contextTokens configuration",
+      "threads configuration",
+      "gpuLayers configuration",
+      "StandaloneMain --backend jni entry route",
+      "Documentation and attribution changes"
+    ],
+    "preservation_constraint": "Preserve current strict UTF-8 handling, deadlines and opaque native handle lifecycle; do not replace receiver files by recency or merge alternate files blindly",
+    "existing_followups": [
+      {
+        "pr": 14655,
+        "repository": "hsoliwal/Synexia",
+        "head": "28faf9a6769980bbd18d4f380d5b3ab339760db2",
+        "purpose": "Fail-closed Git-index boundary recipe",
+        "run": 41165373324,
+        "job": 124431682319,
+        "observed_status": "queued",
+        "observed_steps": null,
+        "poll_count_in_frozen_review": 1
+      },
+      {
+        "pr": 14634,
+        "repository": "hsoliwal/Synexia",
+        "head": "6d7fa3d7ec2f1a0667ab890cb438a2173ff0dc7e",
+        "purpose": "Native opaque-handle canonical recipe proof",
+        "run": 41155395568,
+        "job": 124400957621,
+        "observed_status": "queued",
+        "observed_steps": null,
+        "poll_count_in_frozen_review": 1
+      }
+    ],
+    "known_findings": [
+      {
+        "path": ".github/workflows/browserless-boundary.yml",
+        "status": "UNRESOLVED",
+        "finding": "Git-index producer failure can be masked by process substitution; candidate fix is separate and its canonical proof is queued"
+      },
+      {
+        "path": ".github/workflows/standalone-jni.yml",
+        "status": "STATIC_OBSERVATION",
+        "finding": "Secondary browser-artifact check can mask Git producer failure with a pipeline followed by true; no new runtime discriminator was executed"
+      },
+      {
+        "path": "docs/M3_REBUILD_AND_DISTILLATION.md",
+        "status": "UNRESOLVED",
+        "finding": "Retained document references removed runtime and scripts; existing canonical deletion candidate is Synexia PR14522"
+      }
+    ],
+    "differing_tip_paths": [
+      ".github/workflows/standalone-core.yml",
+      "NOTICE",
+      "README.md",
+      "README.zh-CN.md",
+      "THIRD_PARTY.md",
+      "docs/ADR-0001-BROWSER-INDEPENDENCE.md",
+      "docs/ARCHITECTURE_AND_PROJECTS.md",
+      "docs/BROWSER_REMOVAL_MIGRATION.md",
+      "docs/DIFFUSION_JAVA_NATIVE.md",
+      "docs/DOCUMENTATION_COVERAGE.md",
+      "docs/FORK_DEVELOPMENT.md",
+      "docs/JAVA_PACKAGE_CONTRACTS.md",
+      "docs/NATIVE_RUNTIME_CONTRACTS.md",
+      "docs/STANDALONE_INFERENCE_BOUNDARY.md",
+      "docs/START_HERE.md",
+      "model/README.md",
+      "standalone/README.md",
+      "standalone/native/CMakeLists.txt",
+      "standalone/native/llama_jni.cpp",
+      "standalone/native/tests/llama.h",
+      "standalone/native/tests/llama_stub.cpp",
+      "standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppCliBackend.java",
+      "standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppJniBackend.java",
+      "standalone/src/main/java/io/synexia/chromellm/standalone/StandaloneMain.java",
+      "standalone/src/test/java/io/synexia/chromellm/standalone/FakeLlamaCppMain.java",
+      "standalone/src/test/java/io/synexia/chromellm/standalone/JniSyntheticContractTestMain.java",
+      "standalone/src/test/java/io/synexia/chromellm/standalone/StandaloneContractTestMain.java",
+      ".github/workflows/browserless-boundary.yml",
+      ".github/workflows/standalone-jni.yml",
+      ".github/workflows/standalone-portable-jni.yml",
+      ".github/workflows/standalone-real-gguf.yml",
+      "docs/M3_REBUILD_AND_DISTILLATION.md",
+      "src/test/java/io/synexia/chromellm/cli/BrowserlessConditionVectorTest.java",
+      "standalone/native/README.md",
+      "standalone/native/chromellm_llama_jni.cpp",
+      "standalone/src/main/java/io/synexia/chromellm/standalone/JniLlamaCppBackend.java",
+      "standalone/src/main/java/io/synexia/chromellm/standalone/JniStandaloneMain.java",
+      "standalone/src/main/java/io/synexia/chromellm/standalone/PromptFileReader.java",
+      "standalone/src/test/java/io/synexia/chromellm/standalone/InvalidGgufNativeTestMain.java",
+      "standalone/src/test/java/io/synexia/chromellm/standalone/JniContractTestMain.java",
+      "standalone/src/test/java/io/synexia/chromellm/standalone/RealGgufContractTestMain.java"
+    ],
+    "admission_requirements": [
+      "Resolve each alternate capability with exact source ownership and behavior/effect/lifecycle evidence",
+      "Keep whole-PR CPU gates and required server checks distinct from this document-only check",
+      "Qualify existing canonical recipes before source integration",
+      "Retain original branches and provenance until donor dispositions are complete"
+    ]
+  },
+  "model_artifact": {
+    "selected_runtime": "Standalone Java/JNI GGUF",
+    "source_identifier": "QuantFactory/SmolLM2-135M-Instruct-GGUF",
+    "original_model": "HuggingFaceTB/SmolLM2-135M-Instruct",
+    "source_file": "SmolLM2-135M-Instruct.Q4_K_M.gguf",
+    "source_revision": "a6b7826ed969c3926a98359e39912af137b464cb",
+    "immutable_url": "https://huggingface.co/QuantFactory/SmolLM2-135M-Instruct-GGUF/resolve/a6b7826ed969c3926a98359e39912af137b464cb/SmolLM2-135M-Instruct.Q4_K_M.gguf",
+    "bytes": 105454144,
+    "sha256": "8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684",
+    "format": "GGUF",
+    "gguf_version": 3,
+    "downloaded": true,
+    "full_disk_sha256_readback_matches": true,
+    "local_path": "G:/chromellm-model-8030f045-20261031/weights.bin",
+    "download_receipt_sha256": "328407b185a1b14585f1d4730c84fe2b19ca6527db6869828e05625d2d52b868",
+    "model_card": {
+      "immutable_url": "https://huggingface.co/QuantFactory/SmolLM2-135M-Instruct-GGUF/raw/a6b7826ed969c3926a98359e39912af137b464cb/README.md",
+      "bytes": 5849,
+      "sha256": "b99074dfa7942174d528f999ae8a44e2ac922d09a6f6a2b69e844e4d12dfb9c6",
+      "declared_license": "apache-2.0"
+    },
+    "accompanying_license": {
+      "spdx": "Apache-2.0",
+      "license_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "notice_sha256": "a37ead7a580a7b000946ccab0495915e8bc78703a96e10dfbc53392b60996ea2"
+    },
+    "github_binary_upload_performed": false,
+    "local_inference": "NOT_RUN",
+    "bootstrap_model_quality": "NOT_ESTABLISHED",
+    "repository_blob_limit_bytes": 104857600,
+    "exceeds_repository_blob_limit": true,
+    "external_artifact_route": "PENDING",
+    "next_evidence": "A qualified runtime and external artifact publication route are still required; this downloaded file is not a proof of summarizer quality or local inference"
+  },
+  "file_retention_ledger": {
+    "scope": "All 45 PR19 changed paths, compared against immutable common base and PR20 head",
+    "immutable_refs": {
+      "base": "17a27eaeee83cc0bb7004d5191aca890a5c1d4f4",
+      "pr19": "c63657e92e6e348d9222748b45193c413352af65",
+      "pr20": "ed908801fc1116bd607a49bac9f71ea138af6609"
+    },
+    "tree_metadata_truncated": false,
+    "canonical_rows_format": "JSON.stringify(rows) followed by LF; UTF-8",
+    "canonical_rows_bytes": 10549,
+    "canonical_rows_sha256": "47d2eabbb26dd9f308e4d63ee96377793494eeab7d53a9dad1686857eea2ff3f",
+    "census": {
+      "BOTH_PRESENT_DIFFERENT": 10,
+      "ONLY_PR19_OWNER": 13,
+      "ONLY_PR20_OWNER": 1,
+      "SAME_REMOVAL": 20,
+      "EXACT_SAME": 1
+    },
+    "rows": [
+      {
+        "path": ".github/workflows/standalone-core.yml",
+        "base": {
+          "mode": "100644",
+          "sha": "c406a665ee31a0b2050b4de25ba67277d653c58c",
+          "bytes": 647
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "c06d0256386e3c53921017c2378af03f05b4604f",
+          "bytes": 2161
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "c406a665ee31a0b2050b4de25ba67277d653c58c",
+          "bytes": 647
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "README.md",
+        "base": {
+          "mode": "100644",
+          "sha": "bfd7db0505f4afecb388933cede99d582ea1f4fc",
+          "bytes": 17379
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "216eeb98f0b99644f7e6573af2feecd8e59923eb",
+          "bytes": 1759
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "75bcf8a3946147a09216d0264218269962d6d7f5",
+          "bytes": 3300
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "README.zh-CN.md",
+        "base": {
+          "mode": "100644",
+          "sha": "3e44aa1eff935019f74ce7b7de1cbecd7fba8bac",
+          "bytes": 7446
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "1d2889c4ce1beb9b91e069d843db6d2745a8c822",
+          "bytes": 1758
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "THIRD_PARTY.md",
+        "base": {
+          "mode": "100644",
+          "sha": "6387c0baefe1ebe22c44dc0c83f70fff0ba85ec4",
+          "bytes": 1386
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "c861eac9cefa6e1d69d2ced5162819ae0feb43ed",
+          "bytes": 997
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "2e9e79d9e54b4f151b95c46a09068adbe36761f9",
+          "bytes": 1582
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "docs/ADR-0001-BROWSER-INDEPENDENCE.md",
+        "base": {
+          "mode": "100644",
+          "sha": "a55be161296060e4511e3514a2778c3ed04b6c08",
+          "bytes": 7962
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "fc85bc0f87fec52927526cc49ff88f218482d36c",
+          "bytes": 8397
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "a55be161296060e4511e3514a2778c3ed04b6c08",
+          "bytes": 7962
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "docs/ARCHITECTURE_AND_PROJECTS.md",
+        "base": {
+          "mode": "100644",
+          "sha": "017544de6cbb49cc614466cf3c38a4db8b363701",
+          "bytes": 8796
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "5f740b803ed37dc04dbb8d82f63314a8bfa7966a",
+          "bytes": 9231
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "docs/BROWSER_REMOVAL_MIGRATION.md",
+        "base": null,
+        "pr19": {
+          "mode": "100644",
+          "sha": "ef940887e1734b2da95d3e1cf898c2b32b668cd0",
+          "bytes": 2067
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "docs/DIFFUSION_JAVA_NATIVE.md",
+        "base": {
+          "mode": "100644",
+          "sha": "9f75f5714560756cb737e0840f21a585048e0b7f",
+          "bytes": 2220
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "053cdb85000e92a0b54f4a6fd9e3fb15c5d4dc74",
+          "bytes": 1178
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "9f75f5714560756cb737e0840f21a585048e0b7f",
+          "bytes": 2220
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "docs/DOCUMENTATION_COVERAGE.md",
+        "base": {
+          "mode": "100644",
+          "sha": "10fe214454c2618a24b68e223a36a890ba0e515a",
+          "bytes": 10833
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "11a4a365eb3c3d44129b5593e89dd9028e224e4b",
+          "bytes": 11268
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "docs/FORK_DEVELOPMENT.md",
+        "base": {
+          "mode": "100644",
+          "sha": "6a551c3f169a89652d60543ec13c247a5bae94f0",
+          "bytes": 4909
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "377d48dabac38eb4254a2cdb8f0d5fdd9bf3f40e",
+          "bytes": 1889
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "docs/JAVA_PACKAGE_CONTRACTS.md",
+        "base": {
+          "mode": "100644",
+          "sha": "1a62a09220c9215922af43c3ea3d05aed7b5eb00",
+          "bytes": 14641
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "4f3bba001cfef2344c022d72096164f9096190cf",
+          "bytes": 13694
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "1a62a09220c9215922af43c3ea3d05aed7b5eb00",
+          "bytes": 14641
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "docs/M3_REBUILD_AND_DISTILLATION.md",
+        "base": {
+          "mode": "100644",
+          "sha": "a8d52790ed0032c8378b50c902665d712b217f4c",
+          "bytes": 1845
+        },
+        "pr19": null,
+        "pr20": {
+          "mode": "100644",
+          "sha": "a8d52790ed0032c8378b50c902665d712b217f4c",
+          "bytes": 1845
+        },
+        "verdict": "ONLY_PR20_OWNER"
+      },
+      {
+        "path": "docs/NATIVE_RUNTIME_CONTRACTS.md",
+        "base": {
+          "mode": "100644",
+          "sha": "aa5509e44db26fa662f2c69dfde101ad593b34b1",
+          "bytes": 11777
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "02bb363eabbbed8a04d9acfbb5b9b72013234ed0",
+          "bytes": 8254
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "docs/OPENAI_COMPAT_API.md",
+        "base": {
+          "mode": "100644",
+          "sha": "f4cbbe7f8c4b51090c0a21cea0342e12a731d61c",
+          "bytes": 10110
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "docs/STANDALONE_INFERENCE_BOUNDARY.md",
+        "base": {
+          "mode": "100644",
+          "sha": "218b551fed6da7e5346530fad558b55561e3d443",
+          "bytes": 9279
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "a4f3a38555c1f61b1a7d2794a14646619ab1ec61",
+          "bytes": 9714
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "218b551fed6da7e5346530fad558b55561e3d443",
+          "bytes": 9279
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "docs/START_HERE.md",
+        "base": {
+          "mode": "100644",
+          "sha": "aee43f83631ee0fbd1fb890794e832dd038cef2d",
+          "bytes": 10599
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "59f7b93f254432696f97b68e4acdb746770e7c47",
+          "bytes": 2396
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "model/OptGuideOnDeviceModel/2025.8.8.1141/.gitkeep",
+        "base": {
+          "mode": "100644",
+          "sha": "8b137891791fe96927ad78e64b0aad7bded08bdc",
+          "bytes": 1
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "model/README.md",
+        "base": {
+          "mode": "100644",
+          "sha": "9b3f4cf3c7a1c3a3d9f1a3bd0064646884e76ff8",
+          "bytes": 662
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "07f7a11f88e54c1360adf2bdc24e37dc5ca3013a",
+          "bytes": 403
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "reference/chrome_ml_api.h",
+        "base": {
+          "mode": "100644",
+          "sha": "cd362482a96c8f1d3806a57ae1bcd5657a214270",
+          "bytes": 23503
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "reference/chrome_ml_types.h",
+        "base": {
+          "mode": "100644",
+          "sha": "a6a9891a6470fcc507612149c8bf29fa2b761e02",
+          "bytes": 1906
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "reference/on_device_model_executor.cc",
+        "base": {
+          "mode": "100644",
+          "sha": "671b074a0bd121225e13a177267f97c50eaf694f",
+          "bytes": 32644
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "runtime/ChromeMLBareRunner.cpp",
+        "base": {
+          "mode": "100644",
+          "sha": "31435cae007dc7375a4ce0611c590885f3fffa6c",
+          "bytes": 98841
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "runtime/ChromeMLBareRunner.exe",
+        "base": {
+          "mode": "100644",
+          "sha": "9a28eb001707c608d00399357a202ef9a70e1a5d",
+          "bytes": 487936
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "runtime/chromeml_api_server.cjs",
+        "base": {
+          "mode": "100644",
+          "sha": "60f5dc803191abcba2e1a0d826122486dbb6b338",
+          "bytes": 19458
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "runtime/generated_dawn_proc_names.inc",
+        "base": {
+          "mode": "100644",
+          "sha": "d3f0cf3b0c0e0e59c3b42b567bb670004b0542c8",
+          "bytes": 9389
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "runtime/generated_dawn_proc_names_actual.inc",
+        "base": {
+          "mode": "100644",
+          "sha": "249f17fd6210ebcc1721fdfb2bac3161dd590d89",
+          "bytes": 10008
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "runtime/optimization_guide_internal.dll",
+        "base": {
+          "mode": "100644",
+          "sha": "fcbb546e399cb0284219d8bbe455eed766cbb899",
+          "bytes": 18569880
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "runtime/tag_148_headers/dawn/dawn_proc_table_generated.h",
+        "base": {
+          "mode": "100644",
+          "sha": "1eb9d814ed09d3491c449f22a4f158e534935aa7",
+          "bytes": 16521
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "runtime/tag_148_headers/dawn/webgpu_generated.h",
+        "base": {
+          "mode": "100644",
+          "sha": "0e2e3b3950c7a3084b5d9197f3d0bce840cf9c69",
+          "bytes": 245156
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "runtime/webgpu_dawn.dll",
+        "base": {
+          "mode": "100644",
+          "sha": "b6a836b34ac84565846f6ff298c867817ec9ddeb",
+          "bytes": 25765376
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "scripts/build_runner.ps1",
+        "base": {
+          "mode": "100644",
+          "sha": "fa56edec6538afeb9463e4b7583e3bb748df5575",
+          "bytes": 415
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "scripts/m3_rebuild_runner.py",
+        "base": {
+          "mode": "100644",
+          "sha": "8c081c0cb49e5a5cc1eea57347c4b1431898026f",
+          "bytes": 2760
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "src/main/java/io/synexia/chromellm/chrome/ChromeAiConditioningClient.java",
+        "base": {
+          "mode": "100644",
+          "sha": "967ac48f79f9580ef3dca19a184f01580644ef48",
+          "bytes": 3937
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "src/main/java/io/synexia/chromellm/cli/Main.java",
+        "base": {
+          "mode": "100644",
+          "sha": "8082f578e11becc0d669d5ba4b14885e14b99ec5",
+          "bytes": 3251
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "ccc9b3c255d0321f5843a2484dfead000cde7863",
+          "bytes": 4165
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "ccc9b3c255d0321f5843a2484dfead000cde7863",
+          "bytes": 4165
+        },
+        "verdict": "EXACT_SAME"
+      },
+      {
+        "path": "standalone/README.md",
+        "base": {
+          "mode": "100644",
+          "sha": "9d4ca75b0592b003daff0a9eee7e84a2201bf9db",
+          "bytes": 3671
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "8c55165e5297d3dc21f998b3723dd83d9a26adef",
+          "bytes": 2896
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "60bd81f06a27607ad9463d843637f59bb43c713f",
+          "bytes": 4399
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "standalone/native/CMakeLists.txt",
+        "base": null,
+        "pr19": {
+          "mode": "100644",
+          "sha": "687783acb482cdeec55bc589ec1a026bbf2c9c91",
+          "bytes": 1271
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "3c1c921b8bdd9ebc920e937cbd3b382984f89e36",
+          "bytes": 3083
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "standalone/native/llama_jni.cpp",
+        "base": null,
+        "pr19": {
+          "mode": "100644",
+          "sha": "10fba1208bf9b7bc02c825604340319e69f9b15d",
+          "bytes": 10339
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "standalone/native/tests/llama.h",
+        "base": null,
+        "pr19": {
+          "mode": "100644",
+          "sha": "e6d6085466976406262d32afd809ca554924d8eb",
+          "bytes": 1919
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "standalone/native/tests/llama_stub.cpp",
+        "base": null,
+        "pr19": {
+          "mode": "100644",
+          "sha": "39a2b6b56b37b0d284a81d809dae733f6d024fc3",
+          "bytes": 3288
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "standalone/src/main/java/io/synexia/chromellm/standalone/LlamaCppJniBackend.java",
+        "base": null,
+        "pr19": {
+          "mode": "100644",
+          "sha": "14514131c4dd2d466654dca231d590b68e79d4ec",
+          "bytes": 4233
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "standalone/src/main/java/io/synexia/chromellm/standalone/StandaloneMain.java",
+        "base": {
+          "mode": "100644",
+          "sha": "22497ffc680812aa0b6e493a55049d12fb98a589",
+          "bytes": 2351
+        },
+        "pr19": {
+          "mode": "100644",
+          "sha": "0370f7c04d3a6246da7564736825c4b27c1534e7",
+          "bytes": 3253
+        },
+        "pr20": {
+          "mode": "100644",
+          "sha": "193bddbbed3bd286b233f6b632ac460bfe3a7a4e",
+          "bytes": 2290
+        },
+        "verdict": "BOTH_PRESENT_DIFFERENT"
+      },
+      {
+        "path": "standalone/src/test/java/io/synexia/chromellm/standalone/JniSyntheticContractTestMain.java",
+        "base": null,
+        "pr19": {
+          "mode": "100644",
+          "sha": "e374242305c2ca9362edeb721bfcc2e6385fa371",
+          "bytes": 4096
+        },
+        "pr20": null,
+        "verdict": "ONLY_PR19_OWNER"
+      },
+      {
+        "path": "关键数据.md",
+        "base": {
+          "mode": "100644",
+          "sha": "8db4d0236cc97de2db88c593abde458a8769f4cc",
+          "bytes": 1268
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "启动API服务.ps1",
+        "base": {
+          "mode": "100644",
+          "sha": "3823df80afb8d72e9db0f71c0c6094dc4e777183",
+          "bytes": 1004
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      },
+      {
+        "path": "运行裸Runner.ps1",
+        "base": {
+          "mode": "100644",
+          "sha": "97c296da9d1d43c4a8fa9b6b676f00972bd1dd8b",
+          "bytes": 3262
+        },
+        "pr19": null,
+        "pr20": null,
+        "verdict": "SAME_REMOVAL"
+      }
+    ],
+    "verdict_predicates": {
+      "BOTH_PRESENT_DIFFERENT": "Both PR19 and PR20 paths have non-null entries, and at least one of mode, Git blob identity or byte size differs; either entry may equal the common base"
+    },
+    "historical_input_rows": {
+      "bytes": 10549,
+      "sha256": "5eb9a4ed10f9c7761c9e6758808bfd13abc2fe306fdc93b8233b8e172b476fb2",
+      "former_label": "BOTH_CHANGED_DIFFERENT",
+      "status": "Historical input projection retained in V1 receipt; not the corrected projection hash"
+    }
+  },
+  "completion_boundary": "This metadata-only candidate preserves evidence. Source consolidation, superset integration, external artifact delivery, local inference, summarizer validation and broader log recovery remain incomplete.",
+  "build_feedback_recipe": {
+    "status": "PLAN_ONLY",
+    "enabled": false,
+    "model_download_status": "PASS",
+    "feedback_runtime": "NOT_RUN",
+    "runtime_selection": "Standalone Java/JNI for this request; no browser built-in provider is required for this selected runtime",
+    "build_artifact_state": {
+      "local_real_jar_or_dll": "NOT_ESTABLISHED",
+      "evidence_scope": "Exact Maven-cache metadata checks and a bounded 8000-entry lookup; no whole-machine absence claim",
+      "java21_exe_and_javac": "Existence metadata observed at C:/Program Files/Java/jdk-21/bin; no build executed"
+    },
+    "pipeline": [
+      "Build or test output",
+      "Finite CPU chunk and fact packet",
+      "Standalone ChromeLLM summary or correction candidate",
+      "Exact PR base/head and one-file work order: specification, typed atoms, LLD, interface/API",
+      "Existing recipe application",
+      "CPU source, behavior, fixed-point and refusal checks",
+      "User-authorized eligible merge"
+    ],
+    "controls": [
+      "Model text does not grant semantic approval or automatic merging",
+      "No hidden repeated generation for the same work order",
+      "One generation call per target source file",
+      "Always close the selected runtime session, including cancellation and failure",
+      "Keep current Priority 0 inventory, source-ownership, lifetime and storage controls"
+    ],
+    "source_generation_or_runtime_activation_in_this_candidate": false
+  }
+}

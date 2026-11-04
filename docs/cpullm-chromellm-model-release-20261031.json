@@ -1,0 +1,126 @@
+{
+  "schema": "CPULLM_CHROMELLM_MODEL_RELEASE_RECORD_V1",
+  "date": "2026-10-31",
+  "observed_at_utc": "2026-10-31 06:55:24 UTC",
+  "repository": "hsoliwal/ChromeLLM",
+  "scope": "Metadata-only publication evidence",
+  "authority": "candidate_only",
+  "task_status": "INCOMPLETE",
+  "publication_candidate": {
+    "path": "docs/cpullm-chromellm-model-release-20261031.json",
+    "branch": "codex/chromellm-model-release-20261031-8030f045",
+    "base_commit": "837050874cf6aa16324df263bb054da12e8a93f0",
+    "base_tree": "24fb5cd2d5118a03341859bb02e1dad0a5f9266c",
+    "change": "One new JSON document; preserve the historical audit and all other files"
+  },
+  "historical_audit": {
+    "path": "docs/cpullm-chromellm-superset-audit-20261031.json",
+    "bytes": 31958,
+    "sha256": "531277933f0d5c68346488221379cf1f413597d3c6c875a94304c6fa66f4a399",
+    "blob": "c5055e012a8ca7a9a49ea7855c02e96349e84e32",
+    "pull_request": "https://github.com/hsoliwal/ChromeLLM/pull/25",
+    "merged": true,
+    "merged_at": "2026-10-31T06:52:45Z",
+    "merge_commit": "837050874cf6aa16324df263bb054da12e8a93f0",
+    "tree": "24fb5cd2d5118a03341859bb02e1dad0a5f9266c",
+    "rewritten_by_this_record": false
+  },
+  "model_release": {
+    "id": 429773455,
+    "url": "https://github.com/hsoliwal/ChromeLLM/releases/tag/model-smollm2-135m-q4km-8030f045",
+    "tag": "model-smollm2-135m-q4km-8030f045",
+    "tag_commit": "837050874cf6aa16324df263bb054da12e8a93f0",
+    "target_commit": "837050874cf6aa16324df263bb054da12e8a93f0",
+    "draft": false,
+    "prerelease": true,
+    "kind": "MODEL_ONLY",
+    "runtime_binaries_in_this_release": false,
+    "assets": [
+      {
+        "id": 694630427,
+        "name": "LICENSE",
+        "bytes": 11358,
+        "digest": "sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "state": "uploaded",
+        "url": "https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/LICENSE"
+      },
+      {
+        "id": 694630426,
+        "name": "NOTICE.txt",
+        "bytes": 313,
+        "digest": "sha256:a37ead7a580a7b000946ccab0495915e8bc78703a96e10dfbc53392b60996ea2",
+        "state": "uploaded",
+        "url": "https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/NOTICE.txt"
+      },
+      {
+        "id": 694630424,
+        "name": "weights.bin",
+        "bytes": 105454144,
+        "digest": "sha256:8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684",
+        "state": "uploaded",
+        "url": "https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/weights.bin"
+      }
+    ],
+    "assets_metadata_and_digests_readback_verified": true
+  },
+  "model_provenance": {
+    "source_identifier": "QuantFactory/SmolLM2-135M-Instruct-GGUF",
+    "original_model": "HuggingFaceTB/SmolLM2-135M-Instruct",
+    "source_revision": "a6b7826ed969c3926a98359e39912af137b464cb",
+    "source_file": "SmolLM2-135M-Instruct.Q4_K_M.gguf",
+    "immutable_source_url": "https://huggingface.co/QuantFactory/SmolLM2-135M-Instruct-GGUF/resolve/a6b7826ed969c3926a98359e39912af137b464cb/SmolLM2-135M-Instruct.Q4_K_M.gguf",
+    "format": "GGUF",
+    "gguf_version": 3,
+    "declared_license": "Apache-2.0",
+    "model_card_bytes": 5849,
+    "model_card_sha256": "b99074dfa7942174d528f999ae8a44e2ac922d09a6f6a2b69e844e4d12dfb9c6",
+    "local_download_completed": true,
+    "local_full_sha256_readback_matches_release_digest": true,
+    "download_receipt_sha256": "328407b185a1b14585f1d4730c84fe2b19ca6527db6869828e05625d2d52b868"
+  },
+  "delivery": {
+    "external_model_asset_route": "PUBLISHED",
+    "model_release_assets_uploaded": true,
+    "model_binary_uploaded_as_git_blob": false,
+    "repository_blob_limit_bytes": 104857600,
+    "model_bytes": 105454144,
+    "model_exceeds_repository_blob_limit": true,
+    "historical_pending_state": "The earlier audit recorded the external route as pending; this separate record documents the subsequent model-only release"
+  },
+  "remaining_boundaries": {
+    "full_consolidation_goal_complete": false,
+    "pr19": {
+      "url": "https://github.com/hsoliwal/ChromeLLM/pull/19",
+      "head": "c63657e92e6e348d9222748b45193c413352af65",
+      "merged": false,
+      "status": "HOLD; preserve alternate variants"
+    },
+    "pr20": {
+      "url": "https://github.com/hsoliwal/ChromeLLM/pull/20",
+      "head": "ed908801fc1116bd607a49bac9f71ea138af6609",
+      "merged": false,
+      "status": "HOLD",
+      "whole_50_file_gate": "BINARY_DIFF",
+      "explicit_46_text_gate": "SECRET_PATTERN on old removed content; not waived",
+      "successful_hosted_source_checks": 18,
+      "hosted_gguf_inference": "Separate existing runtime evidence; does not approve the complete PR or this downloaded model locally"
+    },
+    "unresolved_tip_blob_differences": 41,
+    "source_superset_established": false,
+    "local_build": "NOT_RUN",
+    "local_model_inference": "NOT_RUN",
+    "standalone_runtime_build_artifact": "NOT_ESTABLISHED",
+    "bootstrap_model_quality": "NOT_ESTABLISHED",
+    "build_feedback_recipe": "PLAN_ONLY; disabled",
+    "automatic_merge_authority_from_model_text": false,
+    "broader_log_capture_advanced": false
+  },
+  "validation_scope": {
+    "release_metadata": "Public GitHub connector GET readback of main, release, tag, PR25 and base commit; expected asset IDs, bytes and digests matched",
+    "model_bytes": "Earlier full local download hash and readback evidence; this metadata task did not download or load the model",
+    "repository_source_changes": 0,
+    "model_calls": 0,
+    "builds_or_inference_runs": 0,
+    "scope_limit": "Document checks and independent metadata review cannot grant implementation, runtime or full-consolidation approval"
+  }
+}

@@ -50,11 +50,11 @@ synthetic library with ABI version 2 in a separate JVM:
 ```sh
 cmake -S standalone/native -B build/jni-abi-negative \
   -DCHROMELLM_JNI_CONTRACT_FIXTURE=ON \
-  '-DCMAKE_CXX_FLAGS=-DCHROMELLM_JNI_ABI_MISMATCH_FIXTURE=1'
+  -DCHROMELLM_JNI_ABI_MISMATCH_FIXTURE=ON
 cmake --build build/jni-abi-negative
 java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
   io.synexia.chromellm.standalone.JniContractTestMain \
-  "$PWD/build/jni-abi-negative/libchromellm_llama_jni_fixture.so" \
+  "$PWD/build/jni-abi-negative/libchromellm_llama_jni_abi_mismatch_fixture.so" \
   --expect-abi-mismatch
 ```
 
