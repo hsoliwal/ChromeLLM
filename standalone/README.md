@@ -2,6 +2,43 @@
 
 The module has **no Chrome browser, ChromeML, Dawn, Node, PowerShell or third-party Java runtime dependency**. An explicit provider is either the browser-free llama.cpp CLI adapter or the new **in-process llama.cpp JNI adapter**. The operator supplies a lawfully licensed GGUF model and native engine. The JNI code never downloads, extracts or falls back to Chrome assets.
 
+## Explicit inference tiers and Dawn/WebGPU CLI selection
+
+The Java 21 `InferenceTier` and `TieredInference` API routes independently
+supplied `ModelBackend` instances as `fast`, `reasoning`, or `frontier`.
+These are operator-selected *roles*, not Google model identities. Missing
+routes, provider failures, and incorrect prompt-hash/backend-ID receipts fail
+closed; there is no automatic model fallback or second generation attempt.
+Model output remains untrusted candidate text.
+
+The existing one-shot CLI remains unchanged without the following new options.
+To select a tier, provide `--tier fast|reasoning|frontier` and the matching
+`--fast-model`, `--reasoning-model`, or `--frontier-model` path. Do not mix
+`--tier` with `--model`. The selected model is the only model opened.
+
+The existing `hsoliwal/synexia-llmcpp` fork contains GGML's WebGPU backend
+that links Dawn. Build and qualify an independently supplied llama.cpp CLI with
+`-DGGML_WEBGPU=ON` and a compatible installed Dawn package. First inspect the
+runtime's `llama-cli --list-devices` output to learn its *exact* device ID.
+Then run (illustrative device name; replace with the discovered value):
+
+```sh
+java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+  --module io.synexia.chromellm.standalone/io.synexia.chromellm.standalone.StandaloneMain \
+  --backend cli --llama-bin /path/to/llama-cli --tier fast \
+  --fast-model /path/to/licensed.gguf --prompt-file /path/to/request.txt \
+  --device WebGPU0 --gpu-layers 16 --max-tokens 256
+```
+
+The `--device` and `--gpu-layers` options are passed as separate, checked
+arguments to the explicitly provided `llama-cli`; unsupported devices fail
+without CPU substitution. `--device` is currently **CLI-only**. JNI still
+supports its existing `--gpu-layers` hint but does not prove which GPU API
+executed. These flags do not install Dawn, validate a driver, prove actual GPU
+offload, or establish numerical parity. The offline tests prove bounded argv,
+receipt checks and routing only; real WebGPU inference, driver compatibility,
+and performance remain unverified.
+
 ## Build JNI from an independently licensed llama.cpp
 
 Reference fork: hsoliwal/synexia-llmcpp at commit 650ac3739d993e1d425f2d5db3c4205b3606cc30. The build's library headers and ABI must be compatible; this repository does not vendor llama.cpp or weights.
