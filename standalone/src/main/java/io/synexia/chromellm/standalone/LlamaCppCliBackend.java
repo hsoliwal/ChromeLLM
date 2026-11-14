@@ -32,6 +32,15 @@ public final class LlamaCppCliBackend implements ModelBackend {
         }
     }
 
+    /** Explicit native-device selection without changing legacy CLI defaults. */
+    public LlamaCppCliBackend(Path executable, Path model, String device, int gpuLayers) {
+        this(List.of(Objects.requireNonNull(executable, "executable").toAbsolutePath().toString()),
+                model, Path.of(System.getProperty("java.io.tmpdir")), device, gpuLayers);
+        if (!Files.isRegularFile(executable)) {
+            throw new IllegalArgumentException("llama.cpp executable is not a regular file");
+        }
+    }
+
     /** Explicit argv prefix also supports test launchers without shell interpretation. */
     public LlamaCppCliBackend(List<String> launcher, Path model, Path scratch) {
         this(launcher, model, scratch, null, -1);
