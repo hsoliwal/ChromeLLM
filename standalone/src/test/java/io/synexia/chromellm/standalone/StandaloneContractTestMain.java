@@ -44,6 +44,15 @@ public final class StandaloneContractTestMain {
                 } catch (TimeoutException expected) {
                     checks++;
                 }
+                Thread.currentThread().interrupt();
+                try {
+                    backend.infer(new ModelRequest("sleep", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("interrupted call accepted");
+                } catch (InterruptedException expected) {
+                    check(Thread.currentThread().isInterrupted());
+                } finally {
+                    Thread.interrupted();
+                }
             }
             try (var files = Files.list(temp)) {
                 check(files.count() == 1); // No prompt, stdout or stderr survives.

@@ -6,7 +6,11 @@ on:
     paths: ['standalone/**', '.github/workflows/standalone-core.yml']
 jobs:
   java:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -16,7 +20,9 @@ jobs:
           cache: maven
           cache-dependency-path: standalone/pom.xml
       - run: mvn -B -ntp -f standalone/pom.xml verify
-      - run: test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar)" = java.base
+      - name: Verify JDK-only runtime modules
+        shell: bash
+        run: test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar | tr -d '\r')" = java.base,java.net.http
   jni-synthetic:
     runs-on: ubuntu-latest
     env:
@@ -39,11 +45,15 @@ jobs:
           test ! -e '关键数据.md'
       - run: cmake -S standalone/native -B standalone/native/build -DCHROMELLM_SYNTHETIC_TEST=ON
       - run: cmake --build standalone/native/build --parallel 2
-      - name: Verify no ChromeML/Dawn dynamic library linkage
+      - name: Verify no browser runtime linkage
         run: |
-          if readelf -d standalone/native/build/libchromellm_llama_jni.so | grep -Ei 'webgpu_dawn|optimization_guide_internal|libnode'; then
+          if readelf -d standalone/native/build/libchromellm_llama_jni.so | grep -Ei 'optimization_guide_internal|libnode'; then
             echo 'Forbidden browser runtime linkage detected' >&2
             exit 1
           fi
       - run: mvn -B -ntp -f standalone/pom.xml test-compile
       - run: java -cp standalone/target/classes:standalone/target/test-classes io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/standalone/native/build/libchromellm_llama_jni.so"
+      - name: Reject an unavailable WebGPU provider
+        env:
+          CHROMELLM_TEST_NO_WEBGPU: '1'
+        run: java -cp standalone/target/classes:standalone/target/test-classes io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/standalone/native/build/libchromellm_llama_jni.so"

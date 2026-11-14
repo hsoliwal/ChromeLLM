@@ -21,6 +21,12 @@ public final class LlamaCppJniBackend implements ModelBackend {
     /** Both shared library and licensed GGUF model must be supplied explicitly. */
     public LlamaCppJniBackend(Path jniLibrary, Path model, int contextTokens, int threads, int gpuLayers)
             throws IOException {
+        this(jniLibrary, model, contextTokens, threads, gpuLayers, "auto");
+    }
+
+    /** Select a linked GGML provider without introducing a browser runtime. */
+    LlamaCppJniBackend(Path jniLibrary, Path model, int contextTokens, int threads, int gpuLayers,
+                       String computeBackend) throws IOException {
         Path bridge = Objects.requireNonNull(jniLibrary, "jniLibrary").toAbsolutePath().normalize();
         Path weights = Objects.requireNonNull(model, "model").toAbsolutePath().normalize();
         if (!Files.isRegularFile(bridge) || !Files.isReadable(bridge)) {
@@ -33,10 +39,25 @@ public final class LlamaCppJniBackend implements ModelBackend {
                 || gpuLayers < 0 || gpuLayers > 1024) {
             throw new IllegalArgumentException("invalid context, thread count or GPU layer count");
         }
+        int selectedBackend = switch (Objects.requireNonNull(computeBackend, "computeBackend")) {
+            case "auto" -> 0;
+            case "cpu" -> 1;
+            case "webgpu" -> 2;
+            default -> throw new IllegalArgumentException("compute backend must be auto, cpu or webgpu");
+        };
+        if (selectedBackend == 1 && gpuLayers != 0) {
+            throw new IllegalArgumentException("cpu requires zero GPU layers");
+        }
+        if (selectedBackend == 2 && gpuLayers == 0) {
+            throw new IllegalArgumentException("webgpu requires a positive GPU layer count");
+        }
         // Native JNI library is not shipped with this JDK-only module; no auto-discovery or download.
         System.load(bridge.toString());
-        this.handle = nOpen(weights.toString().getBytes(StandardCharsets.UTF_8),
-                contextTokens, threads, gpuLayers);
+        byte[] modelPath = weights.toString().getBytes(StandardCharsets.UTF_8);
+        // Keep the original native entry point for existing Java clients and native bridges.
+        this.handle = selectedBackend == 0
+                ? nOpen(modelPath, contextTokens, threads, gpuLayers)
+                : nOpenWithBackend(modelPath, contextTokens, threads, gpuLayers, selectedBackend);
         if (handle == 0) throw new IOException("native model loader returned no handle");
     }
 
@@ -83,6 +104,8 @@ public final class LlamaCppJniBackend implements ModelBackend {
 
     private static native long nOpen(byte[] utf8ModelPath, int contextTokens, int threads, int gpuLayers)
             throws IOException;
+    private static native long nOpenWithBackend(byte[] utf8ModelPath, int contextTokens, int threads,
+                                               int gpuLayers, int computeBackend) throws IOException;
     private static native byte[] nGenerate(long handle, byte[] utf8Prompt, int maxTokens, long timeoutMillis)
             throws IOException, TimeoutException;
     private static native void nClose(long handle);
