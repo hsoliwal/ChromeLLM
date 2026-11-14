@@ -28,14 +28,41 @@ public final class StandaloneMain {
     }
 
     private static ModelBackend backend(Map<String, String> options) throws Exception {
-        Path model = Path.of(required(options, "--model"));
+        String tierValue = options.get("--tier");
+        final Path model;
+        if (tierValue == null) {
+            if (options.containsKey("--fast-model") || options.containsKey("--reasoning-model")
+                    || options.containsKey("--frontier-model")) {
+                throw new IllegalArgumentException("tier-specific models require --tier");
+            }
+            model = Path.of(required(options, "--model"));
+        } else {
+            if (options.containsKey("--model")) {
+                throw new IllegalArgumentException("--model and --tier-specific model paths are exclusive");
+            }
+            InferenceTier tier = InferenceTier.parse(tierValue);
+            String key = switch (tier) {
+                case FAST -> "--fast-model";
+                case REASONING -> "--reasoning-model";
+                case FRONTIER -> "--frontier-model";
+            };
+            model = Path.of(required(options, key));
+        }
         return switch (options.getOrDefault("--backend", "cli")) {
-            case "cli" -> new LlamaCppCliBackend(Path.of(required(options, "--llama-bin")), model);
-            case "jni" -> new LlamaCppJniBackend(
+            case "cli" -> options.containsKey("--device") || options.containsKey("--gpu-layers")
+                    ? new LlamaCppCliBackend(Path.of(required(options, "--llama-bin")), model,
+                            options.get("--device"), Integer.parseInt(options.getOrDefault("--gpu-layers", "-1")))
+                    : new LlamaCppCliBackend(Path.of(required(options, "--llama-bin")), model);
+            case "jni" -> {
+                if (options.containsKey("--device")) {
+                    throw new IllegalArgumentException("explicit --device currently requires --backend cli");
+                }
+                yield new LlamaCppJniBackend(
                     Path.of(required(options, "--jni-lib")), model,
                     Integer.parseInt(options.getOrDefault("--context-tokens", "4096")),
                     Integer.parseInt(options.getOrDefault("--threads", "4")),
                     Integer.parseInt(options.getOrDefault("--gpu-layers", "0")));
+            }
             default -> throw new IllegalArgumentException("unknown backend (expected cli or jni)");
         };
     }
@@ -55,7 +82,9 @@ public final class StandaloneMain {
                     && !option.equals("--context-tokens") && !option.equals("--threads")
                     && !option.equals("--gpu-layers") && !option.equals("--model")
                     && !option.equals("--prompt-file") && !option.equals("--max-tokens")
-                    && !option.equals("--timeout-seconds")) {
+                    && !option.equals("--timeout-seconds") && !option.equals("--device")
+                    && !option.equals("--tier") && !option.equals("--fast-model")
+                    && !option.equals("--reasoning-model") && !option.equals("--frontier-model")) {
                 throw new IllegalArgumentException("unknown option " + option);
             }
             if (options.putIfAbsent(option, args[i + 1]) != null) {
