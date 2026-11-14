@@ -21,6 +21,8 @@ public final class LlamaCppCliBackend implements ModelBackend {
     private final List<String> launcher;
     private final Path model;
     private final Path scratch;
+    private final String device;
+    private final int gpuLayers;
 
     public LlamaCppCliBackend(Path executable, Path model) {
         this(List.of(Objects.requireNonNull(executable, "executable").toAbsolutePath().toString()),
@@ -32,9 +34,22 @@ public final class LlamaCppCliBackend implements ModelBackend {
 
     /** Explicit argv prefix also supports test launchers without shell interpretation. */
     public LlamaCppCliBackend(List<String> launcher, Path model, Path scratch) {
+        this(launcher, model, scratch, null, -1);
+    }
+
+    /** Explicit GGML device selection; the llama.cpp executable supplies any Dawn/WebGPU backend. */
+    public LlamaCppCliBackend(List<String> launcher, Path model, Path scratch, String device, int gpuLayers) {
         this.launcher = List.copyOf(Objects.requireNonNull(launcher, "launcher"));
         this.model = Objects.requireNonNull(model, "model").toAbsolutePath().normalize();
         this.scratch = Objects.requireNonNull(scratch, "scratch").toAbsolutePath().normalize();
+        if (device != null && !device.matches("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")) {
+            throw new IllegalArgumentException("device must be an exact, bounded GGML device name");
+        }
+        if (gpuLayers < -1 || gpuLayers > 1024) {
+            throw new IllegalArgumentException("GPU layers must be omitted or in [0, 1024]");
+        }
+        this.device = device;
+        this.gpuLayers = gpuLayers;
         if (this.launcher.isEmpty() || this.launcher.stream().anyMatch(s -> s == null || s.isBlank())) {
             throw new IllegalArgumentException("launcher must contain nonblank argv elements");
         }
@@ -86,6 +101,8 @@ public final class LlamaCppCliBackend implements ModelBackend {
         args.addAll(List.of("-m", model.toString(), "-f", prompt.toString(), "-n",
                 Integer.toString(request.maxTokens()), "--no-display-prompt", "--no-show-timings",
                 "--simple-io", "--single-turn"));
+        if (device != null) args.addAll(List.of("--device", device));
+        if (gpuLayers >= 0) args.addAll(List.of("-ngl", Integer.toString(gpuLayers)));
         return new ProcessBuilder(args)
                 .redirectOutput(stdout.toFile())
                 .redirectError(stderr.toFile())
