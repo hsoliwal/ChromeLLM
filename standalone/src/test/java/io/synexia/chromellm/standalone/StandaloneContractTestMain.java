@@ -52,6 +52,7 @@ public final class StandaloneContractTestMain {
             Files.deleteIfExists(model);
             Files.deleteIfExists(temp);
         }
+        checks += StdioProtocolContractTestMain.run();
         System.out.println("standalone contract checks passed: " + checks);
     }
 

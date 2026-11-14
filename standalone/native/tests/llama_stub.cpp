@@ -6,16 +6,57 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
-struct llama_model {};
+struct ggml_backend_reg { const char* name; };
+struct ggml_backend_device {
+    ggml_backend_reg_t backend;
+    const char* name;
+    const char* description;
+    enum ggml_backend_dev_type type;
+};
+// These are synthetic inventory entries. They never create or execute a GPU device.
+static ggml_backend_reg cpu{"CPU"}, webgpu{"WebGPU"}, vulkan{"Vulkan"}, blas{"BLAS"}, duplicate{"Duplicate"};
+static ggml_backend_device devices[]{
+    {&cpu, "CPU", "synthetic CPU", GGML_BACKEND_DEVICE_TYPE_CPU},
+    {&webgpu, "WebGPU", "synthetic WebGPU, not Dawn execution", GGML_BACKEND_DEVICE_TYPE_GPU},
+    {&vulkan, "Vulkan0", "synthetic integrated GPU नमस्ते", GGML_BACKEND_DEVICE_TYPE_IGPU},
+    {&blas, "BLAS", "synthetic CPU accelerator", GGML_BACKEND_DEVICE_TYPE_ACCEL},
+    {&duplicate, "same", "synthetic ambiguous device one", GGML_BACKEND_DEVICE_TYPE_GPU},
+    {&duplicate, "same", "synthetic ambiguous device two", GGML_BACKEND_DEVICE_TYPE_GPU}
+};
+struct llama_model { llama_model_params params; std::string path; };
 struct llama_vocab {};
 struct llama_context { llama_context_params p; int sampled = 0; int mode = 2; };
 struct llama_sampler {};
 extern "C" {
 void llama_backend_init() {}
-llama_model_params llama_model_default_params() { return {0}; }
-llama_model* llama_model_load_from_file(const char* path, llama_model_params) {
+size_t ggml_backend_dev_count() { return sizeof(devices) / sizeof(devices[0]); }
+ggml_backend_dev_t ggml_backend_dev_get(size_t index) { return index < ggml_backend_dev_count() ? &devices[index] : nullptr; }
+const char* ggml_backend_dev_name(ggml_backend_dev_t device) { return device->name; }
+const char* ggml_backend_dev_description(ggml_backend_dev_t device) { return device->description; }
+enum ggml_backend_dev_type ggml_backend_dev_type(ggml_backend_dev_t device) { return device->type; }
+ggml_backend_reg_t ggml_backend_dev_backend_reg(ggml_backend_dev_t device) { return device->backend; }
+const char* ggml_backend_reg_name(ggml_backend_reg_t backend) { return backend->name; }
+llama_model_params llama_model_default_params() { return {nullptr, 0, LLAMA_SPLIT_MODE_LAYER, 7}; }
+static bool correctSelection(const char* path, const llama_model_params& p) {
+    const std::string name(path);
+    if (name.find("require-webgpu") != std::string::npos) {
+        return p.devices != nullptr && p.devices[0] == &devices[1] && p.devices[1] == nullptr
+            && p.n_gpu_layers == 3 && p.split_mode == LLAMA_SPLIT_MODE_NONE && p.main_gpu == 0;
+    }
+    if (name.find("require-cpu") != std::string::npos) {
+        return p.devices != nullptr && p.devices[0] == nullptr && p.n_gpu_layers == 0
+            && p.split_mode == LLAMA_SPLIT_MODE_NONE && p.main_gpu == 0;
+    }
+    if (name.find("require-default") != std::string::npos) {
+        return p.devices == nullptr && p.n_gpu_layers == 0
+            && p.split_mode == LLAMA_SPLIT_MODE_LAYER && p.main_gpu == 7;
+    }
+    return true;
+}
+llama_model* llama_model_load_from_file(const char* path, llama_model_params params) {
     if (std::string(path).find("rejected") != std::string::npos) return nullptr;
-    return new llama_model;
+    if (!correctSelection(path, params)) return nullptr;
+    return new llama_model{params, path};
 }
 const llama_vocab* llama_model_get_vocab(const llama_model*) { static llama_vocab v; return &v; }
 bool llama_model_has_encoder(const llama_model*) { return false; }
@@ -31,7 +72,10 @@ int32_t llama_tokenize(const llama_vocab*, const char* input, int32_t len, llama
     return 1;
 }
 llama_context_params llama_context_default_params() { return {0, 0, 0, 0, nullptr, nullptr}; }
-llama_context* llama_init_from_model(llama_model*, llama_context_params p) { return new llama_context{p}; }
+llama_context* llama_init_from_model(llama_model* model, llama_context_params p) {
+    // Re-read the stored device pointer after model load: selection storage must outlive loading.
+    return correctSelection(model->path.c_str(), model->params) ? new llama_context{p} : nullptr;
+}
 void llama_free(llama_context* c) { delete c; }
 llama_sampler_chain_params llama_sampler_chain_default_params() { return {}; }
 llama_sampler* llama_sampler_chain_init(llama_sampler_chain_params) { return new llama_sampler; }
@@ -59,3 +103,4 @@ int32_t llama_token_to_piece(const llama_vocab*, llama_token t, char* out, int32
     return 1;
 }
 }
+
