@@ -39,4 +39,4 @@ The fixture is test-only, **not a real language model**. Synthetic success does 
 
 The root pom.xml and CMakeLists.txt build a distinct Java/C++ diffusion, image, GPU, vision and video subsystem. The separate diffusion CLI no longer supports --prompt or --chrome-base; optional numeric conditioning uses exactly 16 finite values passed with --condition-vector.
 
-Canonical refactor/deletion recipes belong in [com.synexia](https://github.com/hsoliwal/com.synexia/pull/14522); ChromeLLM only receives reviewable product files. See [migration record](BROWSER_REMOVAL_MIGRATION.md), [standalone README](../standalone/README.md) and [draft PR #19](https://github.com/hsoliwal/ChromeLLM/pull/19).
+Canonical refactor/deletion recipes belong in [com.synexia](https://github.com/hsoliwal/com.synexia/pull/14522); ChromeLLM only receives reviewable product files. See [migration record](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/BROWSER_REMOVAL_MIGRATION.md), [standalone README](../standalone/README.md) and [draft PR #19](https://github.com/hsoliwal/ChromeLLM/pull/19).

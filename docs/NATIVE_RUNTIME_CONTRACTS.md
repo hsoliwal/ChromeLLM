@@ -1,6 +1,6 @@
 # Native bridges and Windows HTTP runtime contracts
 
-[Projects](ARCHITECTURE_AND_PROJECTS.md) · [Java packages](JAVA_PACKAGE_CONTRACTS.md) · [Media lifecycle](MEDIA_PIPELINE_CONTRACTS.md) · [Coverage](DOCUMENTATION_COVERAGE.md)
+[Projects](ARCHITECTURE_AND_PROJECTS.md) · [Java packages](JAVA_PACKAGE_CONTRACTS.md) · [Media lifecycle](MEDIA_PIPELINE_CONTRACTS.md) · [Coverage](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/DOCUMENTATION_COVERAGE.md)
 
 Pinned source: `26473e370c6d7cedace4a0b21e8ad56a35ff2dfc`. This is a source-level guide, not an ABI compatibility certificate or test receipt.
 

@@ -13,4 +13,4 @@ mvn -q exec:java -Dexec.mainClass=io.synexia.chromellm.cli.Main \
 
 The diffusion CLI supports java, jna or jni compute engines and an optional --condition-vector containing exactly 16 finite comma-separated values between 0 and 1. The removed --prompt and --chrome-base arguments are no longer accepted. Any text-to-conditioning workflow must explicitly invoke the separate, independently licensed standalone ModelBackend, validate its result, then construct a DiffusionCondition.
 
-Native media components in root native/ are not the text inference library. See [native runtime contracts](NATIVE_RUNTIME_CONTRACTS.md), [standalone text JNI](../standalone/README.md) and [migration record](BROWSER_REMOVAL_MIGRATION.md).
+Native media components in root native/ are not the text inference library. See [native runtime contracts](NATIVE_RUNTIME_CONTRACTS.md), [standalone text JNI](../standalone/README.md) and [migration record](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/BROWSER_REMOVAL_MIGRATION.md).

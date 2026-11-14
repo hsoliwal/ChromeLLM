@@ -1,6 +1,6 @@
 # Media stream, transform, and batch contracts
 
-[Project map](ARCHITECTURE_AND_PROJECTS.md) · [Java packages](JAVA_PACKAGE_CONTRACTS.md) · [Native contracts](NATIVE_RUNTIME_CONTRACTS.md) · [Coverage](DOCUMENTATION_COVERAGE.md)
+[Project map](ARCHITECTURE_AND_PROJECTS.md) · [Java packages](JAVA_PACKAGE_CONTRACTS.md) · [Native contracts](NATIVE_RUNTIME_CONTRACTS.md) · [Coverage](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/DOCUMENTATION_COVERAGE.md)
 
 Observed at `26473e370c6d7cedace4a0b21e8ad56a35ff2dfc`; examples and tests were not run in this documentation pass. All type names in this page belong to `io.synexia.chromellm.video` unless stated otherwise.
 
@@ -89,4 +89,4 @@ try (var processor = new io.synexia.chromellm.gpu.CpuImageProcessor()) {
 
 ## Known verification boundaries
 
-The source tests cover representative geometry, temporal resets, LUTs, masks, preset compilation and encoding-argument construction. They do not establish exhaustive codec/container compatibility, process cancellation, native resource safety under concurrency, arbitrary LUT validity, or performance. Native integration is opt-in; no test or media tool was executed while authoring this page. See the [ledger](DOCUMENTATION_COVERAGE.md) for remaining semantic and verification work.
+The source tests cover representative geometry, temporal resets, LUTs, masks, preset compilation and encoding-argument construction. They do not establish exhaustive codec/container compatibility, process cancellation, native resource safety under concurrency, arbitrary LUT validity, or performance. Native integration is opt-in; no test or media tool was executed while authoring this page. See the [ledger](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/DOCUMENTATION_COVERAGE.md) for remaining semantic and verification work.

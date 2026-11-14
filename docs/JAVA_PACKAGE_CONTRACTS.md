@@ -1,6 +1,6 @@
 # Java package contracts
 
-[Project map](ARCHITECTURE_AND_PROJECTS.md) · [Media contracts](MEDIA_PIPELINE_CONTRACTS.md) · [Native/HTTP contracts](NATIVE_RUNTIME_CONTRACTS.md) · [Coverage](DOCUMENTATION_COVERAGE.md)
+[Project map](ARCHITECTURE_AND_PROJECTS.md) · [Media contracts](MEDIA_PIPELINE_CONTRACTS.md) · [Native/HTTP contracts](NATIVE_RUNTIME_CONTRACTS.md) · [Coverage](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/DOCUMENTATION_COVERAGE.md)
 
 Source snapshot: `26473e370c6d7cedace4a0b21e8ad56a35ff2dfc`. All names below are packages under `io.synexia.chromellm`, not separately published artifacts. The root Maven project owns 106 main Java files in 14 namespaces. Examples are source-derived and were not executed for this documentation change.
 
@@ -87,4 +87,4 @@ The Java implementation deliberately approximates these operations: inpaint uses
 
 ## Test source packages
 
-The six test namespaces reuse production qualified package names under a different source root. They are test-only and included in coverage accounting. `batch` checks file traversal/output separation; `engine` checks Java seed/normalization behavior; `gpu` checks pixel/mask/array behavior; `preset` checks compilation/version rejection; `video` checks transforms, LUT parsing, rates, encoding command construction and opt-in decoder integration; `vision` checks fallback behavior and opt-in OpenCV calls. Full test navigation and unexecuted checks are in the [coverage ledger](DOCUMENTATION_COVERAGE.md).
+The six test namespaces reuse production qualified package names under a different source root. They are test-only and included in coverage accounting. `batch` checks file traversal/output separation; `engine` checks Java seed/normalization behavior; `gpu` checks pixel/mask/array behavior; `preset` checks compilation/version rejection; `video` checks transforms, LUT parsing, rates, encoding command construction and opt-in decoder integration; `vision` checks fallback behavior and opt-in OpenCV calls. Full test navigation and unexecuted checks are in the [coverage ledger](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/DOCUMENTATION_COVERAGE.md).
