@@ -27,4 +27,4 @@ Windows 和 macOS 分别使用 DLL 和 dylib 路径；还需正确配置原生�
 
 Java/JNI 合成测试验证 Unicode、超时和资源清理，但不包含真实模型。真实 GGUF 推理、GPU 和跨平台运行仍待验证。
 
-参考：[standalone/README.md](standalone/README.md)、[当前架构](docs/START_HERE.md)、[迁移记录](docs/BROWSER_REMOVAL_MIGRATION.md)。[ChromeLLM PR #19](https://github.com/hsoliwal/ChromeLLM/pull/19) 尚为草案。
+参考：[standalone/README.md](standalone/README.md)、[当前架构](docs/START_HERE.md)、[迁移记录](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/BROWSER_REMOVAL_MIGRATION.md)。[ChromeLLM PR #19](https://github.com/hsoliwal/ChromeLLM/pull/19) 尚为草案。
