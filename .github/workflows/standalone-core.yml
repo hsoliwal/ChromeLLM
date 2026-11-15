@@ -40,7 +40,7 @@ jobs:
               exit 1
             fi
             cat profile-conflict.log
-            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with native-fork or native-synthetic' profile-conflict.log
+            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with (another native build profile|native-fork or native-synthetic)' profile-conflict.log
           done
           for mode in fork synthetic pinned-fork; do
             if mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic,fork-native \
@@ -49,34 +49,32 @@ jobs:
               exit 1
             fi
             cat fork-profile-conflict.log
-            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with native-fork or native-synthetic' fork-profile-conflict.log
+            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with (another native build profile|native-fork or native-synthetic)' fork-profile-conflict.log
           done
           if mvn -B -ntp -f standalone/pom.xml -Pfork-native,dawn-binary \
-              -Dchromellm.fork.webgpu=OFF validate > dawn-profile-conflict.log 2>&1; then
+              -Dchromellm.fork.webgpu=OFF validate > dawn-binary-conflict.log 2>&1; then
             echo 'Dawn binary and a disabled pinned fork WebGPU backend unexpectedly passed validate' >&2
             exit 1
           fi
-          cat dawn-profile-conflict.log
-          grep -F 'dawn-binary requires chromellm.fork.webgpu=ON' dawn-profile-conflict.log
-          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn validate > dawn-owner-conflict.log 2>&1; then
-            echo 'Pinned fork and the other Dawn installer unexpectedly passed validate' >&2
+          cat dawn-binary-conflict.log
+          grep -F 'dawn-binary requires chromellm.fork.webgpu=ON' dawn-binary-conflict.log
+          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn \
+              -Dchromellm.fork.webgpu=OFF validate > dawn-profile-conflict.log 2>&1; then
+            echo 'Dawn and a disabled pinned fork WebGPU backend unexpectedly passed validate' >&2
             exit 1
           fi
-          cat dawn-owner-conflict.log
-          grep -F 'native-dawn cannot be used with native-synthetic or fork-native; use dawn-binary with fork-native' dawn-owner-conflict.log
+          cat dawn-profile-conflict.log
+          grep -F 'native-dawn requires the pinned fork WebGPU=ON' dawn-profile-conflict.log
+          # This supported pair validates without provisioning Dawn or reading source.
+          mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn \
+            -Dchromellm.fork.source=/unavailable-for-validation \
+            -Dchromellm.fork.commit=889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b validate
           if mvn -B -ntp -f standalone/pom.xml -Pnative-dawn,dawn-binary validate > dawn-provisioning-conflict.log 2>&1; then
             echo 'Both Dawn provisioning profiles unexpectedly passed validate' >&2
             exit 1
           fi
           cat dawn-provisioning-conflict.log
           grep -F 'native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile' dawn-provisioning-conflict.log
-          if mvn -B -ntp -f standalone/pom.xml -Pnative-dawn \
-              -Dchromellm.fork.webgpu=OFF validate > dawn-disabled-profile.log 2>&1; then
-            echo 'Dawn and a disabled WebGPU backend unexpectedly passed validate' >&2
-            exit 1
-          fi
-          cat dawn-disabled-profile.log
-          grep -F 'native-dawn requires the pinned fork WebGPU=ON' dawn-disabled-profile.log
           test ! -e standalone/target/native-synthetic/CMakeCache.txt
           test ! -e standalone/target/native-fork/CMakeCache.txt
           test ! -e standalone/target/fork-native/CMakeCache.txt
@@ -121,6 +119,8 @@ jobs:
           test ! -e '关键数据.md'
       - name: Maven native-synthetic build and CTest regressions
         run: mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic verify
+      - name: Verify relocated fixture archive with a fresh Java consumer
+        run: java -cp standalone/target/test-classes io.synexia.chromellm.standalone.NativeDistributionTestMain "${{ github.workspace }}/standalone/native"
       - name: Expose synthetic DLL dependencies to the Windows loader
         if: runner.os == 'Windows'
         shell: pwsh

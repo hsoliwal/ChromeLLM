@@ -124,7 +124,20 @@ final class CodingAgentTools implements AutoCloseable {
                     searchControls(arguments, form);
                     return request("POST", "/api/search-batch", form, remaining, 12 * 1024);
                 }));
-        result.add(emptyTool("problem_categories", "Read the canonical category catalogue and algorithm evidence.", "/api/problem-categories"));
+        Map<String, Object> categoryProperties = new LinkedHashMap<>();
+        categoryProperties.put("platform", Map.of("type", "string", "enum",
+                List.of("LEETCODE", "HACKERRANK", "GEEKSFORGEEKS")));
+        categoryProperties.put("category", stringSchema(256));
+        categoryProperties.put("prefix", stringSchema(256));
+        categoryProperties.put("shape", Map.of("type", "string", "pattern", "^[A-Z][A-Z0-9_]{0,63}$",
+                "description", "An exact canonical AlgorithmShape name, such as BINARY_SEARCH or AHO_CORASICK; the service validates membership."));
+        categoryProperties.put("limit", Map.of("type", "integer", "minimum", 1, "maximum", 64));
+        result.add(new AgentSession.Tool("problem_categories",
+                "Read category evidence with no arguments, or search reviewed challenge navigation by platform and category/prefix, or by algorithm shape. Select at most one of category, prefix and shape. Category/prefix require platform; limit alone is invalid. Results confer no solution-copy or promotion authority.",
+                schema(categoryProperties, List.of()), (arguments, remaining) -> {
+                    fields(arguments, Set.of("platform", "category", "prefix", "shape", "limit"), Set.of());
+                    return request("GET", "/api/problem-categories", categoryControls(arguments), remaining, 0);
+                }));
         result.add(new AgentSession.Tool("github_build_plan", "Read a configured GitHub build target plan.",
                 schema(Map.of("target", Map.of("type", "string", "pattern", "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")), List.of("target")),
                 (arguments, remaining) -> {
@@ -236,6 +249,44 @@ final class CodingAgentTools implements AutoCloseable {
             if (!value.equals("raw") && !value.equals("java-code")) throw invalid();
             form.put("surface", value);
         }
+    }
+
+    private static Map<String, String> categoryControls(Map<String, Object> arguments) throws IOException {
+        if (arguments.isEmpty()) return Map.of();
+        Map<String, String> form = new LinkedHashMap<>();
+        if (arguments.containsKey("platform")) {
+            String platform = text(arguments, "platform", 16, false);
+            if (!Set.of("LEETCODE", "HACKERRANK", "GEEKSFORGEEKS").contains(platform)) throw invalid();
+            form.put("platform", platform);
+        }
+        int selectors = 0;
+        for (String selector : List.of("category", "prefix", "shape")) {
+            if (!arguments.containsKey(selector)) continue;
+            if (++selectors > 1) throw invalid();
+            String value = text(arguments, selector, selector.equals("shape") ? 64 : 256, false);
+            if (selector.equals("shape")) {
+                if (!value.matches("[A-Z][A-Z0-9_]{0,63}")) throw invalid();
+            } else if (!form.containsKey("platform")) throw invalid();
+            form.put(selector, value);
+        }
+        if (form.isEmpty()) throw invalid();
+        form.put("limit", Integer.toString(boundedLimit(arguments, 64)));
+        return form;
+    }
+
+    private static int boundedLimit(Map<String, Object> arguments, int maximum) throws IOException {
+        int limit = 25;
+        if (arguments.containsKey("limit")) {
+            Object value = arguments.get("limit");
+            try {
+                if (value instanceof BigDecimal number) limit = number.intValueExact();
+                else if (value instanceof Integer number) limit = number;
+                else if (value instanceof Long number) limit = Math.toIntExact(number);
+                else throw invalid();
+            } catch (ArithmeticException invalidNumber) { throw invalid(); }
+            if (limit < 1 || limit > maximum) throw invalid();
+        }
+        return limit;
     }
 
     private String request(String method, String route, Map<String, String> fields, Duration timeout, int maxFormBytes)

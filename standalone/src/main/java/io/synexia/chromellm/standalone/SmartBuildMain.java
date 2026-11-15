@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
@@ -42,10 +43,9 @@ public final class SmartBuildMain {
         if ((args.length != 3 && args.length != 4) || args[0].isBlank()) {
             throw new IllegalArgumentException("expected recipe, standalone root, Maven target directory, and optional offline flag");
         }
-        String offline = args.length == 4 ? args[3]
-                : Boolean.toString("offline=true".equals(System.getProperty("chromellm.offline"))
-                        || Boolean.getBoolean("chromellm.offline"));
+        String offline = args.length == 4 ? args[3] : System.getProperty("chromellm.offline", "false");
         if (offline.startsWith("--offline=")) offline = offline.substring("--offline=".length());
+        else if (offline.startsWith("offline=")) offline = offline.substring("offline=".length());
         if (!offline.equals("true") && !offline.equals("false")) {
             throw new IllegalArgumentException("offline flag requires true or false");
         }
@@ -121,19 +121,16 @@ public final class SmartBuildMain {
             if (value != null) options.put(key, root.resolve(value).normalize().toString());
         }
         if (options.containsKey("--model-url")) {
-            if (offline) {
-                // Preserve provider admission before substituting verified local cache bytes.
-                // Creating and closing the lazy provider performs no model or network work.
-                StandaloneMain.backend(Map.copyOf(options), environment).close();
-            }
-            Path cache = root.resolve(Path.of(required(config, "modelCacheDir"))).normalize();
+            // The existing lazy provider validates the complete option combination without I/O.
+            StandaloneMain.backend(Map.copyOf(options), environment).close();
+            Path cache = Path.of(options.get("--model-cache-dir"));
             if (!offline) Files.createDirectories(cache);
             if (!Files.isDirectory(cache, LinkOption.NOFOLLOW_LINKS) || !cache.toRealPath().equals(cache)) {
                 throw new IOException("model cache must be an existing directory without symlinks");
             }
             if (offline) {
-                Path model = new ModelArtifactCache(required(config, "modelUrl"),
-                        required(config, "modelSha256"), cache, ModelArtifactCache.MAX_BYTES, true).resolve();
+                Path model = new ModelArtifactCache(options.get("--model-url"), options.get("--model-sha256"),
+                        cache, ModelArtifactCache.MAX_BYTES, true).resolve();
                 options.remove("--model-url");
                 options.remove("--model-sha256");
                 options.remove("--model-cache-dir");

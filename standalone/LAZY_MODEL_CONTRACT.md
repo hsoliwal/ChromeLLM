@@ -1,45 +1,45 @@
 # ChromeLLM lazy local model contract (opt-in)
 
-The local CLI/JNI model providers operate independently of a browser. Legacy `--model`
-and tier-specific paths remain authoritative. A local CLI or JNI invocation may instead
-supply all three options `--model-url`, `--model-sha256`, and `--model-cache-dir`; these
-are exclusive with `--model`, `--tier`, and all tier-specific paths. The cache directory
+The standalone Java/JNI runtime stays browser-free. Legacy `--model` and tier-specific
+paths remain authoritative. A local CLI or JNI invocation may instead supply all
+three options `--model-url`, `--model-sha256`, and `--model-cache-dir`; these are
+exclusive with `--model`, `--tier`, and all tier-specific paths. The cache directory
 must already exist and be writable for the direct CLI; acquisition never creates an
-implicit user-home cache. Explicitly selected Maven binary profiles and online smart-build
-entrypoints prepare their documented cache directories. Hosted Gemini rejects these options.
+implicit user-home cache. The explicitly selected Maven binary profiles and smart-build
+entrypoint prepare their documented cache directories. The opt-in `real-model-test`
+profile creates its explicitly configured directory, defaulting to
+`${settings.localRepository}/io/synexia/chromellm/models`. Hosted Gemini rejects these options.
 
 `--model-url` must be an explicitly supplied HTTPS URL, without user-info or fragment.
 `--model-sha256` is a 64-hex-character digest of the entire licensed GGUF artifact.
-For ordinary CLI/MCP use, the model is fetched no earlier than the first inference
-request, never at argument parse time. The explicit Maven `real-model-test` profile
-resolves its pinned test model during integration-test, then executes real JNI inference.
-The separate `real-model` profile may provision its pinned test model before verification.
-The CLI executable or JNI bridge remains separately installed or built from the selected
-native source. The caller must review model redistribution, export, and use rights.
+The lazy provider fetches the model no earlier than the first inference request and
+never at argument parse time. An explicitly selected Maven `real-model` profile may
+provision its pinned test model before verification. The explicit `real-model-test`
+profile resolves its pinned model during `integration-test`, then executes real JNI
+inference. The CLI executable or JNI bridge
+remains separately installed or built from the selected native source.
+The caller must review model redistribution, export, and use rights.
 
 The implementation stores verified model bytes as `<sha256>.gguf` in the specified
 cache. Every cache hit is SHA-256 checked, a corrupt cache entry fails closed,
 and an incomplete or mismatched download is removed without replacing existing
-unowned paths. Missing artifacts use HTTPS GET with at most five validated redirects.
-Each destination must remain HTTPS without credentials or a fragment; valid nondefault
-HTTPS ports and explicitly selected source/CDN hosts are supported. Redirect cycles,
-missing or ambiguous Location headers, and empty locations fail. Redirect requests
-carry no cookies or authorization. A response may have at most one Content-Length,
-which must be a nonnegative integer within the caller's byte bound. Content-Encoding
-must be absent or a single identity value. Both headers and streamed bytes are checked.
-Transfer size is bounded to 64 GiB or the smaller caller-supplied bound; transient
-failures have no automatic retry or provider fallback. The production transport and
-the injected HttpClient overload own and close their response bodies and client on
-completion or failure. The ResponseSender fixture seam borrows its sender while closing
-discarded response bodies; callers close the successful response stream.
+unowned paths. Missing artifacts use HTTPS GET.
 
-Files are staged in the same directory and published via an exclusive hard link only
-on successful verification. The cache owner itself does not create directories or
-silently repair corrupt artifacts. The opt-in Maven test creates its explicitly
-configured directory in online mode; its default is
-`${settings.localRepository}/io/synexia/chromellm/models`. Maven `-o` forbids downloads
-in the real-model test and smart-build profiles while still verifying existing cache
-bytes. A missing cache directory is left untouched and fails before opening a downloader.
+Pinned native binary acquisition distinguishes an explicit URL of the form
+`https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>` on the default
+HTTPS port may follow up to three HTTPS redirects within GitHub release-download
+endpoints and `release-assets.githubusercontent.com`, also on the default HTTPS
+port. General model acquisition and other explicit HTTPS origins retain up to five
+validated HTTPS redirects. The native-binary GitHub release lane retains its
+three-hop endpoint allowlist; both lanes use the same bounded lifecycle engine.
+Every hop rejects downgrades, user-info and fragments; redirect cycles and blank or
+ambiguous locations fail. Redirects carry no cookies or authorization. Redirected
+responses are closed before the next request, and the full pinned SHA-256 is checked
+after transfer. Transfer size is bounded to 64 GiB, or the smaller caller-supplied
+bound; transient failures have no automatic retry or provider fallback. Files are staged in the same directory and published via an
+exclusive hard link only on successful verification. The cache owner itself does
+not create directories or silently repair corrupt artifacts. Maven offline mode
+revalidates existing binary inputs and refuses cache misses before opening the downloader.
 
 The artifact is acquired before native or subprocess model initialization. The
 request's inference timeout applies to inference after successful acquisition.

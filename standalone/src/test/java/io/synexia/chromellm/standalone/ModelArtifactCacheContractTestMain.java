@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.ByteArrayInputStream;
@@ -152,7 +153,7 @@ public final class ModelArtifactCacheContractTestMain {
                         : response(200, destination, Map.of("Content-Length", List.of("" + fixture.length)), body);
             })) {
                 check(java.util.Arrays.equals(result.readAllBytes(), fixture), "redirect returned incorrect bytes");
-                check(redirect.closed && !body.closed, "redirect body lifecycle was incorrect");
+                check(redirect.closed && body.closed, "redirect or EOF response body was not released");
             }
             check(body.closed && requests.size() == 2 && requests.getLast().uri().equals(destination),
                     "HTTPS redirect not followed exactly once");
@@ -291,14 +292,15 @@ public final class ModelArtifactCacheContractTestMain {
     }
 
     private static void binaryContracts(Path dir, byte[] fixture, String hash, String url) throws Exception {
-        Files.write(dir.resolve(hash + ".gguf"), fixture);
+        Path model = dir.resolve(hash + ".gguf");
+        Files.write(model, fixture);
         AtomicInteger opens = new AtomicInteger();
         ModelArtifactCache.Downloader download = ignored -> {
             opens.incrementAndGet();
             return new ByteArrayInputStream(fixture);
         };
-        reject(() -> new ModelArtifactCache(url, hash, dir, 0));
-        reject(() -> new ModelArtifactCache(url, hash, dir, ModelArtifactCache.MAX_BYTES + 1));
+        reject(() -> ModelArtifactCache.binaryArtifact(url, hash, dir, 0));
+        reject(() -> ModelArtifactCache.binaryArtifact(url, hash, dir, ModelArtifactCache.MAX_BYTES + 1));
         reject(() -> new ModelArtifactCache(url, hash, dir, download, 100, -1, ".bin"));
         ModelArtifactCache binary = new ModelArtifactCache(url, hash, dir, download, fixture.length,
                 fixture.length, ".bin");
@@ -309,7 +311,7 @@ public final class ModelArtifactCacheContractTestMain {
         check(binary.resolveWithOfflinePolicy(true).equals(file) && opens.get() == 1, "offline verified binary hit downloaded");
         check(new ModelArtifactCache(url, hash, dir, fixture.length).resolveWithOfflinePolicy(true).equals(file),
                 "legacy native constructor lost exact-size binary cache selection");
-        check(Files.exists(dir.resolve(hash + ".gguf")), "native artifact replaced existing model cache");
+        check(java.util.Arrays.equals(Files.readAllBytes(model), fixture), "native artifact replaced existing model cache");
         ModelArtifactCache wrongLength = new ModelArtifactCache(url, hash, dir, download, 100,
                 fixture.length + 1, ".bin");
         rejectIo(wrongLength::resolve);
@@ -347,6 +349,20 @@ public final class ModelArtifactCacheContractTestMain {
         check(success.requests.stream().allMatch(request -> request.timeout().orElseThrow().compareTo(Duration.ofSeconds(5)) <= 0
                 && request.headers().firstValue("Accept-Encoding").orElseThrow().equals("identity")),
                 "request deadline or identity encoding missing");
+
+        TrackedStream oversized = new TrackedStream(fixture);
+        FakeTransport bounded = new FakeTransport(response(200,
+                Map.of("Content-Length", List.of(Integer.toString(fixture.length))), oversized));
+        rejectIo(() -> ModelArtifactCache.fetch(start, fixture.length - 1, bounded, Duration.ofSeconds(5)));
+        check(bounded.closes.get() == 1 && oversized.closes.get() == 1,
+                "bounded transport accepted oversized headers or leaked its response/client");
+
+        TrackedStream cycleBody = new TrackedStream(new byte[0]);
+        FakeTransport cycle = new FakeTransport(response(302,
+                Map.of("Location", List.of(start.toString())), cycleBody));
+        rejectIo(() -> ModelArtifactCache.fetch(start, cycle, Duration.ofSeconds(5)));
+        check(cycle.requests.size() == 1 && cycle.closes.get() == 1 && cycleBody.closes.get() == 1,
+                "redirect cycle was followed or leaked its response/client");
 
         for (String unsafe : List.of("http://cdn.example.invalid/file", "https://u:p@cdn.example.invalid/file",
                 "https://cdn.example.invalid/file#fragment", "https://cdn.example.invalid:70000/file")) {
