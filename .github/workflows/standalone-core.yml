@@ -1,5 +1,12 @@
-name: Standalone browser-free inference
+name: Standalone inference
 on:
+  workflow_dispatch:
+    inputs:
+      run_chrome_ai:
+        description: Run the installed-Chrome model smoke test on the trusted chrome-ai runner
+        type: boolean
+        required: true
+        default: false
   push:
     paths: ['standalone/**', '.github/workflows/standalone-core.yml']
   pull_request:
@@ -19,8 +26,11 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - run: mvn -B -ntp -f standalone/pom.xml verify
-      - name: Reject conflicting native Maven profiles before CMake
+      - name: Reject conflicting native profiles with the configured regex diagnostic
         if: runner.os == 'Linux'
         shell: bash
         run: |
@@ -54,7 +64,7 @@ jobs:
           test ! -e standalone/target/fork-native/CMakeCache.txt
       - name: Verify JDK-only runtime modules
         shell: bash
-        run: test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar | tr -d '\r')" = java.base,java.net.http
+        run: test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar | tr -d '\r')" = java.base,java.net.http,jdk.httpserver
   jni-synthetic:
     strategy:
       fail-fast: false
@@ -81,7 +91,10 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
-      - name: Enforce no browser runtime files
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject legacy embedded browser runtime files
         run: |
           git ls-files runtime reference scripts/build_runner.ps1 scripts/m3_rebuild_runner.py src/main/java/io/synexia/chromellm/chrome | tee /tmp/legacy-browser-tracked.txt
           test ! -s /tmp/legacy-browser-tracked.txt
@@ -116,6 +129,43 @@ jobs:
         run: java -Xcheck:jni -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}"
       - name: Bound JNI prompt encoding before allocation
         run: java -Xcheck:jni -Xmx32m -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}" oversize-memory
+  real-model:
+    # Public CI uses the same immutable, public source donor as the prior real GGUF gate.
+    # Locally, fork-native accepts an independently checked-out private Synexia fork too.
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      LLAMA_COMMIT: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+          path: external/llama.cpp
+          persist-credentials: false
+  chrome-ai-live:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
+    runs-on: [self-hosted, linux, chrome-ai]
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.repository }}-chrome-ai-live
+      cancel-in-progress: false
+    env:
+      CHROME_BIN: ${{ vars.CHROME_BIN }}
+      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
   native-binaries:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -140,6 +190,87 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - name: Select model cache directory
+        shell: bash
+        run: echo "MODEL_CACHE=$RUNNER_TEMP/chromellm-models" >> "$GITHUB_ENV"
+      - name: Reuse checksum-verified model cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.MODEL_CACHE }}
+          key: chromellm-gguf-8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684
+      - name: Maven build, model acquisition and real JNI inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -f standalone/pom.xml -Pfork-native,real-model-test \
+            -Dchromellm.fork.source="$PWD/external/llama.cpp" \
+            -Dchromellm.fork.commit="$LLAMA_COMMIT" \
+            -Dchromellm.real.model.cache="$MODEL_CACHE" verify \
+            2>&1 | tee "$RUNNER_TEMP/real-model-first.log"
+          grep -F 'PASS: licensed GGUF CPU inference, deterministic repeat, receipts and close' "$RUNNER_TEMP/real-model-first.log"
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' "$RUNNER_TEMP/real-model-first.log"; then
+            exit 1
+          fi
+      - name: Reuse the downloaded model in an offline Maven smart build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > standalone/target/real-smart-build.properties <<EOF
+          promptFile=examples/smart-build-prompt.txt
+          backend=jni
+          jniLib=$PWD/standalone/target/fork-native/libchromellm_llama_jni.so
+          modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/weights.bin
+          modelSha256=8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684
+          modelCacheDir=$MODEL_CACHE
+          contextTokens=512
+          threads=2
+          gpuLayers=0
+          computeBackend=cpu
+          maxTokens=48
+          timeoutSeconds=120
+          EOF
+          mvn -o -B -ntp -f standalone/pom.xml -Pfork-native,real-model-test,smart-build \
+            -Dchromellm.fork.source="$PWD/external/llama.cpp" \
+            -Dchromellm.fork.commit="$LLAMA_COMMIT" \
+            -Dchromellm.real.model.cache="$MODEL_CACHE" \
+            -Dchromellm.smart.recipe=target/real-smart-build.properties verify \
+            2>&1 | tee "$RUNNER_TEMP/real-model-offline.log"
+          grep -F 'Model artifact: verified cache hit' "$RUNNER_TEMP/real-model-offline.log"
+          grep -F 'ChromeLLM smart-build candidate SHA-256:' "$RUNNER_TEMP/real-model-offline.log"
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' "$RUNNER_TEMP/real-model-offline.log"; then
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require an explicitly configured dedicated profile
+        run: |
+          test -n "$CHROMELLM_CHROME_PROFILE"
+          test -n "$CHROME_BIN"
+          test -x "$CHROME_BIN"
+      - name: Read installed Chrome availability without provisioning
+        run: |
+          set -o pipefail
+          mvn -B -ntp -f standalone/pom.xml -Pchrome-status \
+            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
+            -Dchromellm.chrome.timeoutSeconds=60 verify | tee chrome-status.log
+      - name: Run real built-in AI inference without fallback
+        run: |
+          set -o pipefail
+          printf '%s\n' 'Reply with a short greeting.' > "$RUNNER_TEMP/chromellm-smoke-prompt.txt"
+          mvn -B -ntp -f standalone/pom.xml -Pchrome-infer \
+            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
+            -Dchromellm.chrome.promptFile="$RUNNER_TEMP/chromellm-smoke-prompt.txt" \
+            -Dchromellm.chrome.maxTokens=128 \
+            -Dchromellm.chrome.timeoutSeconds=180 verify | tee chrome-infer.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installed-chrome-ai-smoke
+          path: |
+            chrome-status.log
+            chrome-infer.log
+          retention-days: 7
           cache: maven
           cache-dependency-path: standalone/pom.xml
       - uses: actions/cache@v4

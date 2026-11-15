@@ -1,11 +1,80 @@
 # ChromeLLM standalone Java 21 inference
 
-The module has no Chrome browser, ChromeML, Node, PowerShell or third-party Java runtime dependency. It uses the JDK modules `java.base` and `java.net.http`. Select the existing local llama.cpp CLI/JNI provider or the hosted Gemini API explicitly. Dawn is an optional native compute dependency for local WebGPU inference.
+The module has no third-party Java runtime dependency. It uses the JDK modules `java.base`, `java.net.http` and `jdk.httpserver`. Select the local llama.cpp CLI/JNI, hosted Gemini API, or optional installed-Chrome built-in AI provider explicitly. The CLI/JNI providers run independently of Chrome; Dawn is an optional native compute dependency for local WebGPU inference.
+
+## Installed Chrome built-in AI
+
+Select `--backend chrome` to let Java launch an installed Chrome executable with a dedicated profile and a small localhost page. Java owns the process, deadlines and request orchestration; the page invokes Chrome's `LanguageModel` API. The selected Chrome installation and its eligibility determine API availability. No browser, model weights or Chrome runtime library is bundled or downloaded by the Java launcher.
+
+The profile must be a new/empty directory on first use, or a directory already marked by ChromeLLM. Personal Chrome profiles, symbolic-link profiles and simultaneous use of one profile are refused. The profile is retained after shutdown so Chrome can reuse its own model assets on later jobs. An OS file lock remains held until the owned process exits. Each launch uses a new localhost port and document identity; Java never attaches to an existing personal tab or browser.
+
+Supply `--chrome-bin /absolute/path/to/chrome`, or set `CHROME_BIN`. If both are omitted, the CLI checks standard Chrome/Chromium installation paths for the current platform and reports a clear error when no executable is found. It does not install or modify the browser.
+
+### Availability and explicit preparation
+
+Availability does not create a model session, download weights or run a prompt:
+
+```sh
+java -cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+  io.synexia.chromellm.standalone.StandaloneMain \
+  --backend chrome --chrome-profile "$HOME/.chromellm/chrome-ai-profile" \
+  --chrome-headless true --chrome-status true --timeout-seconds 60
+```
+
+Preparation is explicit. `--chrome-download true` authorizes Chrome-managed model provisioning. Java supplies a Chrome DevTools user-gesture request only for that authorized preparation; the page still checks Chrome's current activation and availability. Chrome may refuse provisioning because of API, hardware, policy, network or activation requirements. A headed bridge page also provides a **Prepare model** button for a trusted operator click.
+
+```sh
+java -cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+  io.synexia.chromellm.standalone.StandaloneMain \
+  --backend chrome --chrome-profile "$HOME/.chromellm/chrome-ai-profile" \
+  --chrome-prepare true --chrome-download true --chrome-headless false \
+  --timeout-seconds 600
+```
+
+The setup modes emit a bounded JSON result. `--chrome-status` and `--chrome-prepare` are mutually exclusive and cannot be combined with prompts, stdio sessions, device listing, token limits or native-provider options. Chrome's state is authoritative: launching Chromium successfully does not establish that `LanguageModel` or an eligible model is available.
+
+### Inference and cancellation
+
+```sh
+java -cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+  io.synexia.chromellm.standalone.StandaloneMain \
+  --backend chrome --chrome-profile "$HOME/.chromellm/chrome-ai-profile" \
+  --chrome-headless true --prompt-file prompt.txt --max-tokens 512 \
+  --timeout-seconds 180
+```
+
+Inference defaults to an already available model. Explicit `--chrome-download true` also permits preparation before inference; it never enables fallback to another provider. `--chrome-headless` defaults to `false` in the CLI. Headless model support depends on the selected browser and host.
+
+The request deadline includes launch, discovery, connection, preparation and inference. Interruption, cancellation or shutdown retires uncertain work and releases owned sessions; late results cannot satisfy a new request. Prompt and output bytes are bounded. Chrome does not expose a portable generation `maxTokens` option: after generation, the bridge measures the response with `measureContextUsage` and refuses a response above the requested budget. This is an admission bound on returned output, not a promise that generation stops at that token count.
+
+### Maven and a trusted GitHub runner
+
+Verification requires **JDK 21, Maven and Node.js 22**. Node runs the fixed JavaScript contract harness only; it is not a product runtime dependency.
+
+Default `mvn -f standalone/pom.xml verify` runs offline contract fixtures for process ownership, transport, lifecycle and provider selection. It does not launch an installed browser or download a model. The existing native Maven profiles remain available.
+
+The optional profiles invoke the same CLI. `CHROME_BIN` selects the executable. The default dedicated Maven profile path is `${user.home}/.chromellm/chrome-ai-profile`; override it when separate jobs need separate profiles.
+
+```sh
+mvn -f standalone/pom.xml -Pchrome-status verify
+mvn -f standalone/pom.xml -Pchrome-prepare \
+  -Dchromellm.chrome.allowDownload=true \
+  -Dchromellm.chrome.timeoutSeconds=600 verify
+mvn -f standalone/pom.xml -Pchrome-infer \
+  -Dchromellm.chrome.promptFile=/absolute/path/to/prompt.txt \
+  -Dchromellm.chrome.maxTokens=512 verify
+```
+
+Choose one Chrome profile per Maven invocation. `chromellm.chrome.profile`, `chromellm.chrome.headless`, `chromellm.chrome.timeoutSeconds`, `chromellm.chrome.allowDownload` and `chromellm.chrome.maxTokens` configure the corresponding CLI options. Status and inference default to headless; the preparation profile defaults to headed. Provisioning remains disabled unless explicitly enabled.
+
+The existing standalone workflow includes a manual `run_chrome_ai` job restricted to the repository's `main` branch and a Linux self-hosted runner labelled `chrome-ai`. Configure repository variables `CHROME_BIN` and `CHROMELLM_CHROME_PROFILE`, with a prepared and eligible model in that dedicated profile. Public pull-request events cannot schedule this job. It runs real availability and inference commands, uploads their logs, and fails on an unavailable model or inference error. Passing portable fixtures or having an installed browser does not count as a live model pass.
 
 ## Opt-in lazy local model artifacts
 
 A local CLI or JNI backend may now select one **explicitly licensed, SHA-256-pinned HTTPS GGUF**
-without bundling or downloading it during Maven/CMake builds. The cache is an existing,
+without bundling it in the Java artifact. Ordinary Maven/CMake builds do not fetch weights;
+the explicit `real-model-test` Maven profile below downloads and verifies its pinned test model.
+The CLI cache is an existing,
 operator-chosen writable directory; no implicit home cache is created. The model is
 downloaded at the first inference request and verified before opening llama.cpp.
 
@@ -20,7 +89,8 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
 
 Provide **all three** of `--model-url`, `--model-sha256`, and `--model-cache-dir`.
 They exclude `--model`, `--tier`, and tier-model paths; hosted Gemini rejects them.
-Download redirects and provider fallback are forbidden. Cache hits are rehashed;
+Model downloads follow at most five HTTPS redirects, with no credentials or fragments.
+Provider selection remains explicit. Cache hits are rehashed;
 corrupt entries fail closed instead of being silently overwritten. Native libraries
 and executables remain separately installed. See [LAZY_MODEL_CONTRACT.md](LAZY_MODEL_CONTRACT.md)
 for byte limits, staging, cache ownership, acquisition timeouts, and the WebMCP/MCP
@@ -28,13 +98,34 @@ boundary. This does **not** extract Chrome-managed Gemini Nano weights.
 
 
 
+## Maven downloads and tests a real model
+
+The explicit `real-model-test` profile resolves ChromeLLM's published `weights.bin`,
+checks its full SHA-256 and exact byte length, and runs real CPU inference under
+`-Xcheck:jni`. It shares the runtime's verified model cache. A second Maven invocation
+with `-o` reuses the verified bytes and fails on a missing or corrupt cache entry.
+
+```sh
+mvn -B -ntp -f standalone/pom.xml -Pfork-native,real-model-test \
+  -Dchromellm.fork.source=/absolute/path/to/your/llama.cpp-checkout \
+  -Dchromellm.fork.commit=YOUR_CHECKOUT_FULL_40_HEX_COMMIT verify
+```
+
+Maven drives native compilation, model acquisition and inference verification in that
+command. The model defaults to SmolLM2-135M-Instruct Q4_K_M: 105,454,144 bytes with
+SHA-256 `8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684`.
+The native checkout is an explicitly supplied source input. Public GitHub CI checks out
+its pinned public donor automatically, then runs this command and an offline smart-build
+recipe using the same downloaded model. See [MAVEN_MODEL_TEST.md](MAVEN_MODEL_TEST.md)
+for cache, platform, model and recipe settings.
+
 ## MCP JSON-RPC stdio (opt-in)
 
 Standalone mode now exposes an MCP-compatible stdio server separately from the legacy
 `--stdio true` CLM1 binary transport. The MCP server supports an explicit
 `2025-06-18` initialization handshake, `tools/list`, `tools/call`,
 `ping`, and two bounded tools: `backend_status` and `infer_text`.
-No browser engine, Node, or HTTP listener is required.
+The stdio transport does not require Node or a browser. The explicitly selected Chrome provider owns its separate localhost page and browser process.
 
 ```sh
 java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
@@ -222,7 +313,7 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
   --threads 4 --max-tokens 256
 ```
 
-The source-build option uses linked GGML providers (`GGML_BACKEND_DL=OFF`) and delegates WebGPU configuration to llama.cpp. ChromeLLM itself does not download source or models. The independently installed Dawn package and its build prerequisites must already be available.
+The source-build option uses linked GGML providers (`GGML_BACKEND_DL=OFF`) and delegates WebGPU configuration to llama.cpp. The CMake source-build path does not download source or models. The independently installed Dawn package and its build prerequisites must already be available.
 
 Alternatively, point `Dawn_DIR` at the directory containing the installed `DawnConfig.cmake`. When building llama.cpp separately for the prebuilt-library path, enable `GGML_WEBGPU=ON` and keep `GGML_BACKEND_DL=OFF`; use the resulting matching llama/GGML libraries above. The pinned [WebGPU build](https://github.com/hsoliwal/synexia-llmcpp/blob/650ac3739d993e1d425f2d5db3c4205b3606cc30/ggml/src/ggml-webgpu/CMakeLists.txt) requires Python 3 to embed WGSL shaders. Keep the three WebGPU debug/profile flags off for binary stdio sessions because those modes can write native diagnostics to stdout. Device enumeration observes registered providers; it does not automatically load backend plugins.
 
@@ -308,3 +399,9 @@ Repeat the same Java command with `CHROMELLM_TEST_NO_WEBGPU=1` in its environmen
 The existing CI workflow runs both the Java contracts and synthetic JNI contracts on Linux, Windows and macOS. JNI checks run with `-Xcheck:jni`; a separate 32 MiB heap invocation verifies that oversized prompt encoding fails before allocating an encoded copy. The native fixture links the platform thread library and uses UTF-8 source encoding on MSVC.
 
 These tests check JNI loading, strict Unicode and byte limits, bounded token pieces, prompt receipts, timeout, interruption, native-lock deadlines, independent model close, stale-handle rejection and explicit CPU/WebGPU selection using a **fake test-only llama API**. They do not establish real GGUF inference or GPU offload. `mvn verify` also executes loopback HTTP tests for the Gemini adapter and provider-selection tests, without contacting Google or using credentials. Live API credentials, real models, drivers and device performance require separate runtime verification. Reusable source-change recipes and fixed-point evidence belong to hsoliwal/com.synexia; product code and tests live here.
+## Bounded coding-agent sessions
+
+Run `--agent true` with an explicitly configured headless repository service to
+use the existing Java/JNI model provider for multi-step source inspection and
+candidate previews. See [AGENT.md](AGENT.md) for setup, tools, MCP integration,
+budgets, source-hash checks and qualification boundaries.
