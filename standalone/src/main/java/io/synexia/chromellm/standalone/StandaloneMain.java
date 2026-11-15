@@ -20,6 +20,17 @@ public final class StandaloneMain {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
+        if (flag(options, "--mcp-stdio")) {
+            if (flag(options, "--stdio") || flag(options, "--list-devices")
+                    || options.containsKey("--prompt-file")) {
+                throw new IllegalArgumentException("MCP stdio requires its own exclusive session mode");
+            }
+            try (ModelBackend backend = backend(options, System.getenv());
+                 FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
+                McpStdioServer.serve(backend, System.in, output);
+            }
+            return;
+        }
         if (flag(options, "--list-devices")) {
             if (!"jni".equals(options.getOrDefault("--backend", "jni"))) {
                 throw new IllegalArgumentException("device listing requires the JNI backend");
@@ -75,6 +86,7 @@ public final class StandaloneMain {
     static ModelBackend backend(Map<String, String> options, Map<String, String> environment) throws Exception {
         String provider = options.getOrDefault("--backend", "cli");
         if ("gemini".equals(provider)) {
+            rejectOptions(options, "--model-url", "--model-sha256", "--model-cache-dir");
             rejectOptions(options, "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
                     "--gpu-layers", "--compute-backend", "--device-backend", "--device", "--tier",
                     "--fast-model", "--reasoning-model", "--frontier-model");
@@ -91,6 +103,10 @@ public final class StandaloneMain {
                     options.getOrDefault("--thinking-level", GeminiApiBackend.DEFAULT_THINKING_LEVEL));
         }
         rejectOptions(options, "--thinking-level", "--api-key-env");
+        if (options.containsKey("--model-url") || options.containsKey("--model-sha256")
+                || options.containsKey("--model-cache-dir")) {
+            return lazyLocalModel(options, environment, provider);
+        }
         Path model = localModel(options);
         return switch (provider) {
             case "cli" -> {
@@ -120,6 +136,44 @@ public final class StandaloneMain {
             }
             default -> throw new IllegalArgumentException("unknown backend (expected cli, jni or gemini)");
         };
+    }
+
+    /** Optional model URL is downloaded only on the first inference; existing paths remain untouched. */
+    private static ModelBackend lazyLocalModel(Map<String, String> options,
+                                                Map<String, String> environment, String provider) {
+        if (!"cli".equals(provider) && !"jni".equals(provider)) {
+            throw new IllegalArgumentException("lazy model artifacts require the cli or jni backend");
+        }
+        rejectOptions(options, "--model", "--tier", "--fast-model",
+                "--reasoning-model", "--frontier-model");
+        String url = required(options, "--model-url");
+        String sha256 = required(options, "--model-sha256");
+        Path cacheDir = Path.of(required(options, "--model-cache-dir"));
+        // Validate the local provider selection before any network or cache writes.
+        if ("cli".equals(provider)) {
+            rejectOptions(options, "--compute-backend", "--device-backend", "--jni-lib",
+                    "--context-tokens", "--threads");
+            required(options, "--llama-bin");
+        } else {
+            rejectOptions(options, "--llama-bin");
+            required(options, "--jni-lib");
+            if (options.containsKey("--device-backend") || options.containsKey("--device")) {
+                rejectOptions(options, "--compute-backend");
+                required(options, "--device-backend");
+                required(options, "--device");
+            }
+        }
+        ModelArtifactCache artifact = new ModelArtifactCache(url, sha256, cacheDir);
+        Map<String, String> retained = new HashMap<>(options);
+        retained.remove("--model-url");
+        retained.remove("--model-sha256");
+        retained.remove("--model-cache-dir");
+        String backendId = "cli".equals(provider) ? "llama.cpp-cli" : "llama.cpp-jni";
+        return new LazyModelBackend(backendId, artifact, resolved -> {
+            Map<String, String> local = new HashMap<>(retained);
+            local.put("--model", resolved.toString());
+            return backend(local, environment);
+        });
     }
 
     /** One local model path: --model, or the path named for the explicitly selected --tier. */
@@ -181,7 +235,8 @@ public final class StandaloneMain {
                 "--threads", "--gpu-layers", "--model", "--prompt-file", "--max-tokens",
                 "--timeout-seconds", "--stdio", "--list-devices", "--device-backend", "--device",
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
-                "--reasoning-model", "--frontier-model");
+                "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
+                "--model-cache-dir", "--mcp-stdio");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String option = args[i];

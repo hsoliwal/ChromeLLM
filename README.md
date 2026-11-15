@@ -3,6 +3,7 @@
 ChromeLLM now separates its independent Java 21 model runtime from Chrome2api/ChromeML. **The source product no longer requires browser APIs, Node/PowerShell runners, ChromeML/Dawn DLLs or Chrome-managed model weights for text inference.** Historical fork attribution remains in LICENSE, NOTICE, THIRD_PARTY.md and Git history.
 
 - [standalone/](standalone/README.md) is a separately built Java 21 module using only `java.base` and `java.net.http`. Select local llama.cpp through CLI/JNI or **Gemini 4 Hydrogen through the Gemini API**. Native inference can explicitly select the existing **Dawn/WebGPU provider in llama.cpp**.
+- [webmcp/](webmcp/README.md) is an optional browser-page WebMCP tool adapter. It uses injected, user-authorized callbacks; Java/JNI remains browser-independent. The standalone MCP JSON-RPC stdio server and browser WebMCP are distinct protocols.
 - `src/main/java/io/synexia/chromellm/` owns separate diffusion/GPU/vision/video/media functionality; the diffusion CLI no longer calls Chrome.
 - `native/` and the root CMake build contain media JNI adapters; `standalone/native/` contains the independent llama.cpp JNI library with a test-only synthetic backend.
 
