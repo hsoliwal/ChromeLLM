@@ -9,6 +9,8 @@ ChromeLLM now separates its independent Java 21 model runtime from Chrome2api/Ch
 
 Run `mvn -f standalone/pom.xml verify` to compile the module and run its local-process, loopback HTTP and provider-selection contract tests. No API key is required for these tests.
 
+An opt-in `-Pnative-webgpu-artifact` Maven profile can now acquire a specific **SHA-256-pinned Dawn install archive from GitHub Releases**, verify/extract it inside `standalone/target/`, and build the existing JNI fork with `CHROMELLM_WEBGPU=ON`. It requires an explicit archive URL, checksum and native fork checkout; the default build still downloads no native binaries or models. See [Dawn artifact Maven provisioning](standalone/DAWN_ARTIFACT_MAVEN.md).
+
 | Selection | Execution | Required input |
 | --- | --- | --- |
 | `--backend cli` (default) | Local llama.cpp process | Executable and licensed GGUF model |
