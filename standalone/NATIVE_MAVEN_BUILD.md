@@ -24,6 +24,59 @@ mvn -B -ntp -f standalone/pom.xml -Pnative-fork \
 
 The supplied checkout must actually support GGML WebGPU and CMake must be able to find a compatible Dawn package (for example, through the operator's `CMAKE_PREFIX_PATH` or `Dawn_DIR`). There is no silent GPU-to-CPU substitution when WebGPU is explicitly requested. No native model or device inference test runs automatically because a licensed GGUF and a supported device are operator-specific. The normal `--jni-lib` and `--model` runtime parameters remain mandatory.
 
+## Lazy, verified Dawn artifacts
+
+The upstream llama.cpp WebGPU workflow already acquires the Dawn release from
+`reeselevine/dawn`, tag `v2.0.0`, rather than building Chromium or ChromeML.
+ChromeLLM reuses that **native Dawn dependency**, never browser-managed model
+weights. The opt-in `native-dawn` Maven profile runs the Java 21 source-file
+installer in `standalone/native/DawnArtifactInstaller.java` during
+`generate-sources`; `native-fork` then configures CMake during
+`generate-resources`. Maven owns both operations:
+
+```sh
+mvn -B -ntp -f standalone/pom.xml -Pnative-fork,native-dawn \
+  -Dchromellm.native.source=/absolute/path/to/pinned/llama.cpp \
+  -Dchromellm.native.webgpu=ON verify
+```
+
+For download and CMake-package discovery without a native source checkout,
+`mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources`
+only stages Dawn. It does **not** build an inference engine.
+
+The installer selects **Linux x86_64** or **macOS arm64**, then downloads
+the corresponding pinned GitHub release ZIP. Exactly these immutable asset
+names and published GitHub release SHA-256 digests are admitted:
+
+| Platform | Release archive suffix | SHA-256 |
+| --- | --- | --- |
+| Linux x86_64 | `ubuntu-latest-Release.zip` | `a5a87d9513e1fc109c355628baebe6b85fe7aa258f8ed2d2cf71ddc902e778bb` |
+| macOS arm64 | `macos-latest-Release.zip` | `3e8d604c4b601b07cc0895396507927f2b52db60022276e435fb21bba590cfa9` |
+
+Both names begin with
+`Dawn-5e9a4865b1635796ccc77dd30057f2b4002a1355-`.
+The original upstream archives contain a nested `.tar.gz`; the installer
+checks its exact entry name, extracts it using the host `tar`, and verifies
+the existence of `DawnConfig.cmake`. CMake discovers the staged
+`standalone/target/native-deps/dawn` prefix without changing global
+machine state. Downloads use HTTPS, a bounded response size, the exact
+published SHA-256, and no unpinned `latest` lookup. The verified archive and
+installed prefix are reused when intact, instead of downloading on every build.
+Unexpected, damaged or unsupported archives **fail closed**; there is no silent
+CPU fallback, unpinned version change, or browser-provided DLL substitution.
+The installer does not redistribute native files inside the JAR.
+
+The Maven profile intentionally does not run on Windows: this pinned
+upstream release has no corresponding Windows asset. Windows users may
+still build CPU JNI or supply a separately qualified local Dawn installation;
+the automatic downloader explicitly refuses unsupported hosts.
+
+GitHub Actions tests the actual Dawn download, checksum, extraction, CMake
+package discovery and supported host matrix. These checks establish dependency
+availability, **not** GGUF inference, GPU offload, semantic parity, or the
+license status of any operator-supplied model. Fork source must still be
+explicitly supplied; it is not cloned implicitly by the Dawn downloader.
+
 ## Synthetic JNI test build
 
 For CI and contract development without a model or donor checkout:
