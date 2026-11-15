@@ -9,13 +9,22 @@ public final class AgentHost {
     private AgentHost() { }
 
     public static void main(String[] args) throws IOException {
-        if (args.length < 1 || args.length > 3) {
+        // jpackage --arguments can be skipped when Chrome supplies an extension origin.
+        // The native host may instead receive its fixed config as a packaged JVM property.
+        String pinnedConfig = System.getProperty("chromellm.agent.config", "");
+        String[] launch = args;
+        if (!pinnedConfig.isBlank()) {
+            launch = new String[args.length + 1];
+            launch[0] = pinnedConfig;
+            System.arraycopy(args, 0, launch, 1, args.length);
+        }
+        if (launch.length < 1 || launch.length > 3) {
             System.err.println("invalid native host arguments");
             System.exit(2);
             return;
         }
-        ApprovedInventory inventory = new ApprovedInventory(Path.of(args[0]));
-        if (!validCaller(args, inventory.allowedOrigin())) {
+        ApprovedInventory inventory = new ApprovedInventory(Path.of(launch[0]));
+        if (!validCaller(launch, inventory.allowedOrigin())) {
             System.err.println("native caller not authorized");
             System.exit(2);
             return;
