@@ -124,6 +124,7 @@ public final class ProviderSelectionContractTestMain {
         }
         ModelArtifactCacheContractTestMain.main(new String[0]);
         McpStdioServerContractTestMain.main(new String[0]);
+        AgentPlanContractTestMain.main(new String[0]);
         System.out.println("provider selection contract checks passed: " + checks);
     }
 
