@@ -70,10 +70,21 @@ final class McpStdioServer {
         if (!(parsed instanceof Map<?, ?> raw)) return encoded(error(null, -32600, "Invalid Request"));
         Map<String, Object> message = map(raw);
         Object id = message.get("id");
-        if (message.containsKey("id") && !validId(id)) return encoded(error(null, -32600, "Invalid Request"));
+        if (message.containsKey("id") && (!validId(id) || !echoableId(id))) {
+            return encoded(error(null, -32600, "Invalid Request"));
+        }
         if (!"2.0".equals(message.get("jsonrpc")) || !(message.get("method") instanceof String method)) {
             return encoded(error(validId(id) ? id : null, -32600, "Invalid Request"));
         }
+        try {
+            return dispatch(message, id, method);
+        } catch (IOException responseFailure) {
+            // The request ID was admitted against this exact error envelope before dispatch.
+            return encoded(error(id, -32603, "MCP response exceeds bounded size"));
+        }
+    }
+
+    private String dispatch(Map<String, Object> message, Object id, String method) throws IOException {
         boolean notification = !message.containsKey("id");
         if (notification) {
             if ("notifications/initialized".equals(method) && negotiated) initialized = true;
@@ -86,11 +97,12 @@ final class McpStdioServer {
                     || !(params.get("clientInfo") instanceof Map<?, ?>)) {
                 return encoded(error(id, -32602, "Invalid initialization parameters"));
             }
-            negotiated = true;
-            return encoded(success(id, Map.of(
+            String reply = encoded(success(id, Map.of(
                     "protocolVersion", VERSION,
                     "capabilities", Map.of("tools", Map.of("listChanged", false)),
                     "serverInfo", Map.of("name", "chromellm-standalone", "version", "0.1.0"))));
+            negotiated = true;
+            return reply;
         }
         if (!initialized) return encoded(error(id, -32000, "MCP session not initialized"));
         if ("ping".equals(method)) return encoded(success(id, Map.of()));
@@ -129,7 +141,7 @@ final class McpStdioServer {
                 Map<String, Object> result = new LinkedHashMap<>(toolResult(plan.json(), false));
                 result.put("structuredContent", plan.structuredContent());
                 return encoded(success(id, result));
-            } catch (IOException | TimeoutException | IllegalArgumentException failure) {
+            } catch (IOException | TimeoutException | RuntimeException failure) {
                 return encoded(success(id, toolResult("Agent planning failed", true)));
             } catch (InterruptedException interruption) {
                 Thread.currentThread().interrupt();
@@ -159,7 +171,7 @@ final class McpStdioServer {
             }
             String response = encoded(success(id, toolResult(result.text(), false)));
             return response;
-        } catch (IOException | TimeoutException | IllegalArgumentException failure) {
+        } catch (IOException | TimeoutException | RuntimeException failure) {
             return encoded(success(id, toolResult("Model inference failed", true)));
         } catch (InterruptedException interruption) {
             Thread.currentThread().interrupt();
@@ -189,7 +201,7 @@ final class McpStdioServer {
             Map<String, Object> result = new LinkedHashMap<>(toolResult(run.answer(), false));
             result.put("structuredContent", run.asMap());
             return encoded(success(id, result));
-        } catch (IOException | TimeoutException | IllegalArgumentException failure) {
+        } catch (IOException | TimeoutException | RuntimeException failure) {
             return encoded(success(id, toolResult("Agent run failed", true)));
         } catch (InterruptedException interruption) {
             Thread.currentThread().interrupt();
@@ -201,9 +213,13 @@ final class McpStdioServer {
         if (!arguments.containsKey(key)) return fallback;
         Object value = arguments.get(key);
         if (!(value instanceof BigDecimal number)) throw new IllegalArgumentException("integer required");
-        int result = number.intValueExact();
-        if (result < min || result > max) throw new IllegalArgumentException("integer outside range");
-        return result;
+        if (number.compareTo(BigDecimal.valueOf(min)) < 0 || number.compareTo(BigDecimal.valueOf(max)) > 0) {
+            throw new IllegalArgumentException("integer outside range");
+        }
+        try { return number.intValueExact(); }
+        catch (ArithmeticException fractional) {
+            throw new IllegalArgumentException("integer required", fractional);
+        }
     }
 
     private List<Map<String, Object>> toolList() {
@@ -289,6 +305,18 @@ final class McpStdioServer {
             catch (ArithmeticException invalid) { return false; }
         }
         return false;
+    }
+
+    private static boolean echoableId(Object id) {
+        try {
+            // These are the largest fixed protocol-error and tool-error envelopes.
+            // Admit their escaped UTF-8 bytes, not raw ID characters or an arbitrary ID cap.
+            encoded(error(id, -32603, "MCP response exceeds bounded size"));
+            encoded(success(id, toolResult("Model inference interrupted", true)));
+            return true;
+        } catch (IOException oversized) {
+            return false;
+        }
     }
 
     private static String readLine(InputStream input) throws IOException {

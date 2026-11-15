@@ -346,8 +346,7 @@ public final class StandaloneMain {
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
                 "--model-cache-dir", "--mcp-stdio", "--agent", "--workspace",
-                "--agent-max-steps", "--agent-max-calls");
-                "--model-cache-dir", "--mcp-stdio", "--chrome-bin", "--chrome-profile", "--chrome-headless",
+                "--agent-max-steps", "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
                 "--chrome-download", "--chrome-status", "--chrome-prepare");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {

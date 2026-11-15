@@ -124,7 +124,7 @@ public final class ModelArtifactCacheContractTestMain {
             }
             redirectContracts(fixture);
             binaryContracts(dir, fixture, hash, url);
-            redirectContracts(fixture);
+            transportRedirectContracts(fixture);
             bodyDeadlineContract();
         } finally {
             try (var all = Files.walk(dir)) {
@@ -287,7 +287,11 @@ public final class ModelArtifactCacheContractTestMain {
         boolean closed;
         TrackedInputStream(byte[] bytes) { super(bytes); }
         @Override public void close() throws IOException { closed = true; super.close(); }
+    }
+
     private static void binaryContracts(Path dir, byte[] fixture, String hash, String url) throws Exception {
+        // The preceding partial-download contract removed the shared model fixture.
+        Files.write(dir.resolve(hash + ".gguf"), fixture);
         AtomicInteger opens = new AtomicInteger();
         ModelArtifactCache.Downloader download = ignored -> {
             opens.incrementAndGet();
@@ -321,7 +325,7 @@ public final class ModelArtifactCacheContractTestMain {
         }
     }
 
-    private static void redirectContracts(byte[] fixture) throws Exception {
+    private static void transportRedirectContracts(byte[] fixture) throws Exception {
         URI start = URI.create("https://release.example.invalid/download");
         TrackedStream first = new TrackedStream(new byte[0]);
         TrackedStream second = new TrackedStream(new byte[0]);
@@ -341,6 +345,20 @@ public final class ModelArtifactCacheContractTestMain {
         check(success.requests.stream().allMatch(request -> request.timeout().orElseThrow().compareTo(Duration.ofSeconds(5)) <= 0
                 && request.headers().firstValue("Accept-Encoding").orElseThrow().equals("identity")),
                 "request deadline or identity encoding missing");
+
+        TrackedStream oversized = new TrackedStream(fixture);
+        FakeTransport bounded = new FakeTransport(response(200,
+                Map.of("Content-Length", List.of(Integer.toString(fixture.length))), oversized));
+        rejectIo(() -> ModelArtifactCache.fetch(start, fixture.length - 1, bounded, Duration.ofSeconds(5)));
+        check(bounded.closes.get() == 1 && oversized.closes.get() == 1,
+                "bounded transport accepted oversized headers or leaked its response/client");
+
+        TrackedStream cycleBody = new TrackedStream(new byte[0]);
+        FakeTransport cycle = new FakeTransport(response(302,
+                Map.of("Location", List.of(start.toString())), cycleBody));
+        rejectIo(() -> ModelArtifactCache.fetch(start, cycle, Duration.ofSeconds(5)));
+        check(cycle.requests.size() == 1 && cycle.closes.get() == 1 && cycleBody.closes.get() == 1,
+                "redirect cycle was followed or leaked its response/client");
 
         for (String unsafe : List.of("http://cdn.example.invalid/file", "https://u:p@cdn.example.invalid/file",
                 "https://cdn.example.invalid/file#fragment", "https://cdn.example.invalid:70000/file")) {

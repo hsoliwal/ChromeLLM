@@ -28,60 +28,63 @@ final class McpJson {
     }
 
     static String encode(Object value, int maxBytes) throws IOException {
-        StringBuilder out = new StringBuilder();
-        append(out, value, 0);
-        if (out.length() > maxBytes || StdioProtocol.encode(out.toString(), maxBytes).length > maxBytes) {
-            throw new IOException("MCP response exceeds bounded size");
-        }
+        if (maxBytes < 0) throw tooLarge();
+        StringBuilder out = new StringBuilder(Math.min(maxBytes, 256));
+        append(out, value, 0, maxBytes);
         return out.toString();
     }
 
-    private static void append(StringBuilder out, Object value, int depth) throws IOException {
+    private static int append(StringBuilder out, Object value, int depth, int remaining) throws IOException {
         if (depth > MAX_DEPTH) throw invalid();
-        if (value == null) { out.append("null"); return; }
-        if (value instanceof String text) { quote(out, text); return; }
+        if (value == null) return ascii(out, "null", remaining);
+        if (value instanceof String text) return quote(out, text, remaining);
         if (value instanceof Boolean || value instanceof BigDecimal || value instanceof Long
-                || value instanceof Integer) { out.append(value); return; }
+                || value instanceof Integer) {
+            // BigDecimal.toString keeps large exponents compact; never expand to plain notation.
+            return ascii(out, value.toString(), remaining);
+        }
         if (value instanceof Map<?, ?> map) {
-            out.append('{');
+            remaining = ascii(out, "{", remaining);
             boolean first = true;
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (!(entry.getKey() instanceof String key)) throw invalid();
-                if (!first) out.append(',');
+                if (!first) remaining = ascii(out, ",", remaining);
                 first = false;
-                quote(out, key);
-                out.append(':');
-                append(out, entry.getValue(), depth + 1);
+                remaining = quote(out, key, remaining);
+                remaining = ascii(out, ":", remaining);
+                remaining = append(out, entry.getValue(), depth + 1, remaining);
             }
-            out.append('}');
-            return;
+            return ascii(out, "}", remaining);
         }
         if (value instanceof List<?> list) {
-            out.append('[');
+            remaining = ascii(out, "[", remaining);
             for (int i = 0; i < list.size(); i++) {
-                if (i != 0) out.append(',');
-                append(out, list.get(i), depth + 1);
+                if (i != 0) remaining = ascii(out, ",", remaining);
+                remaining = append(out, list.get(i), depth + 1, remaining);
             }
-            out.append(']');
-            return;
+            return ascii(out, "]", remaining);
         }
         throw invalid();
     }
 
-    private static void quote(StringBuilder out, String text) throws IOException {
-        out.append('"');
+    private static int quote(StringBuilder out, String text, int remaining) throws IOException {
+        // Every UTF-16 code unit needs at least one JSON UTF-8 byte, plus the quotes.
+        if (text.length() > remaining - 2) throw tooLarge();
+        remaining = ascii(out, "\"", remaining);
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             switch (c) {
-                case '"' -> out.append("\\\"");
-                case '\\' -> out.append("\\\\");
-                case '\n' -> out.append("\\n");
-                case '\r' -> out.append("\\r");
-                case '\t' -> out.append("\\t");
-                case '\b' -> out.append("\\b");
-                case '\f' -> out.append("\\f");
+                case '"' -> remaining = ascii(out, "\\\"", remaining);
+                case '\\' -> remaining = ascii(out, "\\\\", remaining);
+                case '\n' -> remaining = ascii(out, "\\n", remaining);
+                case '\r' -> remaining = ascii(out, "\\r", remaining);
+                case '\t' -> remaining = ascii(out, "\\t", remaining);
+                case '\b' -> remaining = ascii(out, "\\b", remaining);
+                case '\f' -> remaining = ascii(out, "\\f", remaining);
                 default -> {
                     if (c < 32) {
+                        if (remaining < 6) throw tooLarge();
+                        remaining -= 6;
                         out.append("\\u");
                         for (int shift = 12; shift >= 0; shift -= 4) {
                             out.append(Character.forDigit((c >>> shift) & 15, 16));
@@ -90,14 +93,31 @@ final class McpJson {
                         if (i + 1 == text.length() || !Character.isLowSurrogate(text.charAt(i + 1))) {
                             throw invalid();
                         }
+                        if (remaining < 4) throw tooLarge();
+                        remaining -= 4;
                         out.append(c).append(text.charAt(++i));
                     } else if (Character.isLowSurrogate(c)) {
                         throw invalid();
-                    } else out.append(c);
+                    } else {
+                        int width = c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
+                        if (remaining < width) throw tooLarge();
+                        remaining -= width;
+                        out.append(c);
+                    }
                 }
             }
         }
-        out.append('"');
+        return ascii(out, "\"", remaining);
+    }
+
+    private static int ascii(StringBuilder out, String text, int remaining) throws IOException {
+        if (text.length() > remaining) throw tooLarge();
+        out.append(text);
+        return remaining - text.length();
+    }
+
+    private static IOException tooLarge() {
+        return new IOException("MCP response exceeds bounded size");
     }
 
     private Object value(int depth) throws IOException {

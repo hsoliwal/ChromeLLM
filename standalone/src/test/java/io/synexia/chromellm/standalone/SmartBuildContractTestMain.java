@@ -7,9 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.Comparator;
@@ -24,7 +21,6 @@ public final class SmartBuildContractTestMain {
 
     public static void main(String[] args) throws Exception {
         Path root = Files.createTempDirectory("chromellm-smart-test-").toRealPath();
-        Path root = Files.createTempDirectory("chromellm-smart-test-");
         try {
             Path target = Files.createDirectories(root.resolve("target"));
             Files.writeString(root.resolve("prompt.txt"), "मॉडल prompt", StandardCharsets.UTF_8);
@@ -147,6 +143,8 @@ public final class SmartBuildContractTestMain {
         Path candidate = SmartBuildMain.run(Path.of("lazy.properties"), root, target, Map.of(), lazy);
         check(calls.get() == 1 && Files.readString(candidate).equals("lazy candidate"),
                 "lazy model recipe was not executed");
+    }
+
     private static void lazyRecipe(Path root, Path target) throws Exception {
         Path cache = Files.createDirectory(root.resolve("model-cache"));
         String digest = "a".repeat(64);
