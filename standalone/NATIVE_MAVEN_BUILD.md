@@ -55,7 +55,7 @@ acceptance of the end-to-end `JniSyntheticContractTestMain` stage.
 ## Admission and boundaries
 
 - The default `mvn -f standalone/pom.xml verify` is unchanged: Java-only, no CMake, network, model or native build prerequisite.
-- The two native profiles are opt-in and mutually exclusive. Do not enable `native-fork` and `native-synthetic` together.
+- The two native profiles are opt-in and mutually exclusive. Maven's `validate` stage must fail closed when `native-fork` and `native-synthetic` are activated together, **before** CMake or any native artifact writes. A single profile must not silently substitute for the other.
 - The operator pins and audits the donor source, native dependencies and model licenses. The local build does not copy native artifacts or weights into the Java JAR.
 - Source-build acceptance requires an independently supplied real model, runtime observation, licensing review, the supported OS and (when selected) measured WebGPU device execution. A passing Maven/CTest/synthetic JNI build does **not** supply these proofs.
 - Canonical source mutation, qualification receipts and evidence belong in `hsoliwal/com.synexia`, not ChromeLLM. M3JDK21 integration remains a separate, explicitly qualified receiving change.
