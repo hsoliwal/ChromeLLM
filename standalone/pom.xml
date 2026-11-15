@@ -9,6 +9,11 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <chromellm.native.mode>none</chromellm.native.mode>
     <chromellm.native.dawn.prefix>NONE</chromellm.native.dawn.prefix>
+    <chromellm.chrome.profile>${user.home}/.chromellm/chrome-ai-profile</chromellm.chrome.profile>
+    <chromellm.chrome.headless>true</chromellm.chrome.headless>
+    <chromellm.chrome.allowDownload>false</chromellm.chrome.allowDownload>
+    <chromellm.chrome.timeoutSeconds>120</chromellm.chrome.timeoutSeconds>
+    <chromellm.chrome.maxTokens>512</chromellm.chrome.maxTokens>
     <chromellm.dawn.owner>none</chromellm.dawn.owner>
     <!-- Opt-in source fork and inference recipes; no native/model work in the default build. -->
     <chromellm.fork.source></chromellm.fork.source>
@@ -55,6 +60,29 @@
           <classpathScope>test</classpathScope>
         </configuration>
       </execution><execution>
+        <id>chrome-process-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.ChromeProcessContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
+        <id>chrome-devtools-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.ChromeDevToolsContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
+        <id>chrome-backend-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.ChromeAiBackendContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
+        <id>chrome-script-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.ChromeAiScriptContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
       </execution>
       <execution>
         <id>fork-smart-build-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
@@ -160,6 +188,7 @@
             <id>require-synthetic-only</id><phase>validate</phase><goals><goal>enforce</goal></goals>
             <configuration><rules><requireProperty>
               <property>chromellm.native.mode</property><regex>^synthetic$</regex>
+              <message>native-synthetic and native-fork cannot be active together</message>
               <regexMessage>native-synthetic and native-fork cannot be active together</regexMessage>
             </requireProperty></rules></configuration>
           </execution></executions>
@@ -212,6 +241,7 @@
               <message>native-fork requires -Dchromellm.native.source=/absolute/path/to/llama.cpp</message>
             </requireProperty><requireProperty>
               <property>chromellm.native.mode</property><regex>^fork$</regex>
+              <message>native-synthetic and native-fork cannot be active together</message>
               <regexMessage>native-synthetic and native-fork cannot be active together</regexMessage>
             </requireProperty></rules></configuration>
           </execution></executions>
@@ -544,6 +574,115 @@
               <argument>${project.basedir}/native/DawnArtifactInstaller.java</argument>
               <argument>${chromellm.native.dawn.prefix}</argument>
             </arguments></configuration>
+          </execution></executions>
+        </plugin>
+      </plugins></build>
+    </profile>
+    <profile>
+      <id>chrome-status</id>
+      <properties><chromellm.chrome.mode>status</chromellm.chrome.mode></properties>
+      <build><plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>require-exclusive-chrome-status</id><phase>validate</phase><goals><goal>enforce</goal></goals>
+            <configuration><rules><requireProperty>
+              <property>chromellm.chrome.mode</property><regex>^status$</regex>
+              <message>Choose exactly one of chrome-status, chrome-prepare or chrome-infer</message>
+              <regexMessage>Choose exactly one of chrome-status, chrome-prepare or chrome-infer</regexMessage>
+            </requireProperty></rules></configuration>
+          </execution></executions>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>chrome-status</id><phase>verify</phase><goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.StandaloneMain</mainClass>
+              <classpathScope>runtime</classpathScope>
+              <arguments>
+                <argument>--backend</argument><argument>chrome</argument>
+                <argument>--chrome-profile</argument><argument>${chromellm.chrome.profile}</argument>
+                <argument>--chrome-headless</argument><argument>${chromellm.chrome.headless}</argument>
+                <argument>--timeout-seconds</argument><argument>${chromellm.chrome.timeoutSeconds}</argument>
+                <argument>--chrome-status</argument><argument>true</argument>
+              </arguments>
+            </configuration>
+          </execution></executions>
+        </plugin>
+      </plugins></build>
+    </profile>
+    <profile>
+      <id>chrome-prepare</id>
+      <properties><chromellm.chrome.mode>prepare</chromellm.chrome.mode><chromellm.chrome.headless>false</chromellm.chrome.headless></properties>
+      <build><plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>require-exclusive-chrome-prepare</id><phase>validate</phase><goals><goal>enforce</goal></goals>
+            <configuration><rules><requireProperty>
+              <property>chromellm.chrome.mode</property><regex>^prepare$</regex>
+              <message>Choose exactly one of chrome-status, chrome-prepare or chrome-infer</message>
+              <regexMessage>Choose exactly one of chrome-status, chrome-prepare or chrome-infer</regexMessage>
+            </requireProperty></rules></configuration>
+          </execution></executions>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>chrome-prepare</id><phase>verify</phase><goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.StandaloneMain</mainClass>
+              <classpathScope>runtime</classpathScope>
+              <arguments>
+                <argument>--backend</argument><argument>chrome</argument>
+                <argument>--chrome-profile</argument><argument>${chromellm.chrome.profile}</argument>
+                <argument>--chrome-headless</argument><argument>${chromellm.chrome.headless}</argument>
+                <argument>--timeout-seconds</argument><argument>${chromellm.chrome.timeoutSeconds}</argument>
+                <argument>--chrome-prepare</argument><argument>true</argument>
+                <argument>--chrome-download</argument><argument>${chromellm.chrome.allowDownload}</argument>
+              </arguments>
+            </configuration>
+          </execution></executions>
+        </plugin>
+      </plugins></build>
+    </profile>
+    <profile>
+      <id>chrome-infer</id>
+      <properties><chromellm.chrome.mode>infer</chromellm.chrome.mode></properties>
+      <build><plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>require-exclusive-chrome-infer</id><phase>validate</phase><goals><goal>enforce</goal></goals>
+            <configuration><rules><requireProperty>
+              <property>chromellm.chrome.mode</property><regex>^infer$</regex>
+              <message>Choose exactly one of chrome-status, chrome-prepare or chrome-infer</message>
+              <regexMessage>Choose exactly one of chrome-status, chrome-prepare or chrome-infer</regexMessage>
+            </requireProperty><requireProperty>
+              <property>chromellm.chrome.promptFile</property><regex>.*\S.*</regex>
+              <message>chrome-infer requires -Dchromellm.chrome.promptFile=/path/to/prompt.txt</message>
+              <regexMessage>chrome-infer requires -Dchromellm.chrome.promptFile=/path/to/prompt.txt</regexMessage>
+            </requireProperty></rules></configuration>
+          </execution></executions>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>chrome-infer</id><phase>verify</phase><goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.StandaloneMain</mainClass>
+              <classpathScope>runtime</classpathScope>
+              <arguments>
+                <argument>--backend</argument><argument>chrome</argument>
+                <argument>--chrome-profile</argument><argument>${chromellm.chrome.profile}</argument>
+                <argument>--chrome-headless</argument><argument>${chromellm.chrome.headless}</argument>
+                <argument>--timeout-seconds</argument><argument>${chromellm.chrome.timeoutSeconds}</argument>
+                <argument>--prompt-file</argument><argument>${chromellm.chrome.promptFile}</argument>
+                <argument>--max-tokens</argument><argument>${chromellm.chrome.maxTokens}</argument>
+                <argument>--chrome-download</argument><argument>${chromellm.chrome.allowDownload}</argument>
+              </arguments>
+            </configuration>
           </execution></executions>
         </plugin>
       </plugins></build>
