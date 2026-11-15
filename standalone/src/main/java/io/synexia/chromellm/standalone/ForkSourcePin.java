@@ -35,8 +35,8 @@ public final class ForkSourcePin {
         if (!expectedCommit.equalsIgnoreCase(actual)) {
             throw new IOException("fork commit does not match the pinned source revision");
         }
-        if (!git(root, "status", "--porcelain", "--untracked-files=no").isEmpty()) {
-            throw new IOException("fork has modified tracked files; native build refused");
+        if (!git(root, "status", "--porcelain", "--untracked-files=all").isEmpty()) {
+            throw new IOException("fork contains modified or untracked files; native build refused");
         }
         System.out.println("verified native fork commit: " + actual);
     }
