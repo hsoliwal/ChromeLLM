@@ -16,8 +16,12 @@ The caller must review model redistribution, export, and use rights.
 The implementation stores verified model bytes as `<sha256>.gguf` in the specified
 cache. Every cache hit is SHA-256 checked, a corrupt cache entry fails closed,
 and an incomplete or mismatched download is removed without replacing existing
-unowned paths. Missing artifacts use HTTPS GET with redirects disabled; transfer
-size is bounded to 64 GiB; transient failures have no automatic retry or provider
+unowned paths. Missing artifacts use HTTPS GET. An explicit GitHub release-download URL may follow
+up to three HTTPS redirects within GitHub release-download endpoints and
+`release-assets.githubusercontent.com`, on the default HTTPS port only and without
+user-info or fragments. Other redirects remain refused. The full pinned SHA-256
+is checked after transfer; redirected responses are closed before the next request.
+Transfer size is bounded to 64 GiB; transient failures have no automatic retry or provider
 fallback. Files are staged in the same directory and published via an exclusive
 hard link only on successful verification. Directory creation, implicit writes
 to home/root, and silent repair of corrupted cached artifacts are forbidden.
