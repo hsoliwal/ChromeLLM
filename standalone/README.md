@@ -72,7 +72,9 @@ The existing standalone workflow includes a manual `run_chrome_ai` job restricte
 ## Opt-in lazy local model artifacts
 
 A local CLI or JNI backend may now select one **explicitly licensed, SHA-256-pinned HTTPS GGUF**
-without bundling or downloading it during Maven/CMake builds. The cache is an existing,
+without bundling it in the Java artifact. Ordinary Maven/CMake builds do not fetch weights;
+the explicit `real-model-test` Maven profile below downloads and verifies its pinned test model.
+The CLI cache is an existing,
 operator-chosen writable directory; no implicit home cache is created. The model is
 downloaded at the first inference request and verified before opening llama.cpp.
 
@@ -87,13 +89,35 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
 
 Provide **all three** of `--model-url`, `--model-sha256`, and `--model-cache-dir`.
 They exclude `--model`, `--tier`, and tier-model paths; hosted Gemini rejects them.
-Download redirects and provider fallback are forbidden. Cache hits are rehashed;
+Model downloads follow at most five HTTPS redirects, with no credentials or fragments.
+Provider selection remains explicit. Cache hits are rehashed;
 corrupt entries fail closed instead of being silently overwritten. Native libraries
 and executables remain separately installed. See [LAZY_MODEL_CONTRACT.md](LAZY_MODEL_CONTRACT.md)
 for byte limits, staging, cache ownership, acquisition timeouts, and the WebMCP/MCP
 boundary. This does **not** extract Chrome-managed Gemini Nano weights.
 
 
+
+## Maven downloads and tests a real model
+
+The explicit `real-model-test` profile resolves ChromeLLM's published `weights.bin`,
+checks its full SHA-256 and exact byte length, and runs real CPU inference under
+`-Xcheck:jni`. It shares the runtime's verified model cache. A second Maven invocation
+with `-o` reuses the verified bytes and fails on a missing or corrupt cache entry.
+
+```sh
+mvn -B -ntp -f standalone/pom.xml -Pfork-native,real-model-test \
+  -Dchromellm.fork.source=/absolute/path/to/your/llama.cpp-checkout \
+  -Dchromellm.fork.commit=YOUR_CHECKOUT_FULL_40_HEX_COMMIT verify
+```
+
+Maven drives native compilation, model acquisition and inference verification in that
+command. The model defaults to SmolLM2-135M-Instruct Q4_K_M: 105,454,144 bytes with
+SHA-256 `8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684`.
+The native checkout is an explicitly supplied source input. Public GitHub CI checks out
+its pinned public donor automatically, then runs this command and an offline smart-build
+recipe using the same downloaded model. See [MAVEN_MODEL_TEST.md](MAVEN_MODEL_TEST.md)
+for cache, platform, model and recipe settings.
 
 ## MCP JSON-RPC stdio (opt-in)
 
@@ -289,7 +313,7 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
   --threads 4 --max-tokens 256
 ```
 
-The source-build option uses linked GGML providers (`GGML_BACKEND_DL=OFF`) and delegates WebGPU configuration to llama.cpp. ChromeLLM itself does not download source or models. The independently installed Dawn package and its build prerequisites must already be available.
+The source-build option uses linked GGML providers (`GGML_BACKEND_DL=OFF`) and delegates WebGPU configuration to llama.cpp. The CMake source-build path does not download source or models. The independently installed Dawn package and its build prerequisites must already be available.
 
 Alternatively, point `Dawn_DIR` at the directory containing the installed `DawnConfig.cmake`. When building llama.cpp separately for the prebuilt-library path, enable `GGML_WEBGPU=ON` and keep `GGML_BACKEND_DL=OFF`; use the resulting matching llama/GGML libraries above. The pinned [WebGPU build](https://github.com/hsoliwal/synexia-llmcpp/blob/650ac3739d993e1d425f2d5db3c4205b3606cc30/ggml/src/ggml-webgpu/CMakeLists.txt) requires Python 3 to embed WGSL shaders. Keep the three WebGPU debug/profile flags off for binary stdio sessions because those modes can write native diagnostics to stdout. Device enumeration observes registered providers; it does not automatically load backend plugins.
 
