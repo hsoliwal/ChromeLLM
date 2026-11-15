@@ -49,6 +49,10 @@ public final class SmartBuildMain {
         }
         return run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), environment, providerFactory,
                 offline.equals("true"));
+        run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), System.getenv(), StandaloneMain::backend,
+                "offline=true".equals(System.getProperty("chromellm.offline"))
+                        || Boolean.getBoolean("chromellm.offline"));
+        run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), System.getenv(), StandaloneMain::backend);
     }
 
     static Path run(Path recipe, Path workspace, Path buildDirectory,
@@ -58,6 +62,8 @@ public final class SmartBuildMain {
 
     static Path run(Path recipe, Path workspace, Path buildDirectory,
                     Map<String, String> environment, ProviderFactory providerFactory, boolean offline) throws Exception {
+        Path root = workspace.toRealPath();
+        Path target = NativeBuildArtifacts.buildDirectory(root, buildDirectory);
         Path root = workspace.toRealPath();
         Path recipePath = confined(root, recipe, "recipe");
         byte[] recipeBytes;
@@ -111,6 +117,32 @@ public final class SmartBuildMain {
             String value = config.getProperty(entry.getKey());
             if (value != null && !value.isBlank()) options.put(entry.getValue(), value);
         }
+        // Recipe paths resolve against the standalone project, independent of Maven's launch directory.
+        for (String key : java.util.List.of("--llama-bin", "--jni-lib", "--model", "--model-cache-dir")) {
+            String value = options.get(key);
+            if (value != null) options.put(key, root.resolve(value).normalize().toString());
+        }
+        if (options.containsKey("--model-url")) {
+            Path cache = Path.of(required(config, "modelCacheDir"));
+            cache = root.resolve(cache).normalize();
+            Files.createDirectories(cache);
+            if (!cache.toRealPath().equals(cache)) throw new IOException("model cache must not traverse symlinks");
+            if (offline) {
+                Path model = new ModelArtifactCache(required(config, "modelUrl"),
+                        required(config, "modelSha256"), cache).resolveWithOfflinePolicy(true);
+                options.remove("--model-url");
+                options.remove("--model-sha256");
+                options.remove("--model-cache-dir");
+                if (options.putIfAbsent("--model", model.toString()) != null) {
+                    throw new IllegalArgumentException("model and modelUrl are exclusive");
+                }
+            }
+        }
+        Path outputRoot = target.resolve("smart-build");
+        Files.createDirectories(outputRoot);
+        if (!outputRoot.toRealPath().startsWith(root) || Files.isSymbolicLink(outputRoot)) {
+            throw new IOException("smart-build outputs must stay inside the project build directory");
+        }
         // Reject the destination before any artifact acquisition or provider initialization.
         Path outputRoot = validateOutputRoot(root, buildDirectory);
         if (offline && options.containsKey("--model-url")) {
@@ -135,6 +167,17 @@ public final class SmartBuildMain {
             }
             provider = model.id();
             candidate = StdioProtocol.encode(result.text(), StdioProtocol.MAX_RESPONSE_BYTES);
+        }
+        Path target = buildDirectory.toAbsolutePath().normalize();
+        if (!target.equals(root.resolve("target"))
+                || !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)
+                || !target.toRealPath().equals(target)) {
+            throw new IOException("smart-build requires the existing in-project Maven target directory");
+        }
+        Path outputRoot = target.resolve("smart-build");
+        Files.createDirectories(outputRoot);
+        if (!outputRoot.toRealPath().startsWith(root) || Files.isSymbolicLink(outputRoot)) {
+            throw new IOException("smart-build outputs must stay inside the project build directory");
         }
         Files.createDirectories(outputRoot);
         validateOutputRoot(root, buildDirectory);
@@ -177,6 +220,8 @@ public final class SmartBuildMain {
 
     private static void publish(Path path, byte[] content) throws IOException {
         if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                    || !Arrays.equals(Files.readAllBytes(path), content)) {
             if (!sameContent(path, content)) {
                 throw new IOException("smart-build artifact collision; source and prior result remain unchanged");
             }
@@ -187,6 +232,8 @@ public final class SmartBuildMain {
             Files.write(staged, content, StandardOpenOption.TRUNCATE_EXISTING);
             try { Files.createLink(path, staged); }
             catch (FileAlreadyExistsException concurrent) {
+                if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                        || !Arrays.equals(Files.readAllBytes(path), content)) {
                 if (!sameContent(path, content)) {
                     throw new IOException("concurrent smart-build artifact conflict", concurrent);
                 }

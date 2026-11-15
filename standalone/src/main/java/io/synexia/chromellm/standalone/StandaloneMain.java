@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Agent additions: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project; Apache-2.0.
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
@@ -11,15 +12,29 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Explicit browser-free inference with a local or hosted provider, once or through a bounded stdio session. */
+/** Explicit provider selection for local, hosted or installed-Chrome inference and bounded stdio sessions. */
 public final class StandaloneMain {
     private StandaloneMain() { }
 
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
+        Path workspace = agentWorkspace(options);
+        List<AgentTool> tools = workspace == null ? null : new WorkspaceTools(workspace).tools();
+        validateChromeModes(options);
+        if (flag(options, "--chrome-status") || flag(options, "--chrome-prepare")) {
+            Duration timeout = setupTimeout(options);
+            try (ModelBackend selected = backend(options, System.getenv())) {
+                ChromeAiBackend chrome = (ChromeAiBackend) selected;
+                Map<String, Object> result = flag(options, "--chrome-status")
+                        ? chrome.status(timeout) : chrome.prepare(timeout);
+                System.out.println(McpJson.encode(result, 64 * 1024));
+            }
+            return;
+        }
         if (flag(options, "--mcp-stdio")) {
             if (flag(options, "--stdio") || flag(options, "--list-devices")
                     || options.containsKey("--prompt-file")) {
@@ -27,7 +42,7 @@ public final class StandaloneMain {
             }
             try (ModelBackend backend = backend(options, System.getenv());
                  FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
-                McpStdioServer.serve(backend, System.in, output);
+                McpStdioServer.serveTools(backend, System.in, output, tools);
             }
             return;
         }
@@ -60,11 +75,40 @@ public final class StandaloneMain {
         ModelRequest request = new ModelRequest(
                 readPrompt(promptFile, "gemini".equals(options.get("--backend"))),
                 Integer.parseInt(options.getOrDefault("--max-tokens",
-                        "gemini".equals(options.get("--backend")) ? "32768" : "512")),
+                        flag(options, "--agent") ? "1024" : "gemini".equals(options.get("--backend")) ? "32768" : "512")),
                 Duration.ofSeconds(Long.parseLong(options.getOrDefault("--timeout-seconds", "120"))));
+        AgentEngine.Limits limits = flag(options, "--agent") ? agentLimits(options, request.timeout()) : null;
         try (ModelBackend backend = backend(options, System.getenv())) {
-            System.out.print(backend.infer(request).text());
+            if (limits == null) {
+                System.out.print(backend.infer(request).text());
+            } else {
+                AgentEngine agent = new AgentEngine(backend, tools, event ->
+                        System.err.println("agent " + event.sequence() + " " + event.phase() + " " + event.tool()));
+                System.out.print(agent.run(request.prompt(), request.maxTokens(), limits).answer());
+            }
         }
+    }
+
+    /** Reject mode mistakes before loading a provider or touching the model cache. */
+    private static Path agentWorkspace(Map<String, String> options) {
+        boolean agent = flag(options, "--agent");
+        boolean mcp = flag(options, "--mcp-stdio");
+        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
+            throw new IllegalArgumentException("agent mode requires its own exclusive session mode");
+        }
+        if (!agent && (options.containsKey("--agent-max-steps") || options.containsKey("--agent-max-calls"))) {
+            throw new IllegalArgumentException("agent limits require --agent true");
+        }
+        if (options.containsKey("--workspace") && !agent && !mcp) {
+            throw new IllegalArgumentException("workspace requires --agent true or --mcp-stdio true");
+        }
+        if (agent || options.containsKey("--workspace")) return Path.of(required(options, "--workspace"));
+        return null;
+    }
+
+    private static AgentEngine.Limits agentLimits(Map<String, String> options, Duration timeout) {
+        return new AgentEngine.Limits(Integer.parseInt(options.getOrDefault("--agent-max-steps", "16")),
+                Integer.parseInt(options.getOrDefault("--agent-max-calls", "8")), 65536, 32768, timeout);
     }
 
     static String readPrompt(Path promptFile, boolean hosted) throws IOException {
@@ -85,6 +129,16 @@ public final class StandaloneMain {
 
     static ModelBackend backend(Map<String, String> options, Map<String, String> environment) throws Exception {
         String provider = options.getOrDefault("--backend", "cli");
+        validateChromeModes(options);
+        if ("chrome".equals(provider)) {
+            rejectOptions(options, "--model", "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
+                    "--gpu-layers", "--compute-backend", "--device-backend", "--device", "--tier",
+                    "--fast-model", "--reasoning-model", "--frontier-model", "--model-url",
+                    "--model-sha256", "--model-cache-dir", "--thinking-level", "--api-key-env", "--list-devices");
+            return new ChromeAiBackend(chromeExecutable(options, environment),
+                    Path.of(required(options, "--chrome-profile")),
+                    flag(options, "--chrome-headless"), flag(options, "--chrome-download"));
+        }
         if ("gemini".equals(provider)) {
             rejectOptions(options, "--model-url", "--model-sha256", "--model-cache-dir");
             rejectOptions(options, "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
@@ -134,8 +188,63 @@ public final class StandaloneMain {
                 yield new LlamaCppJniBackend(library, model, context, threads, layers,
                         options.getOrDefault("--compute-backend", "auto"));
             }
-            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni or gemini)");
+            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni, gemini or chrome)");
         };
+    }
+
+    private static void validateChromeModes(Map<String, String> options) {
+        if (!"chrome".equals(options.get("--backend"))) {
+            rejectOptions(options, "--chrome-bin", "--chrome-profile", "--chrome-headless",
+                    "--chrome-download", "--chrome-status", "--chrome-prepare");
+            return;
+        }
+        boolean status = flag(options, "--chrome-status");
+        boolean prepare = flag(options, "--chrome-prepare");
+        if (status && prepare) throw new IllegalArgumentException("Chrome status and preparation are exclusive modes");
+        if (status || prepare) {
+            rejectOptions(options, "--prompt-file", "--stdio", "--mcp-stdio", "--list-devices", "--max-tokens");
+        }
+    }
+
+    private static Duration setupTimeout(Map<String, String> options) {
+        long seconds = Long.parseLong(options.getOrDefault("--timeout-seconds", "120"));
+        if (seconds < 1 || seconds > 3600) throw new IllegalArgumentException("timeout must be in [1, 3600] seconds");
+        return Duration.ofSeconds(seconds);
+    }
+
+    /** Discovery selects an executable only; it never attaches to an existing browser or profile. */
+    private static Path chromeExecutable(Map<String, String> options, Map<String, String> environment) {
+        String selected = options.containsKey("--chrome-bin") ? required(options, "--chrome-bin")
+                : environment.get("CHROME_BIN");
+        if (selected != null && !selected.isBlank()) return executable(Path.of(selected));
+        java.util.ArrayList<Path> candidates = new java.util.ArrayList<>();
+        String os = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT);
+        if (os.contains("win")) {
+            for (String variable : java.util.List.of("PROGRAMFILES", "ProgramFiles", "PROGRAMFILES(X86)",
+                    "ProgramFiles(x86)", "LOCALAPPDATA")) {
+                String folder = environment.get(variable);
+                if (folder != null && !folder.isBlank()) candidates.add(Path.of(folder, "Google", "Chrome", "Application", "chrome.exe"));
+            }
+        } else if (os.contains("mac")) {
+            candidates.add(Path.of("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"));
+            candidates.add(Path.of("/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"));
+            candidates.add(Path.of("/Applications/Chromium.app/Contents/MacOS/Chromium"));
+        } else {
+            for (String path : java.util.List.of("/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
+                    "/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium")) candidates.add(Path.of(path));
+        }
+        for (Path candidate : candidates) {
+            if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) return candidate.toAbsolutePath().normalize();
+        }
+        throw new IllegalArgumentException("Installed Chrome was not found; set --chrome-bin or CHROME_BIN to its executable");
+    }
+
+    private static Path executable(Path path) {
+        Path absolute = path.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(absolute) || !Files.isExecutable(absolute)) {
+            throw new IllegalArgumentException("Chrome executable is not an executable regular file");
+        }
+        return absolute;
     }
 
     /** Optional model URL is downloaded only on the first inference; existing paths remain untouched. */
@@ -236,7 +345,10 @@ public final class StandaloneMain {
                 "--timeout-seconds", "--stdio", "--list-devices", "--device-backend", "--device",
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
-                "--model-cache-dir", "--mcp-stdio");
+                "--model-cache-dir", "--mcp-stdio", "--agent", "--workspace",
+                "--agent-max-steps", "--agent-max-calls");
+                "--model-cache-dir", "--mcp-stdio", "--chrome-bin", "--chrome-profile", "--chrome-headless",
+                "--chrome-download", "--chrome-status", "--chrome-prepare");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String option = args[i];
