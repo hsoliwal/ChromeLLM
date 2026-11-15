@@ -62,6 +62,36 @@ The selected model and JNI/CLI binaries must be provided by the operator.
 `modelUrl` is an explicit, checksum-pinned HTTPS artifact, not a Chrome-managed
 proprietary model component.
 
+## Invoke from Maven (no browser)
+
+Build the pinned **source fork** with the existing JNI CMake integration:
+
+```sh
+mvn -B -ntp -f standalone/pom.xml -Pfork-native verify \
+  -Dchromellm.fork.source=/approved/src/synexia-llmcpp \
+  -Dchromellm.fork.commit=650ac3739d993e1d425f2d5db3c4205b3606cc30 \
+  -Dchromellm.fork.webgpu=OFF
+```
+
+The commit above is an observed historical fork revision, not an assertion that
+the operator's current checkout is at that revision. Choose and pin the
+checked-out commit. To enable the separately built Dawn fork, use
+`-Dchromellm.fork.webgpu=ON -Dchromellm.fork.prefix=/approved/dawn/install`.
+If Dawn, compiler, or native dependencies are missing, CMake fails; there is
+no automatic browser, GPU or provider substitution.
+
+Run the model **from the Maven build**, not from Chrome:
+
+```sh
+mvn -B -ntp -f standalone/pom.xml -Psmart-build verify \
+  -Dchromellm.smart.recipe=examples/smart-build.properties.example
+```
+
+Edit the provided recipe first to select your JNI library and licensed GGUF
+model. When explicitly requested, both profiles can be selected:
+`-Pfork-native,smart-build`. The smart-build recipe is a *candidate generator*,
+not an automatic source patcher or a guaranteed deterministic model runner.
+
 ## Artifact and safety contract
 
 The smart recipe reads a bounded UTF-8 prompt inside the standalone project.
