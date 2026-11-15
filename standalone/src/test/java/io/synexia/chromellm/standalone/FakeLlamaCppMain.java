@@ -28,7 +28,18 @@ public final class FakeLlamaCppMain {
                 System.exit(12);
             }
         }
-        if (prompt.equals("sleep")) Thread.sleep(3000);
+        int readyIndex = a.indexOf("--ready-file");
+        if (readyIndex >= 0) {
+            Files.writeString(Path.of(a.get(readyIndex + 1)), ProcessHandle.current().pid() + "\n");
+        }
+        if (prompt.equals("sleep")) Thread.sleep(readyIndex >= 0 ? 60_000 : 3000);
+        if (prompt.startsWith("cleanup-failure")) {
+            Path promptFile = Path.of(a.get(index + 1));
+            Files.delete(promptFile);
+            Files.createDirectory(promptFile);
+            Files.writeString(promptFile.resolve("owned-marker"), "force a cleanup refusal");
+            if (prompt.equals("cleanup-failure-exit")) System.exit(4);
+        }
         if (prompt.equals("fail")) System.exit(4);
         System.out.print("synthetic reply");
     }
