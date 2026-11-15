@@ -1,16 +1,5 @@
-// SPDX-License-Identifier: MIT
-package io.synexia.chromellm.standalone;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-
-/** Actual Java/JNI agent wiring against the scripted C++ fixture; not trained-model inference. */
-// SPDX-License-Identifier: Apache-2.0
-// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
+// SPDX-License-Identifier: MIT AND Apache-2.0
+// Workspace-agent fixture: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.ByteArrayOutputStream;
@@ -20,7 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Uses the real JNI bridge with synthetic model output; does not claim model quality or GPU execution. */
 public final class JniAgentContractTestMain {

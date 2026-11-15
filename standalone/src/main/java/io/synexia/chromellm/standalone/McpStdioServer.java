@@ -26,35 +26,29 @@ final class McpStdioServer {
     private static final int MAX_INPUT = StdioProtocol.MAX_PROMPT_BYTES + 2048;
     private static final int MAX_OUTPUT = StdioProtocol.MAX_RESPONSE_BYTES;
     private final ModelBackend backend;
+    private final List<AgentTool> workspaceTools;
     private final List<AgentSession.Tool> agentTools;
     private final AgentSession.Limits agentLimits;
     private boolean negotiated;
     private boolean initialized;
 
-    private McpStdioServer(ModelBackend backend, List<AgentSession.Tool> agentTools,
-                           AgentSession.Limits agentLimits) {
+    private McpStdioServer(ModelBackend backend, List<AgentTool> workspaceTools,
+                           List<AgentSession.Tool> agentTools, AgentSession.Limits agentLimits) {
         this.backend = Objects.requireNonNull(backend, "backend");
+        this.workspaceTools = workspaceTools == null ? null : List.copyOf(workspaceTools);
         this.agentTools = List.copyOf(agentTools);
         this.agentLimits = Objects.requireNonNull(agentLimits, "agentLimits");
-    private final List<AgentTool> agentTools;
-    private boolean negotiated;
-    private boolean initialized;
-
-    private McpStdioServer(ModelBackend backend, List<AgentTool> agentTools) {
-        this.backend = Objects.requireNonNull(backend, "backend");
-        this.agentTools = agentTools == null ? null : List.copyOf(agentTools);
     }
 
     /** Caller owns model, input and output streams. All processing is sequential. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output) throws IOException {
-        serve(backend, input, output, List.of(), AgentSession.Limits.defaults());
+        serveTools(backend, input, output, null);
     }
 
-    /** A configured tool set adds one bounded agent entry point; the caller owns all resources. */
+    /** A configured service tool set retains the bounded run_agent entry point. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output,
                       List<AgentSession.Tool> agentTools, AgentSession.Limits limits) throws IOException {
-        McpStdioServer session = new McpStdioServer(backend, agentTools, limits);
-        serveTools(backend, input, output, null);
+        processLines(new McpStdioServer(backend, null, agentTools, limits), input, output);
     }
 
     /** Workspace access is explicitly enabled by the process owner, never by a model argument. */
@@ -64,7 +58,11 @@ final class McpStdioServer {
 
     static void serveTools(ModelBackend backend, InputStream input, OutputStream output, List<AgentTool> tools)
             throws IOException {
-        McpStdioServer session = new McpStdioServer(backend, tools);
+        processLines(new McpStdioServer(backend, tools, List.of(), AgentSession.Limits.defaults()), input, output);
+    }
+
+    private static void processLines(McpStdioServer session, InputStream input, OutputStream output)
+            throws IOException {
         BufferedInputStream incoming = new BufferedInputStream(input);
         while (true) {
             String line = readLine(incoming);
@@ -153,10 +151,8 @@ final class McpStdioServer {
                 return encoded(success(id, toolResult("Agent planning interrupted", true)));
             }
         }
-        if ("run_agent".equals(tool) && !agentTools.isEmpty()) {
-            return runAgent(id, arguments);
-        }
-        if ("agent_run".equals(tool) && agentTools != null) return runAgent(id, arguments);
+        if ("run_agent".equals(tool) && !agentTools.isEmpty()) return runServiceAgent(id, arguments);
+        if ("agent_run".equals(tool) && workspaceTools != null) return runAgent(id, arguments);
         if (!"infer_text".equals(tool)) return encoded(error(id, -32602, "Unknown tool"));
         if (!(arguments.get("prompt") instanceof String prompt) || prompt.isBlank()
                 || arguments.keySet().stream().anyMatch(k -> !List.of("prompt", "maxTokens", "timeoutSeconds").contains(k))) {
@@ -190,6 +186,36 @@ final class McpStdioServer {
     private String runAgent(Object id, Map<?, ?> arguments) throws IOException {
         if (!(arguments.get("goal") instanceof String goal) || goal.isBlank()
                 || arguments.keySet().stream().anyMatch(key -> !List.of(
+                        "goal", "maxTokens", "timeoutSeconds", "maxSteps", "maxModelCalls").contains(key))) {
+            return encoded(error(id, -32602, "Invalid agent arguments"));
+        }
+        final int maxTokens;
+        final AgentEngine.Limits limits;
+        try {
+            maxTokens = integer(arguments, "maxTokens", 1024, 1, 32768);
+            int seconds = integer(arguments, "timeoutSeconds", 120, 1, 3600);
+            limits = new AgentEngine.Limits(integer(arguments, "maxSteps", 16, 1, 128),
+                    integer(arguments, "maxModelCalls", 8, 1, 64), 65536, 32768, Duration.ofSeconds(seconds));
+            StdioProtocol.encode(goal, StdioProtocol.MAX_PROMPT_BYTES);
+        } catch (IOException | IllegalArgumentException | ArithmeticException invalid) {
+            return encoded(error(id, -32602, "Invalid agent arguments"));
+        }
+        try {
+            AgentEngine.Result run = new AgentEngine(backend, workspaceTools, event -> { }).run(goal, maxTokens, limits);
+            Map<String, Object> result = new LinkedHashMap<>(toolResult(run.answer(), false));
+            result.put("structuredContent", run.asMap());
+            return encoded(success(id, result));
+        } catch (IOException | TimeoutException | IllegalArgumentException failure) {
+            return encoded(success(id, toolResult("Agent run failed", true)));
+        } catch (InterruptedException interruption) {
+            Thread.currentThread().interrupt();
+            return encoded(success(id, toolResult("Agent run interrupted", true)));
+        }
+    }
+
+    private String runServiceAgent(Object id, Map<?, ?> arguments) throws IOException {
+        if (!(arguments.get("goal") instanceof String goal) || goal.isBlank()
+                || arguments.keySet().stream().anyMatch(key -> !List.of(
                         "goal", "maxSteps", "maxTokens", "timeoutSeconds").contains(key))) {
             return encoded(error(id, -32602, "Invalid agent arguments"));
         }
@@ -219,30 +245,6 @@ final class McpStdioServer {
         } catch (InterruptedException interruption) {
             Thread.currentThread().interrupt();
             return encoded(success(id, toolResult("Agent interrupted", true)));
-                        "goal", "maxTokens", "timeoutSeconds", "maxSteps", "maxModelCalls").contains(key))) {
-            return encoded(error(id, -32602, "Invalid agent arguments"));
-        }
-        final int maxTokens;
-        final AgentEngine.Limits limits;
-        try {
-            maxTokens = integer(arguments, "maxTokens", 1024, 1, 32768);
-            int seconds = integer(arguments, "timeoutSeconds", 120, 1, 3600);
-            limits = new AgentEngine.Limits(integer(arguments, "maxSteps", 16, 1, 128),
-                    integer(arguments, "maxModelCalls", 8, 1, 64), 65536, 32768, Duration.ofSeconds(seconds));
-            StdioProtocol.encode(goal, StdioProtocol.MAX_PROMPT_BYTES);
-        } catch (IOException | IllegalArgumentException | ArithmeticException invalid) {
-            return encoded(error(id, -32602, "Invalid agent arguments"));
-        }
-        try {
-            AgentEngine.Result run = new AgentEngine(backend, agentTools, event -> { }).run(goal, maxTokens, limits);
-            Map<String, Object> result = new LinkedHashMap<>(toolResult(run.answer(), false));
-            result.put("structuredContent", run.asMap());
-            return encoded(success(id, result));
-        } catch (IOException | TimeoutException | IllegalArgumentException failure) {
-            return encoded(success(id, toolResult("Agent run failed", true)));
-        } catch (InterruptedException interruption) {
-            Thread.currentThread().interrupt();
-            return encoded(success(id, toolResult("Agent run interrupted", true)));
         }
     }
 
@@ -291,7 +293,8 @@ final class McpStdioServer {
                             "required", List.of("goal")),
                     "annotations", Map.of("readOnlyHint", false, "destructiveHint", false,
                             "idempotentHint", false, "openWorldHint", false)));
-        if (agentTools != null) {
+        }
+        if (workspaceTools != null) {
             tools.add(Map.of("name", "agent_run", "description",
                     "Run a bounded plan/tool/result loop over the explicitly configured workspace using the selected model provider.",
                     "inputSchema", Map.of("type", "object", "additionalProperties", false,

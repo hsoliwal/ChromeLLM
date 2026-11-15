@@ -21,20 +21,21 @@ public final class SmartBuildContractTestMain {
     private SmartBuildContractTestMain() { }
 
     public static void main(String[] args) throws Exception {
-        Path root = Files.createTempDirectory("chromellm-smart-test-").toRealPath();
         Path root = Files.createTempDirectory("chromellm-smart-test-");
         Path canonicalRoot = root.toRealPath();
         try {
             Path target = Files.createDirectories(root.resolve("target"));
             offlineOutputRefusal(root);
             Files.writeString(root.resolve("prompt.txt"), "मॉडल prompt", StandardCharsets.UTF_8);
+            Path entrypoint = Files.createDirectory(root.resolve("entrypoint"));
+            Files.writeString(entrypoint.resolve("prompt.txt"), "single main prompt", StandardCharsets.UTF_8);
+            mainRunsOneInference(entrypoint, Files.createDirectory(entrypoint.resolve("target")));
+            if (args.length == 1 && args[0].equals("main-once")) return;
             Files.writeString(root.resolve("recipe.properties"), String.join("\n",
                     "promptFile=prompt.txt", "backend=cli", "llamaBin=/explicit/llama-cli",
                     "model=/explicit/model.gguf", "maxTokens=8", "timeoutSeconds=10") + "\n");
             AtomicInteger requests = new AtomicInteger();
             SmartBuildMain.ProviderFactory provider = (options, ignored) -> {
-                check(Path.of(options.get("--llama-bin")).equals(root.resolve("/explicit/llama-cli").normalize()), "launcher selection lost");
-                check(Path.of(options.get("--model")).equals(root.resolve("/explicit/model.gguf").normalize()), "model selection lost");
                 check(options.get("--llama-bin").equals(canonicalRoot.resolve("/explicit/llama-cli").normalize().toString()), "launcher selection lost");
                 check(options.get("--model").equals(canonicalRoot.resolve("/explicit/model.gguf").normalize().toString()), "model selection lost");
                 return new ModelBackend() {
@@ -118,6 +119,7 @@ public final class SmartBuildContractTestMain {
             check(invalidTargetOpens.get() == 0, "invalid offline target opened provider");
             rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider, true));
             check(requests.get() == beforeInvalidTarget, "offline cache miss opened provider");
+            offlineCacheHit(root, target);
             canonicalWorkspaceAliases(root);
             lazyModelOptions(root, target);
             lazyRecipe(root, target);
@@ -129,6 +131,56 @@ public final class SmartBuildContractTestMain {
             }
         }
         System.out.println("fork-native smart-build contract checks passed: " + checks);
+    }
+
+    /** Runs the public entry point through the real CLI backend and a bounded synthetic process. */
+    private static void mainRunsOneInference(Path root, Path target) throws Exception {
+        if (System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win")) {
+            System.out.println("POSIX main-entrypoint fixture not run on Windows; portable smart-build contracts still run");
+            return;
+        }
+        Path count = root.resolve("main-invocations.txt");
+        Path launcher = root.resolve("main-llama-fixture");
+        Files.writeString(launcher, "#!/bin/sh\nprintf 'called\\n' >> '"
+                + count.toString().replace("'", "'\"'\"'") + "'\nprintf 'single main candidate\\n'\n");
+        check(launcher.toFile().setExecutable(true), "main fixture executable permission unavailable");
+        Path model = root.resolve("main-model.gguf");
+        Files.writeString(model, "synthetic fixture, not model data");
+        Files.writeString(root.resolve("main.properties"), String.join("\n",
+                "promptFile=prompt.txt", "backend=cli", "llamaBin=" + propertyPath(launcher),
+                "model=" + propertyPath(model), "maxTokens=8", "timeoutSeconds=10") + "\n");
+        SmartBuildMain.main(new String[] {"main.properties", root.toString(), target.toString()});
+        check(Files.readAllLines(count).size() == 1, "one main invocation must run inference exactly once");
+    }
+
+    private static void offlineCacheHit(Path root, Path target) throws Exception {
+        Path cache = Files.createDirectory(root.resolve("verified-offline-cache"));
+        String modelBytes = "verified offline model fixture";
+        String digest = hash(modelBytes);
+        Path model = Files.writeString(cache.resolve(digest + ".gguf"), modelBytes);
+        Files.writeString(root.resolve("offline-hit.properties"), String.join("\n",
+                "promptFile=prompt.txt", "backend=cli", "llamaBin=bin/llama-cli",
+                "modelUrl=https://example.invalid/model", "modelSha256=" + digest,
+                "modelCacheDir=" + propertyPath(cache)) + "\n");
+        AtomicInteger calls = new AtomicInteger();
+        SmartBuildMain.ProviderFactory provider = (options, environment) -> {
+            check(options.get("--model").equals(model.toRealPath().toString()), "offline cache hit did not select verified local bytes");
+            check(!options.containsKey("--model-url") && !options.containsKey("--model-sha256")
+                    && !options.containsKey("--model-cache-dir"), "offline cache hit retained download options");
+            return new ModelBackend() {
+                public String id() { return "llama.cpp-cli"; }
+                public ModelResponse infer(ModelRequest request) {
+                    calls.incrementAndGet();
+                    return new ModelResponse("offline candidate", id(), hash(request.prompt()));
+                }
+            };
+        };
+        Path result = SmartBuildMain.run(Path.of("offline-hit.properties"), root, target, Map.of(), provider, true);
+        check(calls.get() == 1 && Files.readString(result).equals("offline candidate"), "offline hit must infer once");
+    }
+
+    private static String propertyPath(Path path) {
+        return path.toString().replace("\\", "\\\\");
     }
 
     private static void offlineOutputRefusal(Path root) throws Exception {
@@ -150,8 +202,6 @@ public final class SmartBuildContractTestMain {
         check(opened.get() == 0, "invalid output opened a provider");
     }
 
-    private static void lazyModelOptions(Path root, Path target) throws Exception {
-        Path cache = root.resolve("forwarded-cache");
     private static void canonicalWorkspaceAliases(Path fixture) throws Exception {
         Path workspace = Files.createDirectories(fixture.resolve("canonical/standalone")).toRealPath();
         Path target = Files.createDirectory(workspace.resolve("target"));
@@ -217,17 +267,11 @@ public final class SmartBuildContractTestMain {
         Files.writeString(root.resolve("lazy.properties"), String.join("\n",
                 "promptFile=prompt.txt", "backend=jni", "jniLib=lib/chromellm-jni",
                 "modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/pinned/weights.bin",
-                "modelSha256=" + "a".repeat(64),
-                "modelCacheDir=" + cache.toString().replace("\\", "\\\\"),
                 "modelSha256=" + "a".repeat(64), "modelCacheDir=model-options-cache",
                 "computeBackend=cpu", "gpuLayers=0", "maxTokens=8", "timeoutSeconds=10") + "\n");
         AtomicInteger calls = new AtomicInteger();
         SmartBuildMain.ProviderFactory lazy = (options, environment) -> {
             check(options.get("--backend").equals("jni"), "JNI provider selection lost");
-            check(Path.of(options.get("--jni-lib")).equals(root.resolve("/explicit/chromellm-jni").normalize()), "JNI library lost");
-            check(options.get("--model-url").endsWith("/pinned/weights.bin"), "model URL lost");
-            check(options.get("--model-sha256").equals("a".repeat(64)), "model digest lost");
-            check(Path.of(options.get("--model-cache-dir")).equals(cache), "model cache lost");
             check(options.get("--jni-lib").equals(canonicalRoot.resolve("lib/chromellm-jni").toString()), "JNI library lost");
             check(options.get("--model-url").endsWith("/pinned/weights.bin"), "model URL lost");
             check(options.get("--model-sha256").equals("a".repeat(64)), "model digest lost");
@@ -283,7 +327,7 @@ public final class SmartBuildContractTestMain {
     }
 
     private static void offlineModels(Path root, Path target) throws Exception {
-        Path cache = Files.createDirectories(root.resolve("model-cache"));
+        Path cache = Files.createDirectories(root.resolve("model-cache")).toRealPath();
         String bytes = "offline cache fixture, not a real model";
         String digest = hash(bytes);
         Path model = cache.resolve(digest + ".gguf");
@@ -298,9 +342,9 @@ public final class SmartBuildContractTestMain {
         SmartBuildMain.ProviderFactory offlineProvider = (options, ignored) -> {
             providers.incrementAndGet();
             check(options.get("--backend").equals("cli")
-                            && options.get("--llama-bin").equals("/explicit/llama-cli"),
+                            && Path.of(options.get("--llama-bin")).equals(root.toRealPath().resolve("/explicit/llama-cli").normalize()),
                     "offline model changed provider selection");
-            check(Path.of(options.get("--model")).equals(model.toAbsolutePath()),
+            check(options.get("--model") != null && Path.of(options.get("--model")).equals(model),
                     "offline model path was not the pinned cache entry");
             check(!options.containsKey("--model-url") && !options.containsKey("--model-sha256")
                             && !options.containsKey("--model-cache-dir"),
@@ -336,6 +380,20 @@ public final class SmartBuildContractTestMain {
         check(output.equals(SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
                 target.toString(), "--offline=false"}, Map.of(), onlineProvider)),
                 "Maven online argument changed lazy acquisition");
+
+        String previousOffline = System.getProperty("chromellm.offline");
+        try {
+            for (String property : new String[] {"true", "offline=true"}) {
+                System.setProperty("chromellm.offline", property);
+                check(output.equals(SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                        target.toString()}, Map.of(), offlineProvider)), "legacy offline system property lost cache reuse");
+                check(output.equals(SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                        target.toString(), "false"}, Map.of(), onlineProvider)), "explicit offline argument lost precedence");
+            }
+        } finally {
+            if (previousOffline == null) System.clearProperty("chromellm.offline");
+            else System.setProperty("chromellm.offline", previousOffline);
+        }
 
         int opened = providers.get();
         for (String invalid : new String[] {"TRUE", "yes", "", "${settings.offline}",

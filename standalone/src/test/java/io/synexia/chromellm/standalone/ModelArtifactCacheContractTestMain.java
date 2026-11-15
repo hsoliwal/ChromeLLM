@@ -56,6 +56,7 @@ public final class ModelArtifactCacheContractTestMain {
             check(offline.progress().state() == ModelArtifactCache.State.UNPREPARED,
                     "offline construction started acquisition");
             rejectIo(offline::resolve);
+            rejectIo(() -> offline.resolveWithOfflinePolicy(false));
             check(opens.get() == 0, "offline miss opened a network download");
             check(offline.progress().state() == ModelArtifactCache.State.FAILED
                             && offline.progress().bytes() == 0,
@@ -122,7 +123,7 @@ public final class ModelArtifactCacheContractTestMain {
             try (var files = Files.list(dir)) {
                 check(files.findAny().isEmpty(), "partial download staging file survived");
             }
-            redirectContracts(fixture);
+            responseSenderContracts(fixture);
             binaryContracts(dir, fixture, hash, url);
             redirectContracts(fixture);
             bodyDeadlineContract();
@@ -137,7 +138,7 @@ public final class ModelArtifactCacheContractTestMain {
         ModelAcquisitionLifecycleTestMain.main(new String[0]);
     }
 
-    private static void redirectContracts(byte[] fixture) throws Exception {
+    private static void responseSenderContracts(byte[] fixture) throws Exception {
         URI source = URI.create("https://releases.example.invalid/model");
         URI destination = URI.create("https://assets.example.invalid/model?signature=test");
         for (int status : new int[] {301, 302, 303, 307, 308}) {
@@ -287,7 +288,10 @@ public final class ModelArtifactCacheContractTestMain {
         boolean closed;
         TrackedInputStream(byte[] bytes) { super(bytes); }
         @Override public void close() throws IOException { closed = true; super.close(); }
+    }
+
     private static void binaryContracts(Path dir, byte[] fixture, String hash, String url) throws Exception {
+        Files.write(dir.resolve(hash + ".gguf"), fixture);
         AtomicInteger opens = new AtomicInteger();
         ModelArtifactCache.Downloader download = ignored -> {
             opens.incrementAndGet();
@@ -303,6 +307,8 @@ public final class ModelArtifactCacheContractTestMain {
         Path file = binary.resolve();
         check(file.getFileName().toString().equals(hash + ".bin"), "native cache must use its own suffix");
         check(binary.resolveWithOfflinePolicy(true).equals(file) && opens.get() == 1, "offline verified binary hit downloaded");
+        check(new ModelArtifactCache(url, hash, dir, fixture.length).resolveWithOfflinePolicy(true).equals(file),
+                "legacy native constructor lost exact-size binary cache selection");
         check(Files.exists(dir.resolve(hash + ".gguf")), "native artifact replaced existing model cache");
         ModelArtifactCache wrongLength = new ModelArtifactCache(url, hash, dir, download, 100,
                 fixture.length + 1, ".bin");
@@ -381,6 +387,13 @@ public final class ModelArtifactCacheContractTestMain {
             check(transport.closes.get() == 1 && ((TrackedStream) failure.body()).closes.get() == 1,
                     "failed HTTP response/client leaked");
         }
+        TrackedStream overBudget = new TrackedStream(fixture);
+        FakeTransport limited = new FakeTransport(response(200,
+                Map.of("Content-Length", List.of(Integer.toString(fixture.length))), overBudget));
+        rejectIo(() -> ModelArtifactCache.fetch(start, limited, Duration.ofSeconds(5), fixture.length - 1));
+        check(limited.closes.get() == 1 && overBudget.closes.get() == 1,
+                "owned HTTP transport ignored its configured artifact budget");
+
         TrackedStream unused = new TrackedStream(fixture);
         FakeTransport early = new FakeTransport(response(200, Map.of(), unused));
         ModelArtifactCache.fetch(start, early, Duration.ofSeconds(5)).close();

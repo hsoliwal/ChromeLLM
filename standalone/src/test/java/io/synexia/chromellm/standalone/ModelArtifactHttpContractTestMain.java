@@ -60,7 +60,7 @@ public final class ModelArtifactHttpContractTestMain {
                 "https://user:password@release-assets.githubusercontent.com/model.bin",
                 "https://release-assets.githubusercontent.com:0/model.bin",
                 "https://release-assets.githubusercontent.com:70000/model.bin",
-                "https://release-assets.githubusercontent.com/model.bin#fragment", "[malformed")) {
+                "https://release-assets.githubusercontent.com/model.bin#fragment", "[malformed", "")) {
             refusal(RELEASE, 302, Map.of("Location", List.of(forbidden)));
         }
         // The current artifact contract supports bounded HTTPS redirects for any
@@ -75,13 +75,16 @@ public final class ModelArtifactHttpContractTestMain {
         refusal(RELEASE, 200, Map.of("Content-Encoding", List.of("gzip")));
         refusal(RELEASE, 200, Map.of("Content-Length", List.of("68719476737")));
         refusal(RELEASE, 200, Map.of("Content-Length", List.of("not-a-number")));
+        refusal(RELEASE, 200, Map.of("Content-Length", List.of("-1")));
+        refusal(RELEASE, 200, Map.of("Content-Length", List.of("5", "5")));
+        refusal(RELEASE, 200, Map.of("Content-Encoding", List.of("identity", "identity")));
 
         List<TrackedStream> cycleBodies = new ArrayList<>();
         List<HttpResponse<InputStream>> cycle = new ArrayList<>();
         for (int i = 0; i < ModelArtifactCache.MAX_REDIRECTS + 2; i++) {
             TrackedStream body = new TrackedStream("redirect");
             cycleBodies.add(body);
-            cycle.add(response(302, Map.of("Location", List.of(ASSET.toString())), body));
+            cycle.add(response(302, Map.of("Location", List.of(ASSET.resolve("/hop-" + i).toString())), body));
         }
         ScriptedClient cycleClient = new ScriptedClient(cycle);
         expectIo(() -> ModelArtifactCache.fetch(RELEASE, cycleClient));
@@ -91,6 +94,16 @@ public final class ModelArtifactHttpContractTestMain {
                 "redirect-limit refusal leaked a response");
         check(!cycleBodies.getLast().closed && cycleClient.shutdowns.get() == 1,
                 "redirect limit consumed an extra response or leaked its client");
+
+        TrackedStream loopFirst = new TrackedStream("redirect");
+        TrackedStream loopSecond = new TrackedStream("redirect");
+        ScriptedClient loopClient = new ScriptedClient(
+                response(302, Map.of("Location", List.of(ASSET.toString())), loopFirst),
+                response(302, Map.of("Location", List.of(RELEASE.toString())), loopSecond));
+        expectIo(() -> ModelArtifactCache.fetch(RELEASE, loopClient));
+        check(loopClient.requests.size() == 2 && loopClient.shutdowns.get() == 1
+                        && loopFirst.closed && loopSecond.closed,
+                "redirect cycle repeated a request or leaked owned resources");
 
         TrackedStream direct = new TrackedStream("direct");
         ScriptedClient directClient = new ScriptedClient(response(200, Map.of(), direct));

@@ -42,7 +42,7 @@ jobs:
             cat profile-conflict.log
             grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with native-fork or native-synthetic' profile-conflict.log
           done
-          for mode in pinned-fork synthetic; do
+          for mode in fork synthetic pinned-fork; do
             if mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic,fork-native \
                 -Dchromellm.native.mode="$mode" validate > fork-profile-conflict.log 2>&1; then
               echo 'Synthetic and pinned fork profiles unexpectedly passed validate' >&2
@@ -70,6 +70,13 @@ jobs:
           fi
           cat dawn-provisioning-conflict.log
           grep -F 'native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile' dawn-provisioning-conflict.log
+          if mvn -B -ntp -f standalone/pom.xml -Pnative-dawn \
+              -Dchromellm.fork.webgpu=OFF validate > dawn-disabled-profile.log 2>&1; then
+            echo 'Dawn and a disabled WebGPU backend unexpectedly passed validate' >&2
+            exit 1
+          fi
+          cat dawn-disabled-profile.log
+          grep -F 'native-dawn requires the pinned fork WebGPU=ON' dawn-disabled-profile.log
           test ! -e standalone/target/native-synthetic/CMakeCache.txt
           test ! -e standalone/target/native-fork/CMakeCache.txt
           test ! -e standalone/target/fork-native/CMakeCache.txt
@@ -157,39 +164,15 @@ jobs:
           ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
           path: external/llama.cpp
           persist-credentials: false
-  chrome-ai-live:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
-    runs-on: [self-hosted, linux, chrome-ai]
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    concurrency:
-      group: ${{ github.repository }}-chrome-ai-live
-      cancel-in-progress: false
-    env:
-      CHROME_BIN: ${{ vars.CHROME_BIN }}
-      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          persist-credentials: false
-  native-binaries:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Select model cache directory
         shell: bash
         run: echo "MODEL_CACHE=$RUNNER_TEMP/chromellm-models" >> "$GITHUB_ENV"
@@ -238,6 +221,24 @@ jobs:
           grep -F 'Model artifact: verified cache hit' "$RUNNER_TEMP/real-model-offline.log"
           grep -F 'ChromeLLM smart-build candidate SHA-256:' "$RUNNER_TEMP/real-model-offline.log"
           if grep -E 'WARNING in native method|FATAL ERROR in native method' "$RUNNER_TEMP/real-model-offline.log"; then
+            exit 1
+          fi
+  native-binaries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

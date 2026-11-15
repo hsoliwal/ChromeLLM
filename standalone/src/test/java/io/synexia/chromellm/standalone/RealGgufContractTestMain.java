@@ -3,37 +3,21 @@ package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Reader;
+import java.io.Writer;
 import java.lang.management.ManagementFactory;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Locale;
-
-/** Opt-in real GGUF CPU gate: obtains pinned weights and invokes the supplied JNI runtime. */
-public final class RealGgufContractTestMain {
-    private static final byte[] GGUF_MAGIC = {'G', 'G', 'U', 'F'};
-    private static final String PROMPT = "<|im_start|>user\n"
-            + "Write one short sentence about an oak tree.<|im_end|>\n"
-            + "<|im_start|>assistant\n";
-    private static final String OTHER_PROMPT = "<|im_start|>user\n"
-            + "Write one short sentence about a river.<|im_end|>\n"
-            + "<|im_start|>assistant\n";
-import java.io.Reader;
-import java.io.Writer;
-import java.nio.ByteBuffer;
-import java.nio.channels.SeekableByteChannel;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.time.Duration;
-import java.util.HexFormat;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
@@ -50,6 +34,13 @@ import java.util.TreeMap;
  * The test never executes model output or asserts factual or coding accuracy.
  */
 public final class RealGgufContractTestMain {
+    private static final byte[] GGUF_MAGIC = {'G', 'G', 'U', 'F'};
+    private static final String PROMPT = "<|im_start|>user\n"
+            + "Write one short sentence about an oak tree.<|im_end|>\n"
+            + "<|im_start|>assistant\n";
+    private static final String OTHER_PROMPT = "<|im_start|>user\n"
+            + "Write one short sentence about a river.<|im_end|>\n"
+            + "<|im_start|>assistant\n";
     private static final String MODEL_SHA256 =
             "8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684";
     private static final long MODEL_BYTES = 105_454_144L;
@@ -63,6 +54,12 @@ public final class RealGgufContractTestMain {
     private RealGgufContractTestMain() { }
 
     public static void main(String[] args) throws Exception {
+        if (args.length == 5) runSmartBuild(args);
+        else if (args.length == 6) runProfile(args);
+        else throw new IllegalArgumentException("expected the five-argument Smart Build gate or six-argument model profile gate");
+    }
+
+    private static void runProfile(String[] args) throws Exception {
         if (args.length != 6) {
             throw new IllegalArgumentException("expected JNI library, model HTTPS URL, SHA-256, "
                     + "cache directory, exact model byte length and offline flag");
@@ -87,7 +84,7 @@ public final class RealGgufContractTestMain {
         Path directory = Path.of(args[3]).toAbsolutePath().normalize();
         // The Maven profile explicitly selects this directory. Ordinary Java builds never run here.
         ModelArtifactCache cache = new ModelArtifactCache(args[1], args[2], directory, expectedBytes, offline);
-        Files.createDirectories(directory);
+        if (!offline) Files.createDirectories(directory);
         boolean cached = Files.exists(directory.resolve(args[2].toLowerCase(Locale.ROOT) + ".gguf"),
                 LinkOption.NOFOLLOW_LINKS);
         Path model = cache.resolve();
@@ -100,7 +97,7 @@ public final class RealGgufContractTestMain {
         check(cache.resolve().equals(model), "verified model cache reuse");
 
         ModelRequest request = new ModelRequest(PROMPT, 48, Duration.ofSeconds(120));
-        String expectedPromptHash = digest(PROMPT);
+        String expectedPromptHash = hash(PROMPT);
         // CPU is explicit: no hosted backend, synthetic provider, or GPU fallback is selected here.
         LlamaCppJniBackend backend = new LlamaCppJniBackend(library, model, 512, 2, 0, "cpu");
         try {
@@ -114,7 +111,7 @@ public final class RealGgufContractTestMain {
 
             ModelRequest otherRequest = new ModelRequest(OTHER_PROMPT, 48, Duration.ofSeconds(120));
             ModelResponse other = backend.infer(otherRequest);
-            checkResponse(other, backend.id(), digest(OTHER_PROMPT));
+            checkResponse(other, backend.id(), hash(OTHER_PROMPT));
             check(!other.promptSha256().equals(expectedPromptHash), "different prompt identity");
 
             backend.close();
@@ -140,7 +137,7 @@ public final class RealGgufContractTestMain {
                 "bounded native output");
     }
 
-    private static String digest(String text) throws Exception {
+    private static void runSmartBuild(String[] args) throws Exception {
         if (args.length != 5) {
             throw new IllegalArgumentException(
                     "usage: RealGgufContractTestMain <jni-library> <cache-dir> <work-dir> <model-url> <sha256>");
@@ -307,8 +304,6 @@ public final class RealGgufContractTestMain {
                 .digest(text.getBytes(StandardCharsets.UTF_8)));
     }
 
-    private static void check(boolean success, String contract) {
-        if (!success) throw new AssertionError("real GGUF contract failed: " + contract);
     private static String hash(Path path) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream input = Files.newInputStream(path)) {
