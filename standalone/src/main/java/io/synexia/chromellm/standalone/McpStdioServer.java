@@ -95,6 +95,32 @@ final class McpStdioServer {
             if (!arguments.isEmpty()) return encoded(error(id, -32602, "Unknown status arguments"));
             return encoded(success(id, backendStatus()));
         }
+        if ("plan_steps".equals(tool)) {
+            if (!(arguments.get("task") instanceof String task) || task.isBlank()
+                    || arguments.keySet().stream().anyMatch(k -> !List.of("task", "maxTokens", "timeoutSeconds").contains(k))) {
+                return encoded(error(id, -32602, "Invalid planning arguments"));
+            }
+            int maxTokens;
+            int timeoutSeconds;
+            try {
+                StdioProtocol.encode(task, AgentPlanner.MAX_TASK_BYTES);
+                maxTokens = integer(arguments, "maxTokens", 1024, 1, 32768);
+                timeoutSeconds = integer(arguments, "timeoutSeconds", 120, 1, 3600);
+            } catch (IOException | IllegalArgumentException invalid) {
+                return encoded(error(id, -32602, "Invalid planning arguments"));
+            }
+            try {
+                AgentPlan plan = AgentPlanner.plan(backend, task, maxTokens, Duration.ofSeconds(timeoutSeconds));
+                Map<String, Object> result = new LinkedHashMap<>(toolResult(plan.json(), false));
+                result.put("structuredContent", plan.structuredContent());
+                return encoded(success(id, result));
+            } catch (IOException | TimeoutException | IllegalArgumentException failure) {
+                return encoded(success(id, toolResult("Agent planning failed", true)));
+            } catch (InterruptedException interruption) {
+                Thread.currentThread().interrupt();
+                return encoded(success(id, toolResult("Agent planning interrupted", true)));
+            }
+        }
         if (!"infer_text".equals(tool)) return encoded(error(id, -32602, "Unknown tool"));
         if (!(arguments.get("prompt") instanceof String prompt) || prompt.isBlank()
                 || arguments.keySet().stream().anyMatch(k -> !List.of("prompt", "maxTokens", "timeoutSeconds").contains(k))) {
@@ -136,6 +162,14 @@ final class McpStdioServer {
 
     private static List<Map<String, Object>> toolList() {
         return List.of(
+                Map.of("name", "plan_steps",
+                        "description", "Propose a bounded dependency-ordered read-only tool plan; does not execute any steps.",
+                        "inputSchema", Map.of("type", "object", "additionalProperties", false,
+                                "properties", Map.of("task", Map.of("type", "string", "minLength", 1, "maxLength", 4096),
+                                        "maxTokens", Map.of("type", "integer", "minimum", 1, "maximum", 32768),
+                                        "timeoutSeconds", Map.of("type", "integer", "minimum", 1, "maximum", 3600)),
+                                "required", List.of("task")),
+                        "annotations", Map.of("readOnlyHint", true, "destructiveHint", false, "idempotentHint", false)),
                 Map.of("name", "backend_status", "description", "Read the selected provider and its available preparation snapshot without loading the model.",
                         "inputSchema", Map.of("type", "object", "properties", Map.of(), "additionalProperties", false),
                         "annotations", Map.of("readOnlyHint", true)),
