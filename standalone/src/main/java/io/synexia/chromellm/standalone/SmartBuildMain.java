@@ -56,7 +56,12 @@ public final class SmartBuildMain {
                 .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
                 .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
                 .decode(java.nio.ByteBuffer.wrap(recipeBytes)).toString();
-        Properties config = new Properties();
+        Properties config = new Properties() {
+            @Override public synchronized Object put(Object key, Object value) {
+                if (containsKey(key)) throw new IllegalArgumentException("duplicate smart-build recipe key: " + key);
+                return super.put(key, value);
+            }
+        };
         config.load(new StringReader(encodedRecipe));
         for (String key : config.stringPropertyNames()) {
             if (!KEYS.contains(key)) throw new IllegalArgumentException("unknown smart-build recipe option: " + key);
