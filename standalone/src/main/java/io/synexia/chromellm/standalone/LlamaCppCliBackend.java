@@ -3,6 +3,7 @@ package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -18,6 +19,8 @@ import java.util.concurrent.TimeoutException;
 public final class LlamaCppCliBackend implements ModelBackend {
     private static final long MAX_STDOUT_BYTES = 4L * 1024 * 1024;
     private static final String BACKEND_ID = "llama.cpp-cli";
+    private static final long SCRATCH_DELETE_SECONDS = 5;
+    private static final long SCRATCH_DELETE_RETRY_MILLIS = 20;
     private final List<String> launcher;
     private final Path model;
     private final Path scratch;
@@ -99,9 +102,36 @@ public final class LlamaCppCliBackend implements ModelBackend {
             }
             return new ModelResponse(text, id(), sha256(request.prompt()));
         } finally {
-            Files.deleteIfExists(promptFile);
-            if (stdoutFile != null) Files.deleteIfExists(stdoutFile);
-            if (stderrFile != null) Files.deleteIfExists(stderrFile);
+            deleteScratch(promptFile);
+            deleteScratch(stdoutFile);
+            deleteScratch(stderrFile);
+        }
+    }
+
+    /**
+     * Deletes one scratch file. Windows can report a redirected file as in use for a short
+     * time after its child process has exited, so a busy file is retried within a bound.
+     */
+    private static void deleteScratch(Path file) throws IOException {
+        if (file == null) return;
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(SCRATCH_DELETE_SECONDS);
+        boolean interrupted = false;
+        try {
+            while (true) {
+                try {
+                    Files.deleteIfExists(file);
+                    return;
+                } catch (FileSystemException busy) {
+                    if (System.nanoTime() >= deadline) throw busy;
+                }
+                try {
+                    Thread.sleep(SCRATCH_DELETE_RETRY_MILLIS);
+                } catch (InterruptedException duringCleanup) {
+                    interrupted = true;
+                }
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 
