@@ -5,14 +5,17 @@ on:
       llama_sha:
         description: 'Exact 40-hex hsoliwal/synexia-llmcpp source revision'
         required: true
+        default: '650ac3739d993e1d425f2d5db3c4205b3606cc30'
         type: string
       dawn_release_url:
-        description: 'Published GitHub Release Dawn-*.tar.gz URL, built for Linux'
+        description: 'Published Dawn Release .tar.gz or ZIP package for Linux'
         required: true
+        default: 'https://github.com/reeselevine/dawn/releases/download/v2.0.0/Dawn-5e9a4865b1635796ccc77dd30057f2b4002a1355-ubuntu-latest-Release.zip'
         type: string
       dawn_sha256:
         description: 'SHA-256 digest of the exact published Dawn release archive'
         required: true
+        default: 'a5a87d9513e1fc109c355628baebe6b85fe7aa258f8ed2d2cf71ddc902e778bb'
         type: string
 jobs:
   pinned-webgpu-native:
