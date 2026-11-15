@@ -1,9 +1,13 @@
 # Native Maven Smart Build
 
 ChromeLLM can build an explicitly pinned native source checkout, or download a
-compatible JNI runtime and model when inference is first requested. Maven uses the
-existing Java 21/JNI provider for both routes. The generated advice remains a
+compatible JNI runtime and model when inference is first requested. It also retains
+the platform native JAR build, Maven download, and packaged-runtime loader. Maven uses
+the existing Java 21/JNI provider for these routes. The generated advice remains a
 reviewable artifact; the original Maven compiler and test results stay authoritative.
+The reusable [build-advice action](BUILD_AI_ACTION.md) provides separate pre-build
+and post-build phases around a repository's existing build command, with explicit
+provider selection, verified JAR input and bounded diagnostic packets.
 
 ## Choose the inputs
 
@@ -19,7 +23,14 @@ not unpack archives or find missing native dependencies. Model and native bytes 
 verified before the provider opens. Local paths and downloaded artifacts can be
 combined, but each input must have exactly one selection.
 
-Constructing a provider does not create caches, download files, or initialize a
+If neither `jniLib` nor the native URL quartet is selected, JNI discovers the
+matching installed native classifier JAR through `NativeLibraryLoader`. That loader
+verifies the package manifest and dependency closure before extracting and loading
+its native files. It performs no network download. The `smart-native-download`
+profile supplies that JAR through Maven's resolver; the raw `jniUrl` quartet supplies
+one independently pinned self-contained library through the lazy artifact owner.
+
+Constructing a URL-backed provider does not create caches, download files, or initialize a
 model. First inference acquires the configured inputs, and later calls reuse the
 loaded provider. A new process verifies cached bytes again. Maven `-o` permits only
 verified cache hits and refuses missing or corrupt inputs without network access.
@@ -66,6 +77,8 @@ mvn -o -B -ntp -f standalone/pom.xml -Psmart-build verify \
 The first run downloads missing inputs. The second reuses reverified caches in a
 fresh Maven process. Maven's own plugins and Java dependencies must also be cached
 before `-o` can run. Maven offline mode overrides `offline=false` in the properties.
+The Maven profile passes `${settings.offline}` as the explicit fourth runtime
+argument; legacy three-argument callers use the `chromellm.offline` system property.
 Relative prompt and cache paths resolve from `standalone/`; online acquisition
 creates a missing configured cache directory. Configuration errors are rejected
 before any download. Existing corrupt cache entries are refused rather than replaced.
@@ -74,6 +87,58 @@ The native release workflow is an opt-in publishing operation. A source change o
 local package build alone does not create a downloadable release. Until a tested
 runtime release is published, use a reviewed HTTPS host for the packaged library or
 select the locally built library with `jniLib`.
+
+Legacy model recipes without the three policy fields retain checked generic HTTPS
+redirects with a five-hop bound. Supplying `modelFollowRedirects`,
+`modelDownloadTimeoutSeconds`, or `modelMaxBytes` selects explicit policy, where
+`modelFollowRedirects=false` is the default. Under that policy, GitHub release
+download URLs may follow up to three redirects within approved GitHub release
+endpoints; other HTTPS redirects require `modelFollowRedirects=true`.
+`modelDownloadTimeoutSeconds` bounds the entire acquisition
+(1–3600, default 3600), and `modelMaxBytes` bounds downloaded and cached model bytes
+(at most 64 GiB). `modelBytes`, when supplied, also pins the exact length.
+For URL recipes, `modelCacheDir` defaults to `target/model-cache`. Maven prepares
+caches beneath its verified target after provider validation and just before
+inference. Recipes using an existing CLI or local/packaged JNI runtime prepare
+explicit external model caches after option validation and symlink-ancestor checks,
+before opening the provider. Recipes using a raw JNI URL retain their external model
+and native cache directories under the lazy acquisition owner. Offline execution
+creates no cache directories.
+
+## Build or download packaged native Maven artifacts
+
+The `native` profile builds and attaches platform/backend native classifier JARs.
+The separate `smart-native-download` profile resolves an already-published matching
+classifier through the configured Maven repositories, without a native source build:
+
+```sh
+mvn -B -ntp -f standalone/pom.xml -Psmart-native-download,smart-build \
+  -Dchromellm.smart.recipe=examples/smart-build-packaged-smoke.properties verify
+```
+
+The package must first be installed or published to a configured repository.
+`chromellm.smart.nativeVersion` selects its version; the default is the current
+project version. Maven copies the resolved JAR to
+`target/smart-runtime/chromellm-native.jar`, and Smart Build includes the selected
+`${chromellm.smart.nativeArtifact}` on its runtime classpath. Maven's repository
+offline rules apply to this resolution, independently of lazy artifact acquisition.
+
+An existing classifier JAR, including one downloaded from GitHub Actions, can be
+selected explicitly:
+
+```sh
+mvn -B -ntp -f standalone/pom.xml -Psmart-build \
+  -Dchromellm.smart.nativeArtifact=/absolute/path/to/chromellm-native.jar \
+  -Dchromellm.smart.recipe=examples/smart-build-packaged-smoke.properties verify
+```
+
+Use `-Pnative,smart-build` to build and consume the matching package locally.
+The package resource manifest, native installer, dependency notices, classifiers,
+CTest packaging fixtures and clean consumer remain described in
+[the native Maven artifact workflow](README.md#build-and-consume-native-maven-artifacts).
+The packaged loader uses `${user.home}/.cache/chromellm/native` unless
+`chromellm.native.cache` selects another extraction cache. Raw URL caches remain
+explicit `jniCacheDir` and `modelCacheDir` selections.
 
 ## Build a pinned native source checkout
 
@@ -118,15 +183,18 @@ checks. Cross-platform compatibility is established by each platform's runtime j
 
 ## Maven profile combinations
 
-The ordinary `mvn -f standalone/pom.xml verify` runs the Java contract suite without
-native or model provisioning. Java dependency resolution follows Maven's normal
-online/offline policy.
+The ordinary `mvn -f standalone/pom.xml verify` runs Java and fixed browser-script
+contracts using JDK 21, Maven and Node.js 22, without native or model provisioning.
+Dependency resolution follows Maven's normal online/offline policy.
 
 | Profile | Work performed |
 | --- | --- |
 | `native-synthetic` | Build the test-only JNI fixture and run CTest; never a distributable runtime |
 | `native-fork` | Build a local source checkout through the existing native entry point |
 | `fork-native` | Require a clean exact source commit, then build its native runtime |
+| `native` | Build and attach the selected platform/backend native classifier JAR |
+| `native-dist` | Attach a native runtime ZIP from a real `native-fork` or `fork-native` build, with an explicit classifier and reviewed notices |
+| `smart-native-download` | Resolve an installed or published native classifier JAR through Maven repositories |
 | `smart-build` | Run an explicitly selected inference properties file during `verify` |
 | `real-model` | Acquire the pinned model and run the selected JNI real-model smoke test |
 | `real-model-test` | Run the real GGUF contract suite with explicit native/model pins and Maven offline policy |
@@ -134,11 +202,15 @@ online/offline policy.
 | `native-dawn` | Retain the Linux x86_64/macOS arm64 Dawn installer and sealed installation |
 
 Choose only one native build profile. `smart-build` can accompany that profile when
-the properties select the resulting local JNI library. Choose only one Dawn
+the properties select its local JNI library or packaged artifact. Choose only one Dawn
 installer. Use `fork-native,dawn-binary` for the pinned source build with the binary
-Dawn provider. `native-fork,native-dawn` retains the other source-build integration;
-`fork-native,native-dawn` is refused by the current profile guard. To use an already
-installed Dawn package with `fork-native`, pass its prefix explicitly. See
+Dawn provider. `native-dawn` supports `native-fork`, `fork-native`, and the `native`
+artifact build. It enables the corresponding WebGPU settings and passes the
+verified Dawn prefix before CMake configuration. Synthetic mode, conflicting Dawn
+installers, and explicit contradictory WebGPU settings are refused before native
+writes. To use an already installed Dawn package with `fork-native`, pass its prefix
+explicitly. The separate `native-dist` ZIP retains its explicit classifier and
+reviewed-notices requirements and refuses synthetic or prebuilt-library mode. See
 [NATIVE_MAVEN_BUILD.md](NATIVE_MAVEN_BUILD.md) for the original installer contract.
 
 The additional `real-model-test` contract suite and its `chromellm.real.*` properties

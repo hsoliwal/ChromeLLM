@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT AND Apache-2.0
 // Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
+// Workspace-agent fixture: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.ByteArrayOutputStream;
@@ -9,8 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Comparator;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** Uses the real JNI bridge with synthetic model output; does not claim model quality or GPU execution. */
@@ -19,7 +20,6 @@ public final class JniAgentContractTestMain {
 
     public static void main(String[] args) throws Exception {
         if (args.length != 1) throw new IllegalArgumentException("pass synthetic JNI library path");
-        // Actual Java/JNI session wiring against the scripted fixture, not trained-model inference.
         Path model = Files.createTempFile("agent-require-cpu-", ".gguf");
         try {
             Files.writeString(model, "synthetic protocol fixture, not model weights");

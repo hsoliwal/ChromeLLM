@@ -20,6 +20,15 @@ native dependencies are not part of this loader. Its non-system dependencies mus
 already be linked or packaged by the native build. Model and JNI artifacts have
 independent digests and version identities.
 
+JNI without `--jni-lib` or the native URL quartet uses the matching installed
+platform native JAR through `NativeLibraryLoader`. That existing packaged loader
+verifies the resource manifest and every bundled dependency before loading, and
+does not download native code. Its extraction cache defaults to
+`${user.home}/.cache/chromellm/native` and can be selected with
+`-Dchromellm.native.cache`. Packaged discovery and extraction for a remote model
+remain deferred until first inference. The raw URL path continues to use its
+explicit `--jni-cache-dir` and never treats a downloaded archive as a native JAR.
+
 URLs must use HTTPS without credentials or fragments. SHA-256 pins contain 64 hex
 digits. Length pins must be positive and bounded to 64 GiB. Partial descriptors,
 contradictory local/remote selections, invalid compute policies, and invalid numeric
@@ -27,7 +36,7 @@ parameters are rejected before acquisition. Hosted Gemini and installed-Chrome
 providers reject these native acquisition options.
 
 The explicitly configured cache directory is created on first online acquisition if
-necessary. No implicit user-home location is chosen by the provider. Direct internal
+necessary. No implicit user-home location is chosen for URL artifacts. Direct internal
 cache callers retain their existing requirement to provide an existing directory.
 Verified models are stored as `<sha256>.gguf`; raw native artifacts use
 `<sha256>.bin`. No downloaded binary is loaded until every configured artifact has
@@ -44,13 +53,27 @@ bytes again before opening its session.
 
 For `SmartBuildMain`, the properties keys are `jniUrl`, `jniSha256`, `jniBytes`,
 `jniCacheDir`, `modelUrl`, `modelSha256`, `modelBytes`, `modelCacheDir`, and `offline`.
+The model policy keys are `modelFollowRedirects`, `modelDownloadTimeoutSeconds`,
+and `modelMaxBytes`. For URL recipes, `modelCacheDir` defaults to `target/model-cache`.
+Maven creates a managed cache beneath its verified target directory after provider
+validation, immediately before inference. For a recipe using an existing CLI or
+local/packaged JNI runtime and an explicit external model cache, Smart Build validates
+all options and the cache's existing ancestors before creating the directory and
+opening the provider. Symlink ancestors are refused before writes. Recipes with a
+raw JNI URL retain their external model and native cache directories under the
+artifact owner's first-inference lifecycle.
+Offline execution creates none of these cache directories.
 The existing `jniLib` and `model` keys remain valid. Relative paths resolve from the
 standalone project. Maven's offline setting takes precedence over `offline=false` in
 a recipe. Offline Smart Build preflights both caches before opening its provider.
 The target directory is validated before cache or provider work. Results remain
 review-only candidates under the existing Maven `target/smart-build` directory.
 The original three-argument entry point and the newer optional fourth offline
-argument (`true`, `false`, `--offline=true`, or `--offline=false`) remain supported.
+argument (`true`, `false`, `--offline=true`, `--offline=false`, `offline=true`, or
+`offline=false`) remain supported.
+When present, the fourth argument is the authoritative Maven offline setting.
+Three-argument callers retain the legacy `chromellm.offline` system-property policy.
+A recipe with `offline=true` further restricts either invocation.
 Canonical workspace-ancestor aliases are accepted; target/output symlinks are refused.
 
 The explicit Maven `real-model` and `real-model-test` profiles retain their real
@@ -67,8 +90,22 @@ as the command line; it does not run Maven, edit source, or introduce a second r
 
 ## Transfer and publication
 
-Each production download permits at most five validated HTTPS redirects. Downgrades,
-credentials, and fragments are refused at every hop; the digest covers the final
+Legacy model selections without the three model-policy fields retain up to five
+validated HTTPS redirects, including CDN origins. Supplying
+`--model-follow-redirects`, `--model-download-timeout-seconds`, or `--model-max-bytes`
+selects explicit policy: redirects default to false, and only a GitHub release URL
+of the form `https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>` may
+follow at most three redirects among GitHub release URLs and
+`release-assets.githubusercontent.com`, using the default HTTPS port.
+`--model-follow-redirects true` permits up to five validated HTTPS redirects.
+The native binary provisioning factory applies the three-hop release policy to
+GitHub release origins and retains checked generic HTTPS redirects for other
+explicit origins. Raw `--jni-url` acquisition and the legacy generic HTTP seams
+retain the five-hop HTTPS policy. All paths share one transport and body-lifetime
+owner.
+
+Downgrades, credentials, fragments, cycles, and blank or ambiguous redirect locations
+are refused; requests forward no cookies or authorization. The digest covers the final
 bytes. Content encoding must be identity. Intermediate responses and the final
 HTTP client/stream are closed. The HTTP-client compatibility seam uses that same
 owned transport and deadline. The response-sender test seam retains the incoming
@@ -88,8 +125,12 @@ exclusive publication and verification still prevent overwrites.
 
 ## Deadlines, cancellation, and lifetime
 
-Each artifact acquisition has a one-hour deadline covering coordination, cache
+Each artifact acquisition defaults to a one-hour deadline covering coordination, cache
 verification, connection establishment, redirects, and the complete response body.
+Models can select a smaller whole-acquisition deadline through
+`--model-download-timeout-seconds` (1–3600) and a smaller byte bound through
+`--model-max-bytes` (1–64 GiB). Cached models are subject to that byte bound too.
+An optional exact model size pin further restricts the streamed and cached length.
 The inference timeout applies after successful acquisition. A timed-out waiter returns
 an HTTP timeout error. Interruption cancels its acquisition worker and closes its
 active stream asynchronously; staging cleanup follows worker completion. An

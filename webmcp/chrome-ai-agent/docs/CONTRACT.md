@@ -52,3 +52,16 @@ Neither the extension nor this host reads Chrome-managed model weights. Browser
 availability and Windows native-registration compatibility require physical tests.
 
 The native host classes use the product namespace `io.synexia.chromellm.webmcp`; this avoids creating parallel unscoped/default-package types. There is no new dependency in the standalone Java/JNI runtime.
+
+## Packaged Windows launcher admission
+
+A Java `jpackage` launcher with `--arguments` alone cannot be relied on to
+prepend an approved config path when Chrome supplies origin arguments. For a
+Windows console app-image, the operator must bake an immutable-by-extension
+JVM option `-Dchromellm.agent.config=C:/approved/config.properties` into the
+launcher with `jpackage --java-options`. The host then interprets the runtime
+arguments exclusively as Chrome's origin and optional parent-window handle.
+If both a JVM-pinned config and a positional config are provided, the call
+fails closed. The JVM property is an operator packaging input, never a native
+message field. This is tested with direct Java invocation; Windows jpackage
+and HKCU registration remain unverified until run on actual Windows.

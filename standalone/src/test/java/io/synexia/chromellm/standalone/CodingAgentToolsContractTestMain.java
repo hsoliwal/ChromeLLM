@@ -89,6 +89,49 @@ public final class CodingAgentToolsContractTestMain {
             check(service.last.get().rawQuery() == null, "batch fields leaked into query");
             call(tools, "problem_categories", Map.of());
             assertRequest(service, "GET", "/api/problem-categories", Map.of(), false);
+            call(tools, "problem_categories", Map.of("platform", "LEETCODE", "category", "Binary Search"));
+            assertRequest(service, "GET", "/api/problem-categories",
+                    Map.of("platform", "LEETCODE", "category", "Binary Search", "limit", "25"), false);
+            call(tools, "problem_categories", Map.of("platform", "HACKERRANK", "prefix", "dyn", "limit", new BigDecimal("64")));
+            assertRequest(service, "GET", "/api/problem-categories",
+                    Map.of("platform", "HACKERRANK", "prefix", "dyn", "limit", "64"), false);
+            check(service.last.get().rawQuery().equals("platform=HACKERRANK&prefix=dyn&limit=64"), "nondeterministic category query ordering");
+            call(tools, "problem_categories", Map.of("platform", "GEEKSFORGEEKS"));
+            assertRequest(service, "GET", "/api/problem-categories", Map.of("platform", "GEEKSFORGEEKS", "limit", "25"), false);
+            call(tools, "problem_categories", Map.of("shape", "AHO_CORASICK", "limit", 1L));
+            assertRequest(service, "GET", "/api/problem-categories", Map.of("shape", "AHO_CORASICK", "limit", "1"), false);
+            call(tools, "problem_categories", Map.of("platform", "LEETCODE", "shape", "BINARY_SEARCH"));
+            assertRequest(service, "GET", "/api/problem-categories",
+                    Map.of("platform", "LEETCODE", "shape", "BINARY_SEARCH", "limit", "25"), false);
+            String category = "हिन्दी + & = \uD83D\uDE80";
+            call(tools, "problem_categories", Map.of("platform", "GEEKSFORGEEKS", "category", category));
+            assertRequest(service, "GET", "/api/problem-categories",
+                    Map.of("platform", "GEEKSFORGEEKS", "category", category, "limit", "25"), false);
+            call(tools, "problem_categories", Map.of("platform", "LEETCODE", "prefix", "a".repeat(256)));
+            assertRequest(service, "GET", "/api/problem-categories",
+                    Map.of("platform", "LEETCODE", "prefix", "a".repeat(256), "limit", "25"), false);
+            for (Map<String, Object> bad : List.<Map<String, Object>>of(
+                    Map.of("limit", 1), Map.of("category", "array"), Map.of("prefix", "arr"),
+                    Map.of("platform", "OTHER"), Map.of("platform", "leetcode"),
+                    Map.of("platform", "LEETCODE", "category", "array", "prefix", "arr"),
+                    Map.of("platform", "LEETCODE", "category", "array", "shape", "LINEAR_SCAN"),
+                    Map.of("platform", "LEETCODE", "prefix", "arr", "shape", "LINEAR_SCAN"),
+                    Map.of("platform", "LEETCODE", "category", ""),
+                    Map.of("platform", "LEETCODE", "prefix", " "),
+                    Map.of("platform", "LEETCODE", "category", "a".repeat(257)),
+                    Map.of("platform", "LEETCODE", "prefix", "ह".repeat(86)),
+                    Map.of("platform", "LEETCODE", "category", "\uD800"),
+                    Map.of("shape", "binary-search"), Map.of("shape", "A".repeat(65)),
+                    Map.of("platform", "LEETCODE", "limit", 0), Map.of("platform", "LEETCODE", "limit", 65),
+                    Map.of("shape", "BFS", "limit", new BigDecimal("1.5")),
+                    Map.of("shape", "BFS", "limit", Long.MAX_VALUE), Map.of("shape", "BFS", "limit", "1"),
+                    Map.of("platform", "LEETCODE", "url", "https://leetcode.com/"),
+                    Map.of("platform", "LEETCODE", "apply", true))) {
+                rejectBeforeNetwork(service, () -> call(tools, "problem_categories", bad));
+            }
+            Map<String, Object> nullCategory = new LinkedHashMap<>();
+            nullCategory.put("platform", "LEETCODE"); nullCategory.put("category", null);
+            rejectBeforeNetwork(service, () -> call(tools, "problem_categories", nullCategory));
             call(tools, "github_build_plan", Map.of("target", "ChromeLLM-native_cpu.v1"));
             assertRequest(service, "GET", "/api/github-build-plan", Map.of("target", "ChromeLLM-native_cpu.v1"), false);
             Map<String, Object> candidate = candidate();

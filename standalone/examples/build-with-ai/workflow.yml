@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT
+# Copy to .github/workflows/chrome-ai-build.yml in a calling repository.
+# Replace REVIEWED_FULL_COMMIT_SHA with the reviewed 40-character ChromeLLM commit.
+name: Build with optional Chrome AI
+on:
+  workflow_dispatch:
+    inputs:
+      build-command:
+        description: This repository's reviewed Bash build and test command
+        type: string
+        required: true
+      setup-command:
+        description: Optional reviewed Bash setup command, run in the same shell as the build
+        type: string
+        required: false
+        default: ''
+      ai-enabled:
+        description: Request Chrome advice on a provisioned runner for a default-branch run
+        type: boolean
+        required: false
+        default: false
+permissions:
+  contents: read
+jobs:
+  build:
+    uses: hsoliwal/ChromeLLM/.github/workflows/build-with-ai.yml@REVIEWED_FULL_COMMIT_SHA
+    with:
+      build-command: ${{ inputs.build-command }}
+      setup-command: ${{ inputs.setup-command }}
+      ai-enabled: ${{ inputs.ai-enabled }}
+      chrome-bin: ${{ vars.CHROME_BIN }}
+      chrome-profile: ${{ vars.CHROMELLM_CHROME_PROFILE }}
