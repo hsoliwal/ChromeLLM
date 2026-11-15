@@ -180,7 +180,9 @@ final class McpStdioServer {
     private static boolean validId(Object value) {
         if (value instanceof String) return true;
         if (value instanceof BigDecimal number) {
-            try { number.toBigIntegerExact(); return true; }
+            // JSON-RPC integer IDs are bounded to signed 64-bit to avoid enormous exponents.
+            if (number.precision() > 19 || number.scale() < -18 || number.scale() > 18) return false;
+            try { number.longValueExact(); return true; }
             catch (ArithmeticException invalid) { return false; }
         }
         return false;
