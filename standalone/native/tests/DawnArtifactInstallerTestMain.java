@@ -44,11 +44,13 @@ public final class DawnArtifactInstallerTestMain {
         Path prefix = root.resolve("native-deps/dawn");
         DawnArtifactInstaller.installPinned(prefix, fixture, zip);
         check(DawnArtifactInstaller.hasDawnConfig(prefix));
-        check(Files.readString(prefix.resolve(".chromellm-dawn-sha256")).trim().equals(fixture.sha256()));
+        check(Files.readAllLines(prefix.resolve(".chromellm-dawn-sha256")).get(0).equals(fixture.sha256()));
         DawnArtifactInstaller.installPinned(prefix, fixture, zip);
         check(DawnArtifactInstaller.hasDawnConfig(prefix));
         var tampered = new DawnArtifactInstaller.Artifact(linux.asset(), "0".repeat(64));
         fails(java.io.IOException.class, () -> DawnArtifactInstaller.installPinned(prefix, tampered, zip));
+        Files.writeString(prefix.resolve("lib64/cmake/Dawn/DawnConfig.cmake"), "# corrupted fixture\n");
+        fails(java.io.IOException.class, () -> DawnArtifactInstaller.installPinned(prefix, fixture, zip));
         Files.writeString(prefix.resolve(".chromellm-dawn-sha256"), "0".repeat(64));
         fails(java.io.IOException.class, () -> DawnArtifactInstaller.installPinned(prefix, fixture, zip));
         System.out.println("Dawn installer offline checks passed: " + checks);
