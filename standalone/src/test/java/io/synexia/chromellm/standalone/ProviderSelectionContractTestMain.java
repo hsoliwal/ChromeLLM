@@ -123,6 +123,7 @@ public final class ProviderSelectionContractTestMain {
             Files.deleteIfExists(temp);
         }
         ModelArtifactCacheContractTestMain.main(new String[0]);
+        McpStdioServerContractTestMain.main(new String[0]);
         System.out.println("provider selection contract checks passed: " + checks);
     }
 
