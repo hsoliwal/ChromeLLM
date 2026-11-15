@@ -52,7 +52,6 @@ a pinned source build, digest-verified lazy model download, real JNI inference a
 a bounded candidate-producing build recipe. The existing Java and synthetic JNI
 profiles remain available. See [Maven model verification](standalone/MAVEN_MODEL_TEST.md)
 and [fork-backed smart recipes](standalone/FORK_NATIVE_SMART_BUILD.md).
-A passing synthetic JNI test proves binding/lifecycle behavior only, not trained model correctness, GPU acceleration, or OS qualification. A portable Chrome fixture pass does not prove live model eligibility or inference. Older ChromeML documentation is historical. Transform recipes and fixed-point source qualification are owned by hsoliwal/com.synexia; downstream M3jdk21 imports only separately qualified implementation outputs. The optional Chrome adapter's Apache-2.0 attribution is in [standalone/NOTICE.md](standalone/NOTICE.md).
 
 ## Packaged fork runtime and Maven smart builds
 

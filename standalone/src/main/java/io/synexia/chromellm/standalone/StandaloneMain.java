@@ -25,10 +25,6 @@ public final class StandaloneMain {
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
         validateAgentMode(options);
-        Path workspace = agentWorkspace(options);
-        List<AgentTool> workspaceTools = workspace == null ? null : new WorkspaceTools(workspace).tools();
-        validateChromeModes(options);
-        if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
         validateChromeModes(options);
         if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
             Path goalFile = Path.of(required(options, "--prompt-file"));
@@ -67,11 +63,6 @@ public final class StandaloneMain {
                          ? agentTools(options, System.getenv()) : null;
                  ModelBackend backend = backend(options, System.getenv());
                  FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
-                if (tools != null) {
-                    McpStdioServer.serve(backend, System.in, output, tools.tools(), limits);
-                } else {
-                    McpStdioServer.serveTools(backend, System.in, output, workspaceTools);
-                }
                 McpStdioServer.serve(backend, System.in, output, tools,
                         endpointTools == null ? List.of() : endpointTools.tools(), endpointLimits);
             }
@@ -112,7 +103,7 @@ public final class StandaloneMain {
             if (limits == null) {
                 System.out.print(backend.infer(request).text());
             } else {
-                AgentEngine agent = new AgentEngine(backend, workspaceTools, event ->
+                AgentEngine agent = new AgentEngine(backend, tools, event ->
                         System.err.println("agent " + event.sequence() + " " + event.phase() + " " + event.tool()));
                 System.out.print(agent.run(request.prompt(), request.maxTokens(), limits).answer());
             }
@@ -121,25 +112,6 @@ public final class StandaloneMain {
 
     /** Authority validation runs before provider or cache initialization. */
     private static Path agentWorkspace(Map<String, String> options) {
-        boolean agent = flag(options, "--agent");
-        boolean mcp = flag(options, "--mcp-stdio");
-        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
-            throw new IllegalArgumentException("agent mode requires its own exclusive session mode");
-        }
-        if (options.containsKey("--agent-endpoint")) {
-            if (options.containsKey("--workspace") || options.containsKey("--agent-max-calls")) {
-                throw new IllegalArgumentException("remote agent controls and workspace controls are exclusive");
-            }
-            return null;
-        }
-        if (!agent && (options.containsKey("--agent-max-steps") || options.containsKey("--agent-max-calls"))) {
-            throw new IllegalArgumentException("agent limits require --agent true");
-        }
-        if (options.containsKey("--workspace") && !agent && !mcp) {
-            throw new IllegalArgumentException("workspace requires --agent true or --mcp-stdio true");
-        }
-        if (agent || options.containsKey("--workspace")) return Path.of(required(options, "--workspace"));
-        return null;
         return options.containsKey("--workspace") ? Path.of(required(options, "--workspace")) : null;
     }
 
@@ -153,10 +125,6 @@ public final class StandaloneMain {
                 || options.containsKey("--agent-max-context-bytes")
                 || options.containsKey("--agent-max-tool-result-bytes");
         boolean configured = options.keySet().stream().anyMatch(key -> key.startsWith("--agent-"));
-        boolean remote = options.containsKey("--agent-endpoint") || options.containsKey("--agent-token-env")
-                || options.containsKey("--agent-max-context-bytes")
-                || options.containsKey("--agent-max-tool-result-bytes");
-        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
         if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices")
                 || flag(options, "--chrome-status") || flag(options, "--chrome-prepare"))) {
             throw new IllegalArgumentException("agent execution requires its own exclusive session mode");
@@ -167,13 +135,6 @@ public final class StandaloneMain {
         if (configured && !agent && !mcp) {
             throw new IllegalArgumentException("agent controls require --agent true or --mcp-stdio true");
         }
-        if (remote && (options.containsKey("--workspace") || options.containsKey("--agent-max-calls"))) {
-            throw new IllegalArgumentException("remote agent controls and workspace controls are exclusive");
-        }
-        if (agent && !remote && !options.containsKey("--workspace")) {
-            throw new IllegalArgumentException("agent execution requires --workspace or --agent-endpoint with --agent-token-env");
-        }
-        if (remote) {
         if (workspace && !agent && !mcp) {
             throw new IllegalArgumentException("workspace requires --agent true or --mcp-stdio true");
         }
@@ -393,10 +354,14 @@ public final class StandaloneMain {
                 required(options, "--device");
             }
         }
-        ModelArtifactCache artifact = new ModelArtifactCache(url, sha256, cacheDir,
-                flag(options, "--model-follow-redirects"),
-                Duration.ofSeconds(Long.parseLong(options.getOrDefault("--model-download-timeout-seconds", "3600"))),
-                Long.parseLong(options.getOrDefault("--model-max-bytes", Long.toString(ModelArtifactCache.MAX_BYTES))));
+        boolean explicitPolicy = options.containsKey("--model-follow-redirects")
+                || options.containsKey("--model-download-timeout-seconds")
+                || options.containsKey("--model-max-bytes");
+        ModelArtifactCache artifact = explicitPolicy
+                ? new ModelArtifactCache(url, sha256, cacheDir, flag(options, "--model-follow-redirects"),
+                    Duration.ofSeconds(Long.parseLong(options.getOrDefault("--model-download-timeout-seconds", "3600"))),
+                    Long.parseLong(options.getOrDefault("--model-max-bytes", Long.toString(ModelArtifactCache.MAX_BYTES))))
+                : new ModelArtifactCache(url, sha256, cacheDir);
         Map<String, String> retained = new HashMap<>(options);
         retained.remove("--model-url");
         retained.remove("--model-sha256");
@@ -481,9 +446,6 @@ public final class StandaloneMain {
                 "--model-max-bytes", "--mcp-stdio", "--agent", "--agent-endpoint", "--agent-token-env",
                 "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes",
                 "--workspace", "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
-                "--model-cache-dir", "--mcp-stdio", "--agent", "--workspace",
-                "--agent-max-steps", "--agent-max-calls", "--agent-endpoint", "--agent-token-env",
-                "--agent-max-context-bytes", "--agent-max-tool-result-bytes", "--chrome-bin", "--chrome-profile", "--chrome-headless",
                 "--chrome-download", "--chrome-status", "--chrome-prepare");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
