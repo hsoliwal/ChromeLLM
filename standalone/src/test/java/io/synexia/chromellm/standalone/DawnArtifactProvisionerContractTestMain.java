@@ -13,6 +13,8 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.GZIPOutputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /** Offline native binary acquisition and safe Dawn extraction regression checks. */
 public final class DawnArtifactProvisionerContractTestMain {
@@ -45,6 +47,19 @@ public final class DawnArtifactProvisionerContractTestMain {
             check(Files.isRegularFile(output.resolve("include/webgpu/webgpu.h")), "missing Dawn header");
             check(output.toRealPath().startsWith(target.toRealPath()), "output escaped target");
             check(calls.get() == 2, "redirect/download count mismatch");
+            byte[] zip = zip(good, "Dawn-verified.tar.gz");
+            Path zipWorkspace = Files.createTempDirectory(project, "zip-verified-");
+            Path zipTarget = Files.createDirectory(zipWorkspace.resolve("target"));
+            Path zipResult = DawnArtifactProvisioner.provision(
+                    RELEASE.replace(".tar.gz", ".zip"), sha(zip), zipWorkspace, zipTarget,
+                    uri -> new DawnArtifactProvisioner.FetchResponse(200, null, "identity", zip.length,
+                            new ByteArrayInputStream(zip)));
+            check(Files.isRegularFile(zipResult.resolve("lib/cmake/Dawn/DawnConfig.cmake")),
+                    "GitHub Release ZIP wrapper failed to provision Dawn");
+            byte[] wrongZip = zip(good, "../Dawn-verified.tar.gz");
+            rejectIo(() -> provisionInFreshZip(project, wrongZip));
+            byte[] otherZip = zip(good, "unexpected.txt");
+            rejectIo(() -> provisionInFreshZip(project, otherZip));
             Path again = DawnArtifactProvisioner.provision(RELEASE, digest, project, target, uri -> {
                 throw new AssertionError("cached archive unexpectedly downloaded");
             });
@@ -83,6 +98,24 @@ public final class DawnArtifactProvisionerContractTestMain {
         } finally { delete(project); }
     }
 
+    private static void provisionInFreshZip(Path root, byte[] bytes) throws Exception {
+        Path workspace = Files.createTempDirectory(root, "zip-case-");
+        try {
+            Path target = Files.createDirectory(workspace.resolve("target"));
+            DawnArtifactProvisioner.provision(RELEASE.replace(".tar.gz", ".zip"), sha(bytes), workspace,
+                    target, uri -> new DawnArtifactProvisioner.FetchResponse(200, null, "identity",
+                            bytes.length, new ByteArrayInputStream(bytes)));
+        } finally { delete(workspace); }
+    }
+    private static byte[] zip(byte[] tar, String name) throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipOutputStream stream = new ZipOutputStream(output)) {
+            stream.putNextEntry(new ZipEntry(name));
+            stream.write(tar);
+            stream.closeEntry();
+        }
+        return output.toByteArray();
+    }
     private static void provisionInFresh(Path root, byte[] bytes) throws Exception {
         provisionInFresh(root, bytes, uri -> new DawnArtifactProvisioner.FetchResponse(200, null,
                 "identity", bytes.length, new ByteArrayInputStream(bytes)));
