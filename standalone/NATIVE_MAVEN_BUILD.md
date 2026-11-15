@@ -34,6 +34,34 @@ mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic verify
 
 This builds the existing **test-only** JNI stub into `standalone/target/native-synthetic`, runs its CTest library-discovery regressions, and runs the Java contract suite. On Unix, the JNI bridge is `libchromellm_llama_jni.so` (Linux) or `libchromellm_llama_jni.dylib` (macOS); on Windows it is normally under `Release/chromellm_llama_jni.dll`. GitHub Actions separately invokes `JniSyntheticContractTestMain` with that exact library, including cancellation and allocation-limit checks. Neither the synthetic profile nor its CI checks assert real model correctness.
 
+## Pinned Dawn binary from GitHub Releases (opt-in)
+
+The `native-webgpu-artifact` Maven profile adds a third, **explicitly requested**
+native build mode: compile the supplied llama.cpp source fork, but **download and
+verify the Dawn install package automatically**. Unlike `native-fork`, this
+mode requires no preinstalled Dawn CMake prefix:
+
+```sh
+mvn -B -ntp -f standalone/pom.xml -Pnative-webgpu-artifact verify \
+  -Dchromellm.native.source=/approved/src/synexia-llmcpp \
+  -Dchromellm.dawn.url=https://github.com/OWNER/REPO/releases/download/TAG/Dawn-linux-Release.tar.gz \
+  -Dchromellm.dawn.sha256=THE_REAL_RELEASE_SHA256
+```
+
+The URL and digest above are **placeholders**, not a verified published binary.
+The currently inspected `hsoliwal/dawn` fork uploads GitHub Actions archives,
+but has no published GitHub Release to download by this URL. A release must be
+published and audited before a real network qualification can run.
+
+The archive is verified before extraction, stored only under `target/`, and
+the verified install prefix is fed into CMake with `CHROMELLM_WEBGPU=ON`.
+Use only one of `native-webgpu-artifact`, `native-fork`, or
+`native-synthetic` per Maven invocation. The default build remains offline,
+and the model GGUF remains a separate explicitly licensed inference asset.
+
+See [DAWN_ARTIFACT_MAVEN.md](DAWN_ARTIFACT_MAVEN.md) for the exact URL, archive
+validation, cache and GitHub Actions qualification contracts.
+
 ## Windows dependent DLL resolution
 
 The synthetic JNI fixture builds two separate native artifacts on Windows:
