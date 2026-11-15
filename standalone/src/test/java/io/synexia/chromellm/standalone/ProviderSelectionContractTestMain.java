@@ -40,7 +40,8 @@ public final class ProviderSelectionContractTestMain {
         }
         for (String option : new String[] {"--llama-bin", "--jni-lib", "--context-tokens",
                 "--threads", "--gpu-layers", "--compute-backend", "--device-backend", "--device",
-                "--tier", "--fast-model", "--reasoning-model", "--frontier-model"}) {
+                "--tier", "--fast-model", "--reasoning-model", "--frontier-model",
+                "--model-url", "--model-sha256", "--model-cache-dir"}) {
             rejectOption(option, () -> StandaloneMain.backend(Map.of("--backend", "gemini", option, "1"),
                     Map.of("GEMINI_API_KEY", "test-key")));
         }
@@ -69,6 +70,23 @@ public final class ProviderSelectionContractTestMain {
             try (ModelBackend backend = StandaloneMain.backend(local, Map.of("GEMINI_API_KEY", "test-key"))) {
                 check(backend.id().equals("llama.cpp-cli"));
             }
+            try (ModelBackend deferred = StandaloneMain.backend(Map.of(
+                    "--model-url", "https://example.invalid/test.gguf",
+                    "--model-sha256", "0".repeat(64),
+                    "--model-cache-dir", temp.toString(),
+                    "--llama-bin", executable.toString()), Map.of())) {
+                check(deferred.id().equals("llama.cpp-cli"));
+            }
+            reject(() -> StandaloneMain.backend(Map.of(
+                    "--model-url", "https://example.invalid/test.gguf",
+                    "--model-cache-dir", temp.toString(),
+                    "--llama-bin", executable.toString()), Map.of()));
+            reject(() -> StandaloneMain.backend(Map.of(
+                    "--model-url", "https://example.invalid/test.gguf",
+                    "--model-sha256", "0".repeat(64),
+                    "--model-cache-dir", temp.toString(),
+                    "--model", model.toString(),
+                    "--llama-bin", executable.toString()), Map.of()));
             reject(() -> StandaloneMain.backend(Map.of("--model", model.toString(),
                     "--llama-bin", executable.toString(), "--compute-backend", "webgpu"), Map.of()));
             for (String option : new String[] {"--jni-lib", "--context-tokens", "--threads",
@@ -104,6 +122,7 @@ public final class ProviderSelectionContractTestMain {
             Files.deleteIfExists(model);
             Files.deleteIfExists(temp);
         }
+        ModelArtifactCacheContractTestMain.main(new String[0]);
         System.out.println("provider selection contract checks passed: " + checks);
     }
 
