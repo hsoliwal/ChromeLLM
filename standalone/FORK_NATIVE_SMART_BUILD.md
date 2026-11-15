@@ -108,11 +108,16 @@ no automatic browser, GPU or provider substitution.
 To acquire and execute the Linux x86_64 Dawn binary with a pinned fork build,
 select `-Pfork-native,dawn-binary`. The `dawn-binary` profile enables WebGPU,
 supplies the exact Dawn CMake directory and runs a Vulkan/WGSL compute test.
-The existing `native-dawn` installer supports `native-fork`, the commit-validated
-`fork-native` profile, and the new `native` artifact build. It runs before native
-configuration and supplies its verified prefix, as described in
-[NATIVE_MAVEN_BUILD.md](NATIVE_MAVEN_BUILD.md). Choose one provisioning profile;
-validation rejects simultaneous Dawn installers before either runs.
+The existing `native-dawn` installer supports `native-fork` and the new `native`
+artifact build. It runs before native configuration and supplies its verified
+prefix, as described in [NATIVE_MAVEN_BUILD.md](NATIVE_MAVEN_BUILD.md).
+Maven rejects `fork-native,native-dawn`; use `fork-native,dawn-binary` for the
+combined pinned source and binary build. To use the other Dawn installation,
+first run `-Pnative-dawn generate-sources` in a separate invocation, then run
+`fork-native` with `-Dchromellm.fork.webgpu=ON` and `-Dchromellm.fork.prefix`
+pointing to the absolute `standalone/target/native-deps/dawn` directory.
+Choose one provisioning profile; validation rejects simultaneous Dawn installers
+before either runs.
 
 Run the model **from the Maven build**, not from Chrome:
 
@@ -176,11 +181,13 @@ the current JNI bridge from an exact public llama.cpp revision, and downloads
 the release through Maven's production Java resolver. It then checks actual
 inference, verified cache reuse with an unreachable URL, same-size corruption
 refusal, output receipts, deterministic CPU repetition and native close under
-`-Xcheck:jni`. Dawn/WebGPU runtime execution requires a separate GPU gate.
+`-Xcheck:jni`. The independent `native-binaries` job exercises the downloaded
+Dawn compute binary and the `real-model` Maven profile described below.
+Physical GPU execution requires its own qualification.
 
 The `native-synthetic` profile cannot be combined with either `native-fork`
 or `fork-native`. Choose one native build mode per Maven invocation.
-The optional `native-dawn` profile also refuses synthetic mode. Add `smart-build`
+The optional `native-dawn` profile also refuses synthetic mode and `fork-native`. Add `smart-build`
 to the selected native profiles when you want the configured inference recipe
 to run after the native build; choose the compute backend explicitly in that recipe.
 
@@ -304,7 +311,7 @@ written only to the existing `target/smart-build` output.
   SHA-256 `a5a87d9513e1fc109c355628baebe6b85fe7aa258f8ed2d2cf71ddc902e778bb`.
   Its nested TAR is independently verified before extraction. Package copyright
   and license files remain in the installed tree.
-- The existing `standalone-core.yml` workflow now executes the downloaded Dawn
+- The `native-binaries` job in `standalone-core.yml` executes the downloaded Dawn
   compute test and a real-model JNI test. The public CI source is the exact
   `ggml-org/llama.cpp` revision `889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b`
   already used by the repository's historical real-model workflow. This public
@@ -318,7 +325,7 @@ Choose one Dawn provisioning profile per Maven invocation. Maven rejects
 
 | Profile | Supported downloaded binary | Build entry point | Verification provided |
 | --- | --- | --- | --- |
-| `native-dawn` | Linux x86_64 and macOS arm64 | `-Pnative-dawn generate-sources`; combine with `native-fork`, `fork-native` or `native` for its source build | SHA-256-pinned ZIP, sealed installed tree and CMake package discovery under `target/native-deps/dawn` |
+| `native-dawn` | Linux x86_64 and macOS arm64 | `-Pnative-dawn generate-sources`; combine with `native-fork` or `native` for its source build | SHA-256-pinned ZIP, sealed installed tree and CMake package discovery under `target/native-deps/dawn` |
 | `dawn-binary` | Linux x86_64 | `-Pdawn-binary verify`; combine with `fork-native` for its pinned source build | Exact-size/SHA-256 ZIP and inner archive, plus actual Vulkan WGSL compute/readback under `target/dawn-sdk` |
 
 The `native-dawn` source-file installer and its Linux/macOS workflow remain
@@ -327,8 +334,9 @@ available. Its `native-fork` integration uses `chromellm.native.source` and
 `chromellm.fork.source`, a full `chromellm.fork.commit`, and the independently
 verified runtime tests documented above. Maven rejects combinations that select
 multiple native source builds or simultaneous Dawn installers. The standalone
-`dawn-binary` verifier pairs with `fork-native`; `native-dawn` can precede any real
-native source profile. Each supported pairing provisions Dawn before CMake.
+`dawn-binary` verifier pairs with `fork-native`; `native-dawn` pairs with
+`native-fork` or the `native` artifact profile. Each supported pairing provisions
+Dawn before CMake.
 
 Maven's offline setting is enforced by `dawn-binary`, `real-model` and
 `smart-build`. The `native-dawn` source-file installer controls acquisition

@@ -3,21 +3,22 @@ package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.Reader;
-import java.io.Writer;
 import java.lang.management.ManagementFactory;
-import java.nio.ByteBuffer;
-import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Locale;
+
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
@@ -35,6 +36,12 @@ import java.util.TreeMap;
  */
 public final class RealGgufContractTestMain {
     private static final byte[] GGUF_MAGIC = {'G', 'G', 'U', 'F'};
+    private static final String PROMPT = "<|im_start|>user\n"
+            + "Write one short sentence about an oak tree.<|im_end|>\n"
+            + "<|im_start|>assistant\n";
+    private static final String OTHER_PROMPT = "<|im_start|>user\n"
+            + "Write one short sentence about a river.<|im_end|>\n"
+            + "<|im_start|>assistant\n";
     private static final String MODEL_SHA256 =
             "8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684";
     private static final long MODEL_BYTES = 105_454_144L;
@@ -49,54 +56,9 @@ public final class RealGgufContractTestMain {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 5) {
-            runPublishedModel(args);
-        } else if (args.length == 6) {
-            runConfiguredModel(args);
-        } else {
-            throw new IllegalArgumentException("expected either JNI library, cache, work directory, URL and SHA-256; "
-                    + "or JNI library, URL, SHA-256, cache, exact byte length and offline flag");
+            smartBuild(args);
+            return;
         }
-    }
-
-    private static void runPublishedModel(String[] args) throws Exception {
-        if (args.length != 5) {
-            throw new IllegalArgumentException(
-                    "usage: RealGgufContractTestMain <jni-library> <cache-dir> <work-dir> <model-url> <sha256>");
-        }
-        if (!MODEL_SHA256.equals(args[4])) {
-            throw new IllegalArgumentException("this gate requires the pinned licensed SmolLM2 release digest");
-        }
-        Path library = Path.of(args[0]).toRealPath();
-        Path cache = Path.of(args[1]).toRealPath();
-        Path work = Path.of(args[2]).toRealPath();
-        Path root = Files.createTempDirectory(work, "real-gguf-").toRealPath();
-        Path target = Files.createDirectory(root.resolve("target"));
-        Path prompt = root.resolve("prompt.txt");
-        Files.writeString(prompt, TREE_PROMPT, StandardCharsets.UTF_8);
-
-        // A miss acquires the release through the production Java resolver. CI may
-        // restore a verified cache, so this call does not assert that a download occurred.
-        Path firstRecipe = recipe(root, "release.properties", prompt, library, cache, args[3]);
-        Path first = SmartBuildMain.run(firstRecipe, root, target, Map.of(), StandaloneMain::backend);
-        String candidate = verifyCandidate(first, firstRecipe, TREE_PROMPT);
-        Path model = cache.resolve(MODEL_SHA256 + ".gguf");
-        check(Files.size(model) == MODEL_BYTES, "published model byte length");
-        check(hash(model).equals(MODEL_SHA256), "published model SHA-256");
-
-        // Any attempted transport now fails; successful real inference requires a
-        // verified cache hit, rather than a mocked downloader or provider.
-        Path warmRecipe = recipe(root, "warm.properties", prompt, library, cache, UNREACHABLE_URL);
-        Path warm = SmartBuildMain.run(warmRecipe, root, target, Map.of(), StandaloneMain::backend);
-        check(verifyCandidate(warm, warmRecipe, TREE_PROMPT).equals(candidate),
-                "warm-cache CPU inference must repeat the first result");
-
-        rejectCorruptCache(root, target, prompt, library, cache, model);
-        verifyNativeLifecycle(library, model, candidate);
-        System.out.println("PASS: real GGUF CPU smart build, cache reuse, corruption refusal, receipts and close; checks="
-                + checks);
-    }
-
-    private static void runConfiguredModel(String[] args) throws Exception {
         if (args.length != 6) {
             throw new IllegalArgumentException("expected JNI library, model HTTPS URL, SHA-256, "
                     + "cache directory, exact model byte length and offline flag");
@@ -133,8 +95,8 @@ public final class RealGgufContractTestMain {
                 + "; SHA-256=" + args[2].toLowerCase(Locale.ROOT) + "; bytes=" + expectedBytes);
         check(cache.resolve().equals(model), "verified model cache reuse");
 
-        ModelRequest request = new ModelRequest(TREE_PROMPT, 48, Duration.ofSeconds(120));
-        String expectedPromptHash = hash(TREE_PROMPT);
+        ModelRequest request = new ModelRequest(PROMPT, 48, Duration.ofSeconds(120));
+        String expectedPromptHash = hash(PROMPT);
         // CPU is explicit: no hosted backend, synthetic provider, or GPU fallback is selected here.
         LlamaCppJniBackend backend = new LlamaCppJniBackend(library, model, 512, 2, 0, "cpu");
         try {
@@ -146,9 +108,9 @@ public final class RealGgufContractTestMain {
             checkResponse(repeated, backend.id(), expectedPromptHash);
             check(repeated.text().equals(first.text()), "greedy CPU inference repeatability");
 
-            ModelRequest otherRequest = new ModelRequest(RIVER_PROMPT, 48, Duration.ofSeconds(120));
+            ModelRequest otherRequest = new ModelRequest(OTHER_PROMPT, 48, Duration.ofSeconds(120));
             ModelResponse other = backend.infer(otherRequest);
-            checkResponse(other, backend.id(), hash(RIVER_PROMPT));
+            checkResponse(other, backend.id(), hash(OTHER_PROMPT));
             check(!other.promptSha256().equals(expectedPromptHash), "different prompt identity");
 
             backend.close();
@@ -172,6 +134,44 @@ public final class RealGgufContractTestMain {
         check(!response.text().isBlank(), "real GGUF inference must produce nonblank text");
         check(response.text().getBytes(StandardCharsets.UTF_8).length <= StdioProtocol.MAX_RESPONSE_BYTES,
                 "bounded native output");
+    }
+
+    private static void smartBuild(String[] args) throws Exception {
+        if (args.length != 5) {
+            throw new IllegalArgumentException(
+                    "usage: RealGgufContractTestMain <jni-library> <cache-dir> <work-dir> <model-url> <sha256>");
+        }
+        if (!MODEL_SHA256.equals(args[4])) {
+            throw new IllegalArgumentException("this gate requires the pinned licensed SmolLM2 release digest");
+        }
+        Path library = Path.of(args[0]).toRealPath();
+        Path cache = Path.of(args[1]).toRealPath();
+        Path work = Path.of(args[2]).toRealPath();
+        Path root = Files.createTempDirectory(work, "real-gguf-").toRealPath();
+        Path target = Files.createDirectory(root.resolve("target"));
+        Path prompt = root.resolve("prompt.txt");
+        Files.writeString(prompt, TREE_PROMPT, StandardCharsets.UTF_8);
+
+        // A miss acquires the release through the production Java resolver. CI may
+        // restore a verified cache, so this call does not assert that a download occurred.
+        Path firstRecipe = recipe(root, "release.properties", prompt, library, cache, args[3]);
+        Path first = SmartBuildMain.run(firstRecipe, root, target, Map.of(), StandaloneMain::backend);
+        String candidate = verifyCandidate(first, firstRecipe, TREE_PROMPT);
+        Path model = cache.resolve(MODEL_SHA256 + ".gguf");
+        check(Files.size(model) == MODEL_BYTES, "published model byte length");
+        check(hash(model).equals(MODEL_SHA256), "published model SHA-256");
+
+        // Any attempted transport now fails; successful real inference requires a
+        // verified cache hit, rather than a mocked downloader or provider.
+        Path warmRecipe = recipe(root, "warm.properties", prompt, library, cache, UNREACHABLE_URL);
+        Path warm = SmartBuildMain.run(warmRecipe, root, target, Map.of(), StandaloneMain::backend);
+        check(verifyCandidate(warm, warmRecipe, TREE_PROMPT).equals(candidate),
+                "warm-cache CPU inference must repeat the first result");
+
+        rejectCorruptCache(root, target, prompt, library, cache, model);
+        verifyNativeLifecycle(library, model, candidate);
+        System.out.println("PASS: real GGUF CPU smart build, cache reuse, corruption refusal, receipts and close; checks="
+                + checks);
     }
 
     private static Path recipe(Path root, String name, Path prompt, Path library,

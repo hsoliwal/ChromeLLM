@@ -46,6 +46,10 @@ public final class ModelDownloadPolicyContractTestMain {
             rejectConfig(() -> new ModelArtifactCache(origin.toString(), hash, cache, true, Duration.ZERO, 10));
             rejectConfig(() -> new ModelArtifactCache(origin.toString(), hash, cache, true, Duration.ofHours(2), 10));
             rejectConfig(() -> new ModelArtifactCache(origin.toString(), hash, cache, true, Duration.ofSeconds(1), 0));
+            ModelArtifactCache offline = new ModelArtifactCache(origin.toString(), hash, cache,
+                    uri -> { throw new AssertionError("instance offline policy opened a transport"); }, 100, true);
+            rejectIo("offline", () -> offline.resolveWithOfflinePolicy(false));
+            restrictedReleasePolicy(bytes);
             FakeClient denied = new FakeClient(reply(302, Map.of("Location", List.of("/next")), empty()));
             rejectIo("HTTP 302", () -> ModelArtifactCache.fetch(origin, false, Duration.ofSeconds(1), 100, denied));
             check(denied.requests.size() == 1 && denied.stopped, "default redirect refusal closes its HTTP client");
@@ -121,6 +125,43 @@ public final class ModelDownloadPolicyContractTestMain {
             }
         }
         System.out.println("model redirect/full-body deadline checks passed: " + checks + "; controlled HTTP responses, no internet/model");
+    }
+
+    /** The owned generic compatibility seam must not widen the production default policy. */
+    private static void restrictedReleasePolicy(byte[] bytes) throws Exception {
+        URI release = URI.create("https://github.com/owner/project/releases/download/pinned/weights.bin");
+        String assets = "https://release-assets.githubusercontent.com/";
+        FakeClient permitted = new FakeClient(
+                reply(302, Map.of("Location", List.of(assets + "one")), empty()),
+                reply(307, Map.of("Location", List.of(assets + "two")), empty()),
+                reply(308, Map.of("Location", List.of(assets + "three")), empty()),
+                reply(200, Map.of(), new ByteArrayInputStream(bytes)));
+        try (InputStream input = ModelArtifactCache.fetch(release, false, Duration.ofSeconds(2), 100, permitted)) {
+            check(java.util.Arrays.equals(input.readAllBytes(), bytes), "three restricted release redirects changed bytes");
+        }
+        check(permitted.requests.size() == 4 && permitted.stopped,
+                "restricted release route must follow exactly three hops and close its client");
+        FakeClient exceeded = new FakeClient(
+                reply(302, Map.of("Location", List.of(assets + "one")), empty()),
+                reply(302, Map.of("Location", List.of(assets + "two")), empty()),
+                reply(302, Map.of("Location", List.of(assets + "three")), empty()),
+                reply(302, Map.of("Location", List.of(assets + "four")), empty()));
+        rejectIo("redirect limit", () -> ModelArtifactCache.fetch(
+                release, false, Duration.ofSeconds(2), 100, exceeded));
+        check(exceeded.requests.size() == 4 && exceeded.stopped,
+                "production release policy followed a fourth redirect or leaked its client");
+        for (String destination : List.of("https://cdn.example.invalid/model", assets + "model#fragment",
+                "https://release-assets.githubusercontent.com:8443/model",
+                "https://release-assets.githubusercontent.com.evil.invalid/model")) {
+            FakeClient denied = new FakeClient(reply(302, Map.of("Location", List.of(destination)), empty()));
+            try {
+                ModelArtifactCache.fetch(release, false, Duration.ofSeconds(2), 100, denied);
+                throw new AssertionError("production release policy admitted an unrelated HTTPS route");
+            } catch (IOException expected) {
+                check(denied.requests.size() == 1 && denied.stopped,
+                        "restricted destination refusal followed a request or leaked its client");
+            }
+        }
     }
 
     private static boolean hasEntries(Path directory) throws IOException {

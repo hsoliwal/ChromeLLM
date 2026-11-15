@@ -121,14 +121,10 @@ public final class SmartBuildMain {
             String value = config.getProperty(entry.getKey());
             if (value != null && !value.isBlank()) options.put(entry.getValue(), value);
         }
+        // Resolve all recipe paths with the platform's Path rules, including rooted Windows paths.
         for (String key : Set.of("--llama-bin", "--jni-lib", "--model", "--model-cache-dir")) {
-            if (options.containsKey(key)) {
-                String value = options.get(key);
-                Path selected = Path.of(value);
-                if (!selected.isAbsolute() && !value.startsWith("/") && !value.startsWith("\\")) {
-                    options.put(key, root.resolve(selected).normalize().toString());
-                }
-            }
+            String value = options.get(key);
+            if (value != null) options.put(key, root.resolve(value).normalize().toString());
         }
         Path managedModelCache = null;
         if (options.containsKey("--model-url") || options.containsKey("--model-sha256")) {

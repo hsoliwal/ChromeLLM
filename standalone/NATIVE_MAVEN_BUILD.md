@@ -129,10 +129,12 @@ The existing local-only profiles above remain available. The `native` profile ad
 
 For real inference through Maven, the existing `smart-build` recipe owner accepts the explicit model URL/digest/cache fields. `examples/smart-build-packaged-smoke.properties` is the small pinned download-and-inference smoke recipe. The source fork CI builds the JNI artifact, uploads it, downloads it into a clean consumer job, and invokes that same Maven smart-build path. Native/model blobs stay in build caches and CI artifacts.
 
-The existing `native-dawn` installer composes with `native-fork`, commit-validated
-`fork-native`, and the new `native` artifact profile. The pinned local `fork-native`
-profile may alternatively use `dawn-binary`, which also runs its Vulkan/WGSL
-compute test. Choose one installer; each passes its verified prefix to CMake. Native JAR packaging still requires the complete Dawn/dependency
+The existing `native-dawn` installer composes with `native-fork` and the new
+`native` artifact profile. The commit-validated `fork-native` profile uses
+`dawn-binary`, which also runs its Vulkan/WGSL compute test. Maven rejects
+`fork-native,native-dawn`; to use that installer's output, stage it in a separate
+invocation and pass its installed prefix to `fork-native` explicitly. Choose one
+installer; each supported pairing passes its verified prefix to CMake. Native JAR packaging still requires the complete Dawn/dependency
 notice bundle: use `-Dchromellm.dawn.licenses=/path/to/notices` unless the
 installation already includes populated `share/licenses`. Download verification
 alone does not prove that a release archive contains all redistribution notices.

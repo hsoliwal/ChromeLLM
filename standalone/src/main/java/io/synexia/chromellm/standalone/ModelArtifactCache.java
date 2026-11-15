@@ -396,9 +396,9 @@ final class ModelArtifactCache {
                 .followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(20)).build());
     }
 
-    /** Preserve the caller-owned HTTP seam and restricted GitHub release policy. */
+    /** Compatibility seam owns its client and admits the explicitly supplied HTTPS redirect route. */
     static InputStream fetch(URI url, HttpClient client) throws IOException, InterruptedException {
-        return fetchChecked(url, false, ACQUISITION_TIMEOUT, MAX_BYTES, transport(client, false), false);
+        return fetchChecked(url, true, ACQUISITION_TIMEOUT, MAX_BYTES, transport(client, true), true);
     }
 
     /** Caller-owned response seam with the explicitly selected, bounded HTTPS redirect policy. */
@@ -429,7 +429,13 @@ final class ModelArtifactCache {
     /** Owned transport seam explicitly admits bounded HTTPS CDN redirects. */
     static InputStream fetch(URI initial, Transport transport, Duration timeout)
             throws IOException, InterruptedException {
-        return fetchChecked(initial, true, timeout, MAX_BYTES, transport, true);
+        return fetch(initial, MAX_BYTES, transport, timeout);
+    }
+
+    /** Bounded transport compatibility seam shares the production deadline and cleanup owner. */
+    static InputStream fetch(URI initial, long maxBytes, Transport transport, Duration timeout)
+            throws IOException, InterruptedException {
+        return fetchChecked(initial, true, timeout, maxBytes, transport, true);
     }
 
     private static Transport transport(HttpClient client, boolean owned) {

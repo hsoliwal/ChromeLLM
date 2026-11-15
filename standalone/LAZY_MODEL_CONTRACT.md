@@ -30,8 +30,9 @@ URL may follow up to three HTTPS redirects within GitHub release-download endpoi
 and `release-assets.githubusercontent.com`, on the default HTTPS port only and
 without user-info or fragments. Other redirects remain refused by default.
 `--model-follow-redirects true` explicitly permits at most five HTTPS redirects,
-with no user-info, fragments, or HTTPS downgrade at any hop. Cookies and authorization
-headers are never forwarded. Redirected responses are closed before the next request;
+with no user-info, fragments, or HTTPS downgrade at any hop. Redirect cycles and
+ambiguous Location headers fail. Cookies and authorization headers are never
+forwarded. Redirected responses are closed before the next request;
 the complete pinned SHA-256 is checked after transfer. Transfer size defaults to 64 GiB and may be reduced
 using `--model-max-bytes`. Transient failures have no automatic retry or provider
 fallback. Files are staged in the same directory and published via an exclusive

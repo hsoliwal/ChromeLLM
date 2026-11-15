@@ -45,7 +45,7 @@ jobs:
           test ! -e standalone/target/native-synthetic/CMakeCache.txt
           test ! -e standalone/target/native-fork/CMakeCache.txt
           test ! -e standalone/target/native-build/CMakeCache.txt
-          for mode in fork synthetic; do
+          for mode in fork pinned-fork synthetic; do
             if mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic,fork-native \
                 -Dchromellm.native.mode="$mode" validate > fork-profile-conflict.log 2>&1; then
               echo 'Synthetic and pinned fork profiles unexpectedly passed validate' >&2
@@ -55,6 +55,12 @@ jobs:
             grep -E 'native-synthetic and (native-fork|fork-native) cannot be active together|fork-native cannot be combined with another native build profile|Select exactly one native build profile' fork-profile-conflict.log
           done
           test ! -e standalone/target/fork-native/CMakeCache.txt
+          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn validate > dawn-owner-conflict.log 2>&1; then
+            echo 'Pinned fork and the other Dawn installer unexpectedly passed validate' >&2
+            exit 1
+          fi
+          cat dawn-owner-conflict.log
+          grep -F 'native-dawn cannot be used with native-synthetic or fork-native; use dawn-binary with fork-native' dawn-owner-conflict.log
           for profiles in native-dawn,dawn-binary native-fork,dawn-binary native,dawn-binary; do
             if mvn -B -ntp -f standalone/pom.xml -P"$profiles" validate > dawn-profile-conflict.log 2>&1; then
               echo "Conflicting Dawn profiles unexpectedly passed validate: $profiles" >&2
@@ -170,7 +176,7 @@ jobs:
           echo "XDG_RUNTIME_DIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Maven downloads, verifies and executes the Dawn binary
         run: mvn -B -ntp -f standalone/pom.xml -Pdawn-binary verify
-      - name: Check out the exact public source for the real-model binary test
+      - name: Checkout the public source used by the existing real-model CI
         uses: actions/checkout@v4
         with:
           repository: ggml-org/llama.cpp
