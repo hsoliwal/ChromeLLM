@@ -110,6 +110,17 @@ public final class SmartBuildMain {
             provider = model.id();
             candidate = StdioProtocol.encode(result.text(), StdioProtocol.MAX_RESPONSE_BYTES);
         }
+        Path target = buildDirectory.toAbsolutePath().normalize();
+        if (!target.equals(root.resolve("target"))
+                || !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)
+                || !target.toRealPath().equals(target)) {
+            throw new IOException("smart-build requires the existing in-project Maven target directory");
+        }
+        Path outputRoot = target.resolve("smart-build");
+        Files.createDirectories(outputRoot);
+        if (!outputRoot.toRealPath().startsWith(root) || Files.isSymbolicLink(outputRoot)) {
+            throw new IOException("smart-build outputs must stay inside the project build directory");
+        }
         Files.createDirectories(outputRoot);
         validateOutputRoot(root, buildDirectory);
         Path output = outputRoot.resolve("candidate-" + runKey + ".txt");
@@ -151,6 +162,8 @@ public final class SmartBuildMain {
 
     private static void publish(Path path, byte[] content) throws IOException {
         if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                    || !Arrays.equals(Files.readAllBytes(path), content)) {
             if (!sameContent(path, content)) {
                 throw new IOException("smart-build artifact collision; source and prior result remain unchanged");
             }
@@ -161,6 +174,8 @@ public final class SmartBuildMain {
             Files.write(staged, content, StandardOpenOption.TRUNCATE_EXISTING);
             try { Files.createLink(path, staged); }
             catch (FileAlreadyExistsException concurrent) {
+                if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                        || !Arrays.equals(Files.readAllBytes(path), content)) {
                 if (!sameContent(path, content)) {
                     throw new IOException("concurrent smart-build artifact conflict", concurrent);
                 }
