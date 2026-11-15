@@ -25,7 +25,8 @@ public final class SmartBuildMain {
     private static final int MAX_RECIPE_BYTES = 64 * 1024;
     private static final Set<String> KEYS = Set.of("promptFile", "backend", "llamaBin", "jniLib",
             "model", "modelUrl", "modelSha256", "modelCacheDir", "contextTokens", "threads",
-            "gpuLayers", "computeBackend", "deviceBackend", "device", "maxTokens", "timeoutSeconds");
+            "gpuLayers", "computeBackend", "deviceBackend", "device", "maxTokens", "timeoutSeconds",
+            "jniUrl", "jniSha256", "jniBytes", "jniCacheDir", "modelBytes", "offline");
 
     @FunctionalInterface
     interface ProviderFactory {
@@ -48,7 +49,8 @@ public final class SmartBuildMain {
             throw new IllegalArgumentException("offline flag requires true or false");
         }
         return run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), environment, providerFactory,
-                offline.equals("true"));
+                offline.equals("true") || "offline=true".equals(System.getProperty("chromellm.offline"))
+                        || Boolean.getBoolean("chromellm.offline"));
     }
 
     static Path run(Path recipe, Path workspace, Path buildDirectory,
@@ -59,7 +61,7 @@ public final class SmartBuildMain {
     static Path run(Path recipe, Path workspace, Path buildDirectory,
                     Map<String, String> environment, ProviderFactory providerFactory, boolean offline) throws Exception {
         Path root = workspace.toRealPath();
-        // Reject the destination before any artifact acquisition or provider initialization.
+        // Admission precedes provider construction, cache writes and network acquisition.
         Path outputRoot = validateOutputRoot(root, buildDirectory);
         NativeBuildArtifacts.buildDirectory(root, outputRoot.getParent());
         Path recipePath = confined(root, recipe, "recipe");
@@ -109,31 +111,37 @@ public final class SmartBuildMain {
                 Map.entry("modelSha256", "--model-sha256"), Map.entry("modelCacheDir", "--model-cache-dir"),
                 Map.entry("contextTokens", "--context-tokens"), Map.entry("threads", "--threads"),
                 Map.entry("gpuLayers", "--gpu-layers"), Map.entry("computeBackend", "--compute-backend"),
-                Map.entry("deviceBackend", "--device-backend"), Map.entry("device", "--device"))
+                Map.entry("deviceBackend", "--device-backend"), Map.entry("device", "--device"),
+                Map.entry("jniUrl", "--jni-url"), Map.entry("jniSha256", "--jni-sha256"),
+                Map.entry("jniBytes", "--jni-bytes"), Map.entry("jniCacheDir", "--jni-cache-dir"),
+                Map.entry("modelBytes", "--model-bytes"))
                 .entrySet()) {
             String value = config.getProperty(entry.getKey());
             if (value != null && !value.isBlank()) options.put(entry.getValue(), value);
         }
         // Recipe paths resolve against the standalone project, independent of Maven's launch directory.
-        for (String key : java.util.List.of("--llama-bin", "--jni-lib", "--model", "--model-cache-dir")) {
+        for (String key : java.util.List.of("--llama-bin", "--jni-lib", "--model", "--model-cache-dir", "--jni-cache-dir")) {
             String value = options.get(key);
             if (value != null) options.put(key, root.resolve(value).normalize().toString());
         }
-        if (options.containsKey("--model-url")) {
-            Path cache = Path.of(required(config, "modelCacheDir"));
-            cache = root.resolve(cache).normalize();
-            if (!offline) Files.createDirectories(cache);
-            if (!cache.toRealPath().equals(cache)) throw new IOException("model cache must not traverse symlinks");
-            if (offline) {
-                // Preserve lazy-provider argument admission before replacing remote model options.
-                StandaloneMain.backend(Map.copyOf(options), environment).close();
-                Path model = new ModelArtifactCache(required(config, "modelUrl"),
-                        required(config, "modelSha256"), cache).resolveWithOfflinePolicy(true);
-                options.remove("--model-url");
-                options.remove("--model-sha256");
-                options.remove("--model-cache-dir");
-                if (options.putIfAbsent("--model", model.toString()) != null) {
-                    throw new IllegalArgumentException("model and modelUrl are exclusive");
+        String recipeOffline = config.getProperty("offline", "false");
+        if (!recipeOffline.equals("true") && !recipeOffline.equals("false")) {
+            throw new IllegalArgumentException("offline requires true or false");
+        }
+        offline = offline || Boolean.parseBoolean(recipeOffline);
+        options.put("--offline", Boolean.toString(offline));
+        if (offline && (options.containsKey("--model-url") || options.containsKey("--jni-url"))) {
+            // Validate the complete provider selection before inspecting either cache. No network
+            // or native initialization occurs while opening and closing an artifact-backed provider.
+            try (ModelBackend validated = StandaloneMain.backend(Map.copyOf(options), environment)) {
+                if (!(validated instanceof LazyModelBackend)) throw new IOException("artifact provider was not lazy");
+            }
+            for (String kind : java.util.List.of("model", "jni")) {
+                if (options.containsKey("--" + kind + "-url")) {
+                    Path verified = StandaloneMain.artifact(options, kind, kind.equals("jni"))
+                            .resolveWithOfflinePolicy(true);
+                    StandaloneMain.removeArtifactOptions(options, kind);
+                    options.put(kind.equals("jni") ? "--jni-lib" : "--model", verified.toString());
                 }
             }
         }

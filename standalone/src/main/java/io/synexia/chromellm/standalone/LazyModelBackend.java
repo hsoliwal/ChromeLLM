@@ -13,9 +13,16 @@ final class LazyModelBackend implements ModelBackend {
         ModelBackend open(Path verifiedModel) throws Exception;
     }
 
+    @FunctionalInterface
+    interface ArtifactsOpener {
+        ModelBackend open(Path[] verifiedArtifacts) throws Exception;
+    }
+
     private final String backendId;
-    private final ModelArtifactCache cache;
-    private final Opener opener;
+    private final ModelArtifactCache[] caches;
+    private final boolean offline;
+    private final ArtifactsOpener opener;
+    private ModelArtifactCache currentCache;
     private final Object lifecycle = new Object();
     private ModelBackend loaded;
     private Thread active;
@@ -25,11 +32,21 @@ final class LazyModelBackend implements ModelBackend {
     private boolean closed;
 
     LazyModelBackend(String backendId, ModelArtifactCache cache, Opener opener) {
+        this(backendId, new ModelArtifactCache[] {Objects.requireNonNull(cache, "cache")},
+                false, verified -> opener.open(verified[0]));
+        Objects.requireNonNull(opener, "opener");
+    }
+
+    LazyModelBackend(String backendId, ModelArtifactCache[] caches, boolean offline, ArtifactsOpener opener) {
         if (!"llama.cpp-cli".equals(backendId) && !"llama.cpp-jni".equals(backendId)) {
             throw new IllegalArgumentException("unsupported lazy local backend");
         }
         this.backendId = backendId;
-        this.cache = Objects.requireNonNull(cache, "cache");
+        this.caches = Objects.requireNonNull(caches, "caches").clone();
+        if (this.caches.length == 0) throw new IllegalArgumentException("lazy provider requires an artifact");
+        for (ModelArtifactCache cache : this.caches) Objects.requireNonNull(cache, "cache");
+        this.currentCache = this.caches[0];
+        this.offline = offline;
         this.opener = Objects.requireNonNull(opener, "opener");
     }
 
@@ -38,12 +55,14 @@ final class LazyModelBackend implements ModelBackend {
 
     ModelArtifactCache.Progress progress() {
         synchronized (lifecycle) {
-            ModelArtifactCache.Progress artifact = cache.progress();
+            ModelArtifactCache.Progress artifact = currentCache.progress();
+            long bytes = 0;
+            for (ModelArtifactCache cache : caches) bytes += cache.progress().bytes();
             ModelArtifactCache.State state = closed ? ModelArtifactCache.State.CLOSED
                     : loaded != null ? ModelArtifactCache.State.READY
                     : opening ? ModelArtifactCache.State.INITIALIZING
                     : initializationFailed ? ModelArtifactCache.State.FAILED : artifact.state();
-            return new ModelArtifactCache.Progress(state, artifact.bytes());
+            return new ModelArtifactCache.Progress(state, bytes);
         }
     }
 
@@ -63,7 +82,14 @@ final class LazyModelBackend implements ModelBackend {
             ModelBackend backend;
             synchronized (lifecycle) { backend = loaded; }
             if (backend == null) {
-                Path verified = cache.resolve();
+                Path[] verified = new Path[caches.length];
+                for (int i = 0; i < caches.length; i++) {
+                    synchronized (lifecycle) {
+                        requireOpen();
+                        currentCache = caches[i];
+                    }
+                    verified[i] = caches[i].resolveWithOfflinePolicy(offline);
+                }
                 synchronized (lifecycle) {
                     requireOpen();
                     opening = true;

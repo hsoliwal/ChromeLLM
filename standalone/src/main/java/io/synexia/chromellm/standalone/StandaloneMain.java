@@ -21,6 +21,17 @@ import java.util.Set;
 public final class StandaloneMain {
     private StandaloneMain() { }
 
+    /** Open an existing provider for embedding; request/session options belong to its caller. */
+    public static ModelBackend openBackend(String... args) throws Exception {
+        Map<String, String> options = parse(args);
+        rejectOptions(options, "--prompt-file", "--stdio", "--mcp-stdio", "--list-devices",
+                "--chrome-status", "--chrome-prepare", "--max-tokens", "--timeout-seconds",
+                "--agent", "--workspace", "--agent-endpoint", "--agent-token-env",
+                "--agent-max-steps", "--agent-max-calls", "--agent-max-context-bytes",
+                "--agent-max-tool-result-bytes");
+        return backend(options, System.getenv());
+    }
+
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
         boolean sessionConfigured = options.containsKey("--agent-endpoint")
@@ -210,6 +221,13 @@ public final class StandaloneMain {
     static ModelBackend backend(Map<String, String> options, Map<String, String> environment) throws Exception {
         String provider = options.getOrDefault("--backend", "cli");
         validateChromeModes(options);
+        boolean offline = flag(options, "--offline");
+        if (!"jni".equals(provider)) {
+            rejectOptions(options, "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir");
+        }
+        if ("chrome".equals(provider) || "gemini".equals(provider)) {
+            rejectOptions(options, "--model-bytes", "--offline");
+        }
         if ("chrome".equals(provider)) {
             rejectOptions(options, "--model", "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
                     "--gpu-layers", "--compute-backend", "--device-backend", "--device", "--tier",
@@ -237,9 +255,9 @@ public final class StandaloneMain {
                     options.getOrDefault("--thinking-level", GeminiApiBackend.DEFAULT_THINKING_LEVEL));
         }
         rejectOptions(options, "--thinking-level", "--api-key-env");
-        if (options.containsKey("--model-url") || options.containsKey("--model-sha256")
-                || options.containsKey("--model-cache-dir")) {
-            return lazyLocalModel(options, environment, provider);
+        if (containsAny(options, "--model-url", "--model-sha256", "--model-cache-dir", "--model-bytes",
+                "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir")) {
+            return lazyLocalModel(options, environment, provider, offline);
         }
         Path model = localModel(options);
         return switch (provider) {
@@ -327,42 +345,114 @@ public final class StandaloneMain {
         return absolute;
     }
 
-    /** Optional model URL is downloaded only on the first inference; existing paths remain untouched. */
+    /** Acquire the configured model and/or native bridge once, when inference is first requested. */
     private static ModelBackend lazyLocalModel(Map<String, String> options,
-                                                Map<String, String> environment, String provider) {
+                                                Map<String, String> environment, String provider,
+                                                boolean offline) {
         if (!"cli".equals(provider) && !"jni".equals(provider)) {
             throw new IllegalArgumentException("lazy model artifacts require the cli or jni backend");
         }
-        rejectOptions(options, "--model", "--tier", "--fast-model",
-                "--reasoning-model", "--frontier-model");
-        String url = required(options, "--model-url");
-        String sha256 = required(options, "--model-sha256");
-        Path cacheDir = Path.of(required(options, "--model-cache-dir"));
-        // Validate the local provider selection before any network or cache writes.
+        boolean modelArtifact = containsAny(options, "--model-url", "--model-sha256",
+                "--model-cache-dir", "--model-bytes");
+        boolean nativeArtifact = containsAny(options, "--jni-url", "--jni-sha256",
+                "--jni-bytes", "--jni-cache-dir");
+        if (modelArtifact) {
+            rejectOptions(options, "--model", "--tier", "--fast-model", "--reasoning-model", "--frontier-model");
+        } else {
+            localModel(options); // Admit the complete local-model selection before any acquisition.
+        }
         if ("cli".equals(provider)) {
             rejectOptions(options, "--compute-backend", "--device-backend", "--jni-lib",
                     "--context-tokens", "--threads");
             required(options, "--llama-bin");
+            integer(options, "--gpu-layers", -1, -1, 1024);
+            if (options.containsKey("--device")
+                    && !required(options, "--device").matches("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")) {
+                throw new IllegalArgumentException("device must be an exact, bounded GGML device name");
+            }
         } else {
             rejectOptions(options, "--llama-bin");
-            required(options, "--jni-lib");
+            if (nativeArtifact) rejectOptions(options, "--jni-lib");
+            else required(options, "--jni-lib");
+            integer(options, "--context-tokens", 4096, 32, 1_048_576);
+            integer(options, "--threads", 4, 1, 1024);
+            int layers = integer(options, "--gpu-layers", 0, 0, 1024);
             if (options.containsKey("--device-backend") || options.containsKey("--device")) {
                 rejectOptions(options, "--compute-backend");
-                required(options, "--device-backend");
-                required(options, "--device");
+                selector(required(options, "--device-backend"), "device backend");
+                selector(required(options, "--device"), "device");
+            } else {
+                String compute = options.getOrDefault("--compute-backend", "auto");
+                if (!Set.of("auto", "cpu", "webgpu").contains(compute)
+                        || (compute.equals("cpu") && layers != 0)
+                        || (compute.equals("webgpu") && layers == 0)) {
+                    throw new IllegalArgumentException("invalid compute backend or GPU layer policy");
+                }
             }
         }
-        ModelArtifactCache artifact = new ModelArtifactCache(url, sha256, cacheDir);
+        java.util.ArrayList<ModelArtifactCache> caches = new java.util.ArrayList<>();
+        java.util.ArrayList<String> localKeys = new java.util.ArrayList<>();
         Map<String, String> retained = new HashMap<>(options);
-        retained.remove("--model-url");
-        retained.remove("--model-sha256");
-        retained.remove("--model-cache-dir");
+        if (modelArtifact) {
+            caches.add(artifact(options, "model", false));
+            localKeys.add("--model");
+            removeArtifactOptions(retained, "model");
+        }
+        if (nativeArtifact) {
+            caches.add(artifact(options, "jni", true));
+            localKeys.add("--jni-lib");
+            removeArtifactOptions(retained, "jni");
+        }
         String backendId = "cli".equals(provider) ? "llama.cpp-cli" : "llama.cpp-jni";
-        return new LazyModelBackend(backendId, artifact, resolved -> {
-            Map<String, String> local = new HashMap<>(retained);
-            local.put("--model", resolved.toString());
+        Map<String, String> localOptions = Map.copyOf(retained);
+        return new LazyModelBackend(backendId, caches.toArray(ModelArtifactCache[]::new), offline, verified -> {
+            Map<String, String> local = new HashMap<>(localOptions);
+            for (int i = 0; i < verified.length; i++) local.put(localKeys.get(i), verified[i].toString());
             return backend(local, environment);
         });
+    }
+
+    static ModelArtifactCache artifact(Map<String, String> options, String kind, boolean nativeBinary) {
+        String prefix = "--" + kind;
+        String rawSize = options.get(prefix + "-bytes");
+        long size = rawSize == null && !nativeBinary ? -1 : Long.parseLong(required(options, prefix + "-bytes"));
+        if (rawSize != null && (size < 1 || size > ModelArtifactCache.MAX_BYTES)) {
+            throw new IllegalArgumentException("artifact byte count must be positive and bounded");
+        }
+        return ModelArtifactCache.artifact(required(options, prefix + "-url"),
+                required(options, prefix + "-sha256"), Path.of(required(options, prefix + "-cache-dir")),
+                size, nativeBinary ? ".bin" : ".gguf");
+    }
+
+    static void removeArtifactOptions(Map<String, String> options, String kind) {
+        for (String suffix : java.util.List.of("-url", "-sha256", "-bytes", "-cache-dir")) {
+            options.remove("--" + kind + suffix);
+        }
+    }
+
+    private static boolean containsAny(Map<String, String> options, String... keys) {
+        for (String key : keys) if (options.containsKey(key)) return true;
+        return false;
+    }
+
+    private static int integer(Map<String, String> options, String key, int fallback, int min, int max) {
+        int value = Integer.parseInt(options.getOrDefault(key, Integer.toString(fallback)));
+        if (value < min || value > max) throw new IllegalArgumentException("invalid " + key);
+        return value;
+    }
+
+    private static void selector(String value, String name) {
+        if (value.isBlank() || value.length() > 4096 || value.codePoints().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException("invalid " + name + " selector");
+        }
+        try {
+            if (StandardCharsets.UTF_8.newEncoder().onMalformedInput(CodingErrorAction.REPORT)
+                    .encode(java.nio.CharBuffer.wrap(value)).remaining() > 4096) {
+                throw new IllegalArgumentException("oversized " + name + " selector");
+            }
+        } catch (java.nio.charset.CharacterCodingException malformed) {
+            throw new IllegalArgumentException("invalid UTF-16 " + name + " selector", malformed);
+        }
     }
 
     /** One local model path: --model, or the path named for the explicitly selected --tier. */
@@ -426,9 +516,10 @@ public final class StandaloneMain {
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
                 "--model-cache-dir", "--mcp-stdio", "--agent", "--agent-endpoint", "--agent-token-env",
-                "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes", "--workspace",
-                "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
-                "--chrome-download", "--chrome-status", "--chrome-prepare");
+                "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes",
+                "--workspace", "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
+                "--chrome-download", "--chrome-status", "--chrome-prepare",
+                "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir", "--model-bytes", "--offline");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String option = args[i];

@@ -72,6 +72,7 @@ final class ModelArtifactCache {
     private final long maxBytes;
     private final long expectedBytes;
     private final String suffix;
+    private final boolean createDirectory;
     private final Duration acquisitionTimeout;
     private final boolean offline;
     private volatile Attempt latest;
@@ -83,6 +84,14 @@ final class ModelArtifactCache {
 
     ModelArtifactCache(String url, String sha256, Path directory, long maxBytes, boolean offline) {
         this(url, sha256, directory, uri -> fetch(uri, maxBytes), maxBytes, ACQUISITION_TIMEOUT, offline);
+    }
+
+    /** A caller-selected cache may be created lazily; offline acquisition never creates it. */
+    static ModelArtifactCache artifact(String url, String sha256, Path directory,
+                                       long expectedBytes, String suffix) {
+        long maxBytes = expectedBytes < 0 ? MAX_BYTES : expectedBytes;
+        return new ModelArtifactCache(url, sha256, directory, uri -> fetch(uri, maxBytes),
+                maxBytes, ACQUISITION_TIMEOUT, expectedBytes, suffix, false, true);
     }
 
     /** Native archives/binaries require both an exact byte count and a SHA-256 pin. */
@@ -123,6 +132,13 @@ final class ModelArtifactCache {
     private ModelArtifactCache(String rawUrl, String rawSha256, Path cache, Downloader downloader,
                                long maxBytes, Duration acquisitionTimeout, long expectedBytes, String suffix,
                                boolean offline) {
+        this(rawUrl, rawSha256, cache, downloader, maxBytes, acquisitionTimeout,
+                expectedBytes, suffix, offline, false);
+    }
+
+    private ModelArtifactCache(String rawUrl, String rawSha256, Path cache, Downloader downloader,
+                               long maxBytes, Duration acquisitionTimeout, long expectedBytes, String suffix,
+                               boolean offline, boolean createDirectory) {
         this.url = validateUrl(URI.create(Objects.requireNonNull(rawUrl, "url")));
         if (rawSha256 == null || !rawSha256.matches("[0-9a-fA-F]{64}")) {
             throw new IllegalArgumentException("model SHA-256 must contain 64 hex digits");
@@ -144,6 +160,7 @@ final class ModelArtifactCache {
         }
         this.expectedBytes = expectedBytes;
         this.suffix = suffix;
+        this.createDirectory = createDirectory;
         this.acquisitionTimeout = Objects.requireNonNull(acquisitionTimeout, "acquisition timeout");
         if (acquisitionTimeout.isZero() || acquisitionTimeout.isNegative()
                 || acquisitionTimeout.compareTo(ACQUISITION_TIMEOUT) > 0) {
@@ -166,7 +183,7 @@ final class ModelArtifactCache {
         Attempt attempt = new Attempt();
         latest = attempt;
         attempt.observe(State.WAITING, 0);
-        FutureTask<Path> result = new FutureTask<>(() -> acquire(attempt, offline));
+        FutureTask<Path> result = new FutureTask<>(() -> acquire(attempt, offline || this.offline));
         attempt.worker = Thread.ofVirtual().name("chromellm-model-acquisition").unstarted(result);
         attempt.worker.start();
         try {
@@ -194,11 +211,18 @@ final class ModelArtifactCache {
     private Path acquire(Attempt attempt, boolean offline) throws IOException, InterruptedException {
         try {
             attempt.check();
+            if (createDirectory && !offline) {
+                Files.createDirectories(directory);
+            }
             if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
-                    || !Files.isWritable(directory)) {
+                    || (!offline && !Files.isWritable(directory))) {
                 throw new IOException("model cache directory must exist and be writable");
             }
-            Path target = directory.toRealPath().resolve(sha256 + suffix);
+            Path canonicalDirectory = directory.toRealPath();
+            if (createDirectory && !canonicalDirectory.equals(directory)) {
+                throw new IOException("artifact cache must not traverse symlinks");
+            }
+            Path target = canonicalDirectory.resolve(sha256 + suffix);
             Gate gate = retain(target);
             boolean locked = false;
             try {
@@ -211,7 +235,7 @@ final class ModelArtifactCache {
                     attempt.observe(State.AVAILABLE, Files.size(target));
                     return target;
                 }
-                if (offline) throw new IOException("model is not cached and offline mode forbids downloading");
+                if (offline) throw new IOException("artifact is missing from the verified offline cache");
                 return download(target, attempt);
             } finally {
                 if (locked) gate.lock.unlock();

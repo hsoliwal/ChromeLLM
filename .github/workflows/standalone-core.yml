@@ -7,10 +7,28 @@ on:
         type: boolean
         required: true
         default: false
+      native_repository:
+        description: Repository containing the native source (private sources require NATIVE_SOURCE_TOKEN)
+        type: string
+        required: true
+        default: ggml-org/llama.cpp
+      native_commit:
+        description: Exact native source commit
+        type: string
+        required: true
+        default: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+      publish_runtime:
+        description: Publish the tested CPU runtimes under a release named for this workflow commit
+        type: boolean
+        required: true
+        default: false
   push:
     paths: ['standalone/**', '.github/workflows/standalone-core.yml']
   pull_request:
     paths: ['standalone/**', '.github/workflows/standalone-core.yml']
+permissions:
+  contents: read
+
 jobs:
   java:
     strategy:
@@ -34,6 +52,7 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
+          set -euo pipefail
           for profiles in native-synthetic,native-fork fork-native,native-synthetic fork-native,native-fork; do
             if mvn -B -ntp -f standalone/pom.xml -P"$profiles" -Dchromellm.native.source=/unavailable-for-validation validate > profile-conflict.log 2>&1; then
               echo "Conflicting native profiles unexpectedly passed validate: $profiles" >&2
@@ -42,7 +61,7 @@ jobs:
             cat profile-conflict.log
             grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with native-fork or native-synthetic' profile-conflict.log
           done
-          for mode in pinned-fork synthetic; do
+          for mode in fork pinned-fork synthetic; do
             if mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic,fork-native \
                 -Dchromellm.native.mode="$mode" validate > fork-profile-conflict.log 2>&1; then
               echo 'Synthetic and pinned fork profiles unexpectedly passed validate' >&2
@@ -70,6 +89,13 @@ jobs:
           fi
           cat dawn-provisioning-conflict.log
           grep -F 'native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile' dawn-provisioning-conflict.log
+          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn \
+              -Dchromellm.fork.webgpu=OFF validate > dawn-disabled-profile-conflict.log 2>&1; then
+            echo 'Pinned fork and native-dawn with an explicit WebGPU override unexpectedly passed validate' >&2
+            exit 1
+          fi
+          cat dawn-disabled-profile-conflict.log
+          grep -F 'native-dawn cannot be used with native-synthetic or fork-native; use dawn-binary with fork-native' dawn-disabled-profile-conflict.log
           test ! -e standalone/target/native-synthetic/CMakeCache.txt
           test ! -e standalone/target/native-fork/CMakeCache.txt
           test ! -e standalone/target/fork-native/CMakeCache.txt
@@ -141,55 +167,33 @@ jobs:
       - name: Bound JNI prompt encoding before allocation
         run: java -Xcheck:jni -Xmx32m -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}" oversize-memory
   real-model:
-    # Public CI uses the same immutable, public source donor as the prior real GGUF gate.
-    # Locally, fork-native accepts an independently checked-out private Synexia fork too.
+    # Public CI uses an immutable public source donor; a private fork remains explicit.
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    permissions:
-      contents: read
+    defaults:
+      run:
+        shell: bash
     env:
       LLAMA_COMMIT: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
         with:
-          repository: ggml-org/llama.cpp
-          ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
-          path: external/llama.cpp
           persist-credentials: false
-  chrome-ai-live:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
-    runs-on: [self-hosted, linux, chrome-ai]
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    concurrency:
-      group: ${{ github.repository }}-chrome-ai-live
-      cancel-in-progress: false
-    env:
-      CHROME_BIN: ${{ vars.CHROME_BIN }}
-      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          persist-credentials: false
-  native-binaries:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+          path: external/llama.cpp
+          persist-credentials: false
       - name: Select model cache directory
         shell: bash
         run: echo "MODEL_CACHE=$RUNNER_TEMP/chromellm-models" >> "$GITHUB_ENV"
@@ -238,6 +242,90 @@ jobs:
           grep -F 'Model artifact: verified cache hit' "$RUNNER_TEMP/real-model-offline.log"
           grep -F 'ChromeLLM smart-build candidate SHA-256:' "$RUNNER_TEMP/real-model-offline.log"
           if grep -E 'WARNING in native method|FATAL ERROR in native method' "$RUNNER_TEMP/real-model-offline.log"; then
+            exit 1
+          fi
+      - name: Retain real-model test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-model-profile-tests
+          path: |
+            ${{ runner.temp }}/real-model-first.log
+            ${{ runner.temp }}/real-model-offline.log
+          retention-days: 7
+
+  chrome-ai-live:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
+    runs-on: [self-hosted, linux, chrome-ai]
+    timeout-minutes: 15
+    concurrency:
+      group: ${{ github.repository }}-chrome-ai-live
+      cancel-in-progress: false
+    env:
+      CHROME_BIN: ${{ vars.CHROME_BIN }}
+      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require an explicitly configured dedicated profile
+        run: |
+          test -n "$CHROMELLM_CHROME_PROFILE"
+          test -n "$CHROME_BIN"
+          test -x "$CHROME_BIN"
+      - name: Read installed Chrome availability without provisioning
+        run: |
+          set -o pipefail
+          mvn -B -ntp -f standalone/pom.xml -Pchrome-status \
+            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
+            -Dchromellm.chrome.timeoutSeconds=60 verify | tee chrome-status.log
+      - name: Run real built-in AI inference without fallback
+        run: |
+          set -o pipefail
+          printf '%s\n' 'Reply with a short greeting.' > "$RUNNER_TEMP/chromellm-smoke-prompt.txt"
+          mvn -B -ntp -f standalone/pom.xml -Pchrome-infer \
+            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
+            -Dchromellm.chrome.promptFile="$RUNNER_TEMP/chromellm-smoke-prompt.txt" \
+            -Dchromellm.chrome.maxTokens=128 \
+            -Dchromellm.chrome.timeoutSeconds=180 verify | tee chrome-infer.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installed-chrome-ai-smoke
+          path: |
+            chrome-status.log
+            chrome-infer.log
+          retention-days: 7
+
+  native-binaries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -247,17 +335,24 @@ jobs:
           key: linux-x64-chromellm-binaries-${{ hashFiles('standalone/src/main/java/io/synexia/chromellm/standalone/NativeBuildArtifacts.java') }}
           restore-keys: linux-x64-chromellm-binaries-
       - name: Install the software Vulkan test driver
-        shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
-          driver=$(find /usr/share/vulkan/icd.d -maxdepth 1 -name '*lvp*.json' -print -quit)
-          test -n "$driver"
-          echo "VK_ICD_FILENAMES=$driver" >> "$GITHUB_ENV"
-          echo "XDG_RUNTIME_DIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          python3 - <<'PYTHON'
+          import os
+          from pathlib import Path
+          drivers = sorted(Path('/usr/share/vulkan/icd.d').glob('*lvp*.json'))
+          if not drivers:
+              raise SystemExit('No software Vulkan ICD was installed')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('VK_ICD_FILENAMES=' + str(drivers[0]) + '\n')
+              output.write('XDG_RUNTIME_DIR=' + os.environ['RUNNER_TEMP'] + '\n')
+          PYTHON
       - name: Maven downloads, verifies and executes the Dawn binary
         run: mvn -B -ntp -f standalone/pom.xml -Pdawn-binary verify
+      - name: Repeat Dawn binary execution using the offline verified cache
+        run: mvn -o -B -ntp -f standalone/pom.xml -Pdawn-binary verify
       - name: Checkout the public source used by the existing real-model CI
         uses: actions/checkout@v4
         with:
@@ -273,6 +368,7 @@ jobs:
             -Dchromellm.fork.commit=889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
       - name: Verify binary cache reuse without network access
         run: mvn -o -B -ntp -f standalone/pom.xml -Pdawn-binary,real-model process-classes
+
   real-cpu-smart-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -376,25 +472,31 @@ jobs:
             echo 'Real-model native contract JNI warning gate failed' >&2
             exit 1
           fi
-  chrome-ai-live:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
-    runs-on: [self-hosted, linux, chrome-ai]
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    concurrency:
-      group: ${{ github.repository }}-chrome-ai-live
-      cancel-in-progress: false
-    env:
-      CHROME_BIN: ${{ vars.CHROME_BIN }}
-      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
+
+  native-runtime:
+    name: Native CPU runtime (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux-x86_64
+          - os: windows-2022
+            platform: windows-x86_64
+          - os: macos-15
+            platform: macos-aarch64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
     defaults:
       run:
         shell: bash
+    env:
+      NATIVE_SOURCE_REPOSITORY: ${{ inputs.native_repository || 'ggml-org/llama.cpp' }}
+      NATIVE_SOURCE_COMMIT: ${{ inputs.native_commit || '889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b' }}
+      RUNTIME_PLATFORM: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
           persist-credentials: false
       - uses: actions/setup-java@v4
         with:
@@ -405,31 +507,135 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Require an explicitly configured dedicated profile
-        run: |
-          test -n "$CHROMELLM_CHROME_PROFILE"
-          test -n "$CHROME_BIN"
-          test -x "$CHROME_BIN"
-      - name: Read installed Chrome availability without provisioning
-        run: |
-          set -o pipefail
-          mvn -B -ntp -f standalone/pom.xml -Pchrome-status \
-            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
-            -Dchromellm.chrome.timeoutSeconds=60 verify | tee chrome-status.log
-      - name: Run real built-in AI inference without fallback
-        run: |
-          set -o pipefail
-          printf '%s\n' 'Reply with a short greeting.' > "$RUNNER_TEMP/chromellm-smoke-prompt.txt"
-          mvn -B -ntp -f standalone/pom.xml -Pchrome-infer \
-            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
-            -Dchromellm.chrome.promptFile="$RUNNER_TEMP/chromellm-smoke-prompt.txt" \
-            -Dchromellm.chrome.maxTokens=128 \
-            -Dchromellm.chrome.timeoutSeconds=180 verify | tee chrome-infer.log
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - uses: actions/setup-python@v5
         with:
-          name: installed-chrome-ai-smoke
+          python-version: '3.12'
+      - name: Check out the exact native implementation
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.NATIVE_SOURCE_REPOSITORY }}
+          ref: ${{ env.NATIVE_SOURCE_COMMIT }}
+          path: external/llama.cpp
+          token: ${{ secrets.NATIVE_SOURCE_TOKEN || github.token }}
+          persist-credentials: false
+      - name: Build source-pinned CPU JNI and run the established real-model smoke test
+        run: |
+          set -euo pipefail
+          test "$(git -C external/llama.cpp rev-parse HEAD)" = "$NATIVE_SOURCE_COMMIT"
+          mvn -B -ntp -f standalone/pom.xml -Pfork-native,real-model \
+            -Dchromellm.fork.source="$GITHUB_WORKSPACE/external/llama.cpp" \
+            -Dchromellm.fork.commit="$NATIVE_SOURCE_COMMIT" \
+            -Dchromellm.fork.distributableCpu=ON \
+            -Dchromellm.fork.webgpu=OFF verify
+      - name: Stage the single JNI library, digest, byte count, dependencies and licenses
+        run: cmake --build standalone/target/fork-native --config Release --target chromellm_runtime_package --parallel 2
+      - name: Verify the established model provisioning profile offline
+        run: mvn -o -B -ntp -f standalone/pom.xml -Preal-model process-classes
+      - name: Run Maven cold HTTPS native/model acquisition and warm offline real inference
+        run: |
+          python standalone/native/tests/lazy_runtime_smoke.py \
+            --project standalone \
+            --package standalone/target/fork-native/runtime-package
+      - name: Add the tested Java runtime and source identities
+        run: |
+          python - <<'PYTHON'
+          import hashlib
+          import os
+          from pathlib import Path
+          import shutil
+          package = Path('standalone/target/fork-native/runtime-package')
+          values = dict(line.split('=', 1) for line in (package / 'runtime.properties').read_text().splitlines() if '=' in line)
+          expected_os, expected_arches = {
+              'linux-x86_64': ('Linux', ('x86_64', 'amd64')),
+              'windows-x86_64': ('Windows', ('x86_64', 'amd64')),
+              'macos-aarch64': ('Darwin', ('arm64', 'aarch64')),
+          }[os.environ['RUNTIME_PLATFORM']]
+          if values['os'] != expected_os or values['arch'].lower() not in expected_arches:
+              raise SystemExit('Built native architecture does not match the release asset platform')
+          jar = Path('standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar')
+          shutil.copy2(jar, package / jar.name)
+          with (package / 'runtime.properties').open('a', encoding='utf-8') as output:
+              output.write('platform=' + os.environ['RUNTIME_PLATFORM'] + '\n')
+              output.write('llama.repository=' + os.environ['NATIVE_SOURCE_REPOSITORY'] + '\n')
+              output.write('chromellm.commit=' + os.environ['GITHUB_SHA'] + '\n')
+              output.write('java.file=' + jar.name + '\n')
+              output.write('java.sha256=' + hashlib.sha256(jar.read_bytes()).hexdigest() + '\n')
+          PYTHON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chromellm-native-${{ matrix.platform }}
+          path: standalone/target/fork-native/runtime-package/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromellm-runtime-tests-${{ matrix.platform }}
           path: |
-            chrome-status.log
-            chrome-infer.log
+            standalone/target/lazy-runtime-*/*.log
+            standalone/target/lazy-runtime-*/result.properties
           retention-days: 7
+
+  publish-runtime:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_runtime }}
+    needs: [java, jni-synthetic, real-model, real-cpu-smart-build, native-runtime]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: chromellm-native-*
+          path: bundles
+      - name: Prepare release assets from the tested artifacts
+        shell: bash
+        run: |
+          python3 - <<'PYTHON'
+          import hashlib
+          import os
+          from pathlib import Path
+          import shutil
+          release = Path('release')
+          release.mkdir()
+          manifest = []
+          for platform in ('linux-x86_64', 'windows-x86_64', 'macos-aarch64'):
+              bundle = Path('bundles') / ('chromellm-native-' + platform)
+              values = dict(line.split('=', 1) for line in (bundle / 'runtime.properties').read_text().splitlines() if '=' in line)
+              if values['chromellm.commit'] != os.environ['GITHUB_SHA']:
+                  raise SystemExit('Runtime belongs to another source revision')
+              library = bundle / values['file']
+              if library.stat().st_size != int(values['bytes']) or hashlib.sha256(library.read_bytes()).hexdigest() != values['sha256']:
+                  raise SystemExit('Downloaded native artifact identity mismatch')
+              asset = 'chromellm-cpu-' + platform + library.suffix
+              shutil.copy2(library, release / asset)
+              shutil.make_archive(str(release / ('chromellm-cpu-' + platform)), 'zip', bundle)
+              prefix = 'native.' + platform + '.'
+              manifest.extend([prefix + 'file=' + asset, prefix + 'sha256=' + values['sha256'],
+                               prefix + 'bytes=' + values['bytes']])
+              if platform == 'linux-x86_64':
+                  jar = bundle / values['java.file']
+                  if hashlib.sha256(jar.read_bytes()).hexdigest() != values['java.sha256']:
+                      raise SystemExit('Downloaded Java artifact identity mismatch')
+                  shutil.copy2(jar, release / jar.name)
+                  manifest.extend(['java.file=' + jar.name, 'java.sha256=' + values['java.sha256']])
+          (release / 'runtime-manifest.properties').write_text('\n'.join(manifest) + '\n')
+          Path('release-notes.md').write_text(
+              'CPU JNI runtimes and Java 21 runtime for ChromeLLM commit ' + os.environ['GITHUB_SHA'] + '.\n\n'
+              'Each platform passed source-pin checks, dependency inspection, real Maven HTTPS acquisition, '
+              'warm offline inference, corrupt-cache refusal, model receipts and native lifecycle checks.\n\n'
+              'The ZIP bundles contain licenses, source identities and platform requirements. '
+              'The raw native assets are for checksum-pinned jniUrl acquisition. '
+              'Model weights remain in the separately licensed SmolLM2 release. '
+              'These CPU artifacts do not assert WebGPU or model coding quality.\n')
+          PYTHON
+      - name: Publish an immutable commit-named prerelease
+        shell: bash
+        run: |
+          gh release create "native-$GITHUB_SHA" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "ChromeLLM CPU runtime $GITHUB_SHA" \
+            --notes-file release-notes.md release/*
