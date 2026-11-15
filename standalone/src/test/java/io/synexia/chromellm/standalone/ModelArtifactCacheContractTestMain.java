@@ -81,6 +81,7 @@ public final class ModelArtifactCacheContractTestMain {
             }
         }
         System.out.println("lazy model artifact contract checks passed: " + checks);
+        ModelAcquisitionLifecycleTestMain.main(new String[0]);
     }
 
     @FunctionalInterface private interface Checked { void run() throws Exception; }

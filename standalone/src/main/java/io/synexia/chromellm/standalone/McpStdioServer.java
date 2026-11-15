@@ -93,7 +93,7 @@ final class McpStdioServer {
         }
         if ("backend_status".equals(tool)) {
             if (!arguments.isEmpty()) return encoded(error(id, -32602, "Unknown status arguments"));
-            return encoded(success(id, toolResult(backend.id(), false)));
+            return encoded(success(id, backendStatus()));
         }
         if (!"infer_text".equals(tool)) return encoded(error(id, -32602, "Unknown tool"));
         if (!(arguments.get("prompt") instanceof String prompt) || prompt.isBlank()
@@ -136,7 +136,7 @@ final class McpStdioServer {
 
     private static List<Map<String, Object>> toolList() {
         return List.of(
-                Map.of("name", "backend_status", "description", "Read the explicitly selected inference provider ID without loading the model.",
+                Map.of("name", "backend_status", "description", "Read the selected provider and its available preparation snapshot without loading the model.",
                         "inputSchema", Map.of("type", "object", "properties", Map.of(), "additionalProperties", false),
                         "annotations", Map.of("readOnlyHint", true)),
                 Map.of("name", "infer_text", "description", "Run one explicit text inference using the configured provider; model outputs are untrusted candidate text.",
@@ -145,6 +145,16 @@ final class McpStdioServer {
                                         "maxTokens", Map.of("type", "integer", "minimum", 1, "maximum", 32768),
                                         "timeoutSeconds", Map.of("type", "integer", "minimum", 1, "maximum", 3600)),
                                 "required", List.of("prompt"))));
+    }
+
+    private Map<String, Object> backendStatus() {
+        Map<String, Object> result = new LinkedHashMap<>(toolResult(backend.id(), false));
+        if (backend instanceof LazyModelBackend lazy) {
+            ModelArtifactCache.Progress progress = lazy.progress();
+            result.put("structuredContent", Map.of("backendId", backend.id(),
+                    "modelState", progress.state().name(), "processedBytes", progress.bytes()));
+        }
+        return result;
     }
 
     private static Map<String, Object> toolResult(String text, boolean error) {
