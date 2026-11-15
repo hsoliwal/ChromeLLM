@@ -81,7 +81,7 @@ public final class ModelArtifactHttpContractTestMain {
         for (int i = 0; i < ModelArtifactCache.MAX_REDIRECTS + 2; i++) {
             TrackedStream body = new TrackedStream("redirect");
             cycleBodies.add(body);
-            cycle.add(response(302, Map.of("Location", List.of(ASSET.toString())), body));
+            cycle.add(response(302, Map.of("Location", List.of(ASSET.resolve("/redirect-" + i).toString())), body));
         }
         ScriptedClient cycleClient = new ScriptedClient(cycle);
         expectIo(() -> ModelArtifactCache.fetch(RELEASE, cycleClient));

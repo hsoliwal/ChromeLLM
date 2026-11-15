@@ -49,9 +49,6 @@ public final class SmartBuildMain {
         }
         return run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), environment, providerFactory,
                 offline.equals("true"));
-        run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), System.getenv(), StandaloneMain::backend,
-                "offline=true".equals(System.getProperty("chromellm.offline"))
-                        || Boolean.getBoolean("chromellm.offline"));
     }
 
     static Path run(Path recipe, Path workspace, Path buildDirectory,
@@ -63,8 +60,6 @@ public final class SmartBuildMain {
                     Map<String, String> environment, ProviderFactory providerFactory, boolean offline) throws Exception {
         Path root = workspace.toRealPath();
         // Reject the destination before any artifact acquisition or provider initialization.
-        Path outputRoot = validateOutputRoot(root, buildDirectory);
-        // Reject the destination before cache preparation or provider initialization.
         Path outputRoot = validateOutputRoot(root, buildDirectory);
         NativeBuildArtifacts.buildDirectory(root, outputRoot.getParent());
         Path recipePath = confined(root, recipe, "recipe");
@@ -127,9 +122,11 @@ public final class SmartBuildMain {
         if (options.containsKey("--model-url")) {
             Path cache = Path.of(required(config, "modelCacheDir"));
             cache = root.resolve(cache).normalize();
-            Files.createDirectories(cache);
+            if (!offline) Files.createDirectories(cache);
             if (!cache.toRealPath().equals(cache)) throw new IOException("model cache must not traverse symlinks");
             if (offline) {
+                // Preserve lazy-provider argument admission before replacing remote model options.
+                StandaloneMain.backend(Map.copyOf(options), environment).close();
                 Path model = new ModelArtifactCache(required(config, "modelUrl"),
                         required(config, "modelSha256"), cache).resolveWithOfflinePolicy(true);
                 options.remove("--model-url");
@@ -139,24 +136,6 @@ public final class SmartBuildMain {
                     throw new IllegalArgumentException("model and modelUrl are exclusive");
                 }
             }
-        }
-        Path outputRoot = target.resolve("smart-build");
-        Files.createDirectories(outputRoot);
-        if (!outputRoot.toRealPath().startsWith(root) || Files.isSymbolicLink(outputRoot)) {
-            throw new IOException("smart-build outputs must stay inside the project build directory");
-        }
-        // Reject the destination before any artifact acquisition or provider initialization.
-        Path outputRoot = validateOutputRoot(root, buildDirectory);
-        if (offline && options.containsKey("--model-url")) {
-            // Reuse the engine's lazy-provider admission before changing its model options.
-            // Construction and close do not infer, open the provider, or acquire the model.
-            StandaloneMain.backend(Map.copyOf(options), environment).close();
-            Path model = new ModelArtifactCache(options.get("--model-url"), options.get("--model-sha256"),
-                    Path.of(options.get("--model-cache-dir")), ModelArtifactCache.MAX_BYTES, true).resolve();
-            options.remove("--model-url");
-            options.remove("--model-sha256");
-            options.remove("--model-cache-dir");
-            options.put("--model", model.toString());
         }
         // The selected provider and all options are admitted by the pre-existing engine contract.
         byte[] candidate;
@@ -185,7 +164,6 @@ public final class SmartBuildMain {
     }
 
     private static Path validateOutputRoot(Path root, Path buildDirectory) throws IOException {
-        Path target = NativeBuildArtifacts.buildDirectory(root, buildDirectory);
         Path suppliedTarget = buildDirectory.toAbsolutePath().normalize();
         Path target = root.resolve("target");
         // Resolve ancestor aliases consistently with workspace.toRealPath(), while

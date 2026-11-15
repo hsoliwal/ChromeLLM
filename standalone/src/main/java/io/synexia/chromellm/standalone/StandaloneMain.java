@@ -23,19 +23,30 @@ public final class StandaloneMain {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
-        validateAgentMode(options);
-        if (flag(options, "--agent")) {
+        boolean sessionConfigured = options.containsKey("--agent-endpoint")
+                || options.containsKey("--agent-token-env")
+                || options.containsKey("--agent-max-context-bytes")
+                || options.containsKey("--agent-max-tool-result-bytes");
+        if (sessionConfigured) {
+            rejectOptions(options, "--workspace", "--agent-max-calls");
+            validateAgentMode(options);
+        }
+        if (flag(options, "--agent") && sessionConfigured) {
+            validateChromeModes(options);
             Path goalFile = Path.of(required(options, "--prompt-file"));
             AgentSession.Limits limits = agentLimits(options);
             String goal = readAgentGoal(goalFile, limits);
             // Validate the tool authority before opening or downloading a model.
-            try (CodingAgentTools tools = agentTools(options, System.getenv())) {
-                AgentSession.validateInput(goal, tools.tools(), limits);
+            try (CodingAgentTools selectedTools = agentTools(options, System.getenv())) {
+                AgentSession.validateInput(goal, selectedTools.tools(), limits);
                 try (ModelBackend selected = backend(options, System.getenv())) {
-                    AgentSession.Result result = new AgentSession(selected, tools.tools(), limits).run(goal);
+                    AgentSession.Result result = new AgentSession(selected, selectedTools.tools(), limits).run(goal);
                     System.out.println(McpJson.encode(result.structured(), StdioProtocol.MAX_RESPONSE_BYTES));
                 }
-        Path workspace = agentWorkspace(options);
+            }
+            return;
+        }
+        Path workspace = sessionConfigured ? null : agentWorkspace(options);
         List<AgentTool> tools = workspace == null ? null : new WorkspaceTools(workspace).tools();
         validateChromeModes(options);
         if (flag(options, "--chrome-status") || flag(options, "--chrome-prepare")) {
@@ -53,15 +64,16 @@ public final class StandaloneMain {
                     || options.containsKey("--prompt-file")) {
                 throw new IllegalArgumentException("MCP stdio requires its own exclusive session mode");
             }
-            AgentSession.Limits limits = options.containsKey("--agent-endpoint")
+            AgentSession.Limits sessionLimits = sessionConfigured
                     ? agentLimits(options) : AgentSession.Limits.defaults();
-            try (CodingAgentTools tools = options.containsKey("--agent-endpoint")
-                         ? agentTools(options, System.getenv()) : null;
+            try (CodingAgentTools selectedTools = sessionConfigured ? agentTools(options, System.getenv()) : null;
                  ModelBackend backend = backend(options, System.getenv());
                  FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
-                McpStdioServer.serve(backend, System.in, output,
-                        tools == null ? java.util.List.of() : tools.tools(), limits);
-                McpStdioServer.serveTools(backend, System.in, output, tools);
+                if (selectedTools == null) {
+                    McpStdioServer.serveTools(backend, System.in, output, tools);
+                } else {
+                    McpStdioServer.serve(backend, System.in, output, selectedTools.tools(), sessionLimits);
+                }
             }
             return;
         }
@@ -414,10 +426,8 @@ public final class StandaloneMain {
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
                 "--model-cache-dir", "--mcp-stdio", "--agent", "--agent-endpoint", "--agent-token-env",
-                "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes");
-                "--model-cache-dir", "--mcp-stdio", "--agent", "--workspace",
-                "--agent-max-steps", "--agent-max-calls");
-                "--model-cache-dir", "--mcp-stdio", "--chrome-bin", "--chrome-profile", "--chrome-headless",
+                "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes", "--workspace",
+                "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
                 "--chrome-download", "--chrome-status", "--chrome-prepare");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {

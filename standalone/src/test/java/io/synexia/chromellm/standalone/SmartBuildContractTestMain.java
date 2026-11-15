@@ -21,7 +21,6 @@ public final class SmartBuildContractTestMain {
     private SmartBuildContractTestMain() { }
 
     public static void main(String[] args) throws Exception {
-        Path root = Files.createTempDirectory("chromellm-smart-test-").toRealPath();
         Path root = Files.createTempDirectory("chromellm-smart-test-");
         Path canonicalRoot = root.toRealPath();
         try {
@@ -120,6 +119,7 @@ public final class SmartBuildContractTestMain {
             check(requests.get() == beforeInvalidTarget, "offline cache miss opened provider");
             canonicalWorkspaceAliases(root);
             lazyModelOptions(root, target);
+            relativeLazyModelOptions(root, target);
             lazyRecipe(root, target);
             offlineModels(root, target);
             nativePin(root);
@@ -150,8 +150,6 @@ public final class SmartBuildContractTestMain {
         check(opened.get() == 0, "invalid output opened a provider");
     }
 
-    private static void lazyModelOptions(Path root, Path target) throws Exception {
-        Path cache = root.resolve("forwarded-cache");
     private static void canonicalWorkspaceAliases(Path fixture) throws Exception {
         Path workspace = Files.createDirectories(fixture.resolve("canonical/standalone")).toRealPath();
         Path target = Files.createDirectory(workspace.resolve("target"));
@@ -213,13 +211,12 @@ public final class SmartBuildContractTestMain {
     }
 
     private static void lazyModelOptions(Path root, Path target) throws Exception {
-        Path canonicalRoot = root.toRealPath();
+        Path cache = root.toRealPath().resolve("forwarded-cache");
         Files.writeString(root.resolve("lazy.properties"), String.join("\n",
-                "promptFile=prompt.txt", "backend=jni", "jniLib=lib/chromellm-jni",
+                "promptFile=prompt.txt", "backend=jni", "jniLib=/explicit/chromellm-jni",
                 "modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/pinned/weights.bin",
                 "modelSha256=" + "a".repeat(64),
                 "modelCacheDir=" + cache.toString().replace("\\", "\\\\"),
-                "modelSha256=" + "a".repeat(64), "modelCacheDir=model-options-cache",
                 "computeBackend=cpu", "gpuLayers=0", "maxTokens=8", "timeoutSeconds=10") + "\n");
         AtomicInteger calls = new AtomicInteger();
         SmartBuildMain.ProviderFactory lazy = (options, environment) -> {
@@ -228,6 +225,32 @@ public final class SmartBuildContractTestMain {
             check(options.get("--model-url").endsWith("/pinned/weights.bin"), "model URL lost");
             check(options.get("--model-sha256").equals("a".repeat(64)), "model digest lost");
             check(Path.of(options.get("--model-cache-dir")).equals(cache), "model cache lost");
+            check(!options.containsKey("--model"), "lazy model replaced with a local path");
+            check(options.get("--compute-backend").equals("cpu") && options.get("--gpu-layers").equals("0"),
+                    "explicit CPU policy lost");
+            return new ModelBackend() {
+                public String id() { return "llama.cpp-jni"; }
+                public ModelResponse infer(ModelRequest request) {
+                    calls.incrementAndGet();
+                    return new ModelResponse("lazy candidate", id(), hash(request.prompt()));
+                }
+            };
+        };
+        Path candidate = SmartBuildMain.run(Path.of("lazy.properties"), root, target, Map.of(), lazy);
+        check(calls.get() == 1 && Files.readString(candidate).equals("lazy candidate"),
+                "lazy model recipe was not executed");
+    }
+
+    private static void relativeLazyModelOptions(Path root, Path target) throws Exception {
+        Path canonicalRoot = root.toRealPath();
+        Files.writeString(root.resolve("lazy.properties"), String.join("\n",
+                "promptFile=prompt.txt", "backend=jni", "jniLib=lib/chromellm-jni",
+                "modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/pinned/weights.bin",
+                "modelSha256=" + "a".repeat(64), "modelCacheDir=model-options-cache",
+                "computeBackend=cpu", "gpuLayers=0", "maxTokens=8", "timeoutSeconds=10") + "\n");
+        AtomicInteger calls = new AtomicInteger();
+        SmartBuildMain.ProviderFactory lazy = (options, environment) -> {
+            check(options.get("--backend").equals("jni"), "JNI provider selection lost");
             check(options.get("--jni-lib").equals(canonicalRoot.resolve("lib/chromellm-jni").toString()), "JNI library lost");
             check(options.get("--model-url").endsWith("/pinned/weights.bin"), "model URL lost");
             check(options.get("--model-sha256").equals("a".repeat(64)), "model digest lost");
