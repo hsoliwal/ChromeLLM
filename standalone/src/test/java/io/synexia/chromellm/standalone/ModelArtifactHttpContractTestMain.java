@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
@@ -42,9 +43,10 @@ public final class ModelArtifactHttpContractTestMain {
                     response(status, Map.of("Location", List.of(ASSET.toString())), redirect),
                     response(200, Map.of("Content-Length", List.of("5")), bytes));
             try (InputStream body = ModelArtifactCache.fetch(RELEASE, client)) {
+                check(!bytes.closed, "successful response closed before consumption");
                 check(new String(body.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
                         .equals("model"), "redirect returned wrong bytes");
-                check(!bytes.closed, "successful response closed before consumption");
+                check(bytes.closed && client.shutdowns.get() == 1, "EOF did not close body and client");
             }
             check(redirect.closed && bytes.closed, "response body leaked");
             check(client.requests.stream().map(HttpRequest::uri).toList()
@@ -55,18 +57,18 @@ public final class ModelArtifactHttpContractTestMain {
         }
         for (String forbidden : List.of(
                 "http://release-assets.githubusercontent.com/model.bin",
-                "https://release-assets.githubusercontent.com.evil.invalid/model.bin",
                 "https://user:password@release-assets.githubusercontent.com/model.bin",
-                "https://release-assets.githubusercontent.com:8443/model.bin",
-                "https://release-assets.githubusercontent.com/model.bin#fragment",
-                "https://example.invalid/model.bin", "https://127.0.0.1/model.bin",
-                "https://github.com/hsoliwal/ChromeLLM/blob/main/README.md", "[malformed")) {
+                "https://release-assets.githubusercontent.com:0/model.bin",
+                "https://release-assets.githubusercontent.com:70000/model.bin",
+                "https://release-assets.githubusercontent.com/model.bin#fragment", "[malformed")) {
             refusal(RELEASE, 302, Map.of("Location", List.of(forbidden)));
         }
-        refusal(URI.create("https://example.invalid/model.bin"), 302,
-                Map.of("Location", List.of(ASSET.toString())));
-        refusal(URI.create("https://github.com/hsoliwal/ChromeLLM/blob/main/weights.bin"), 302,
-                Map.of("Location", List.of(ASSET.toString())));
+        // The current artifact contract supports bounded HTTPS redirects for any
+        // explicit source, including CDN hosts and valid non-default HTTPS ports.
+        admittedRedirect(URI.create("https://example.invalid/model.bin"), ASSET);
+        admittedRedirect(URI.create("https://github.com/hsoliwal/ChromeLLM/blob/main/weights.bin"),
+                URI.create("https://cdn.example.invalid:8443/model.bin"));
+        admittedRedirect(RELEASE, URI.create("https://cdn.example.invalid/model.bin"));
         refusal(RELEASE, 302, Map.of());
         refusal(RELEASE, 302, Map.of("Location", List.of(ASSET.toString(), ASSET.toString())));
         refusal(RELEASE, 404, Map.of());
@@ -76,16 +78,19 @@ public final class ModelArtifactHttpContractTestMain {
 
         List<TrackedStream> cycleBodies = new ArrayList<>();
         List<HttpResponse<InputStream>> cycle = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < ModelArtifactCache.MAX_REDIRECTS + 2; i++) {
             TrackedStream body = new TrackedStream("redirect");
             cycleBodies.add(body);
             cycle.add(response(302, Map.of("Location", List.of(ASSET.toString())), body));
         }
         ScriptedClient cycleClient = new ScriptedClient(cycle);
         expectIo(() -> ModelArtifactCache.fetch(RELEASE, cycleClient));
-        check(cycleClient.requests.size() <= 4, "redirect chain is not bounded");
+        check(cycleClient.requests.size() == ModelArtifactCache.MAX_REDIRECTS + 1,
+                "redirect chain is not bounded");
         check(cycleBodies.subList(0, cycleClient.requests.size()).stream().allMatch(b -> b.closed),
                 "redirect-limit refusal leaked a response");
+        check(!cycleBodies.getLast().closed && cycleClient.shutdowns.get() == 1,
+                "redirect limit consumed an extra response or leaked its client");
 
         TrackedStream direct = new TrackedStream("direct");
         ScriptedClient directClient = new ScriptedClient(response(200, Map.of(), direct));
@@ -107,11 +112,28 @@ public final class ModelArtifactHttpContractTestMain {
         System.out.println("model artifact HTTP contract checks passed: " + checks);
     }
 
+    private static void admittedRedirect(URI origin, URI destination) throws Exception {
+        TrackedStream redirect = new TrackedStream("redirect");
+        TrackedStream bytes = new TrackedStream("model");
+        ScriptedClient client = new ScriptedClient(
+                response(302, Map.of("Location", List.of(destination.toString())), redirect),
+                response(200, Map.of(), bytes));
+        try (InputStream body = ModelArtifactCache.fetch(origin, client)) {
+            check(!bytes.closed, "admitted response closed before consumption");
+            check(new String(body.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .equals("model"), "admitted redirect changed bytes");
+        }
+        check(redirect.closed && bytes.closed && client.shutdowns.get() == 1,
+                "admitted redirect leaked body or client");
+        check(client.requests.stream().map(HttpRequest::uri).toList().equals(List.of(origin, destination)),
+                "admitted HTTPS redirect route changed");
+    }
+
     private static void refusal(URI origin, int status, Map<String, List<String>> headers) throws Exception {
         TrackedStream body = new TrackedStream("rejected");
         ScriptedClient client = new ScriptedClient(response(status, headers, body));
         expectIo(() -> ModelArtifactCache.fetch(origin, client));
-        check(body.closed, "rejected response leaked");
+        check(body.closed && client.shutdowns.get() == 1, "rejected response or client leaked");
         check(client.requests.size() == 1, "forbidden redirect made another request");
     }
 
@@ -148,6 +170,7 @@ public final class ModelArtifactHttpContractTestMain {
     private static final class ScriptedClient extends HttpClient {
         private final ArrayDeque<HttpResponse<InputStream>> responses;
         final List<HttpRequest> requests = new ArrayList<>();
+        final AtomicInteger shutdowns = new AtomicInteger();
         ScriptedClient(HttpResponse<InputStream> response) { this(List.of(response)); }
         ScriptedClient(HttpResponse<InputStream> first, HttpResponse<InputStream> second) {
             this(List.of(first, second));
@@ -159,6 +182,7 @@ public final class ModelArtifactHttpContractTestMain {
             if (responses.isEmpty()) throw new AssertionError("unexpected HTTP request");
             return (HttpResponse<T>) responses.removeFirst();
         }
+        @Override public void shutdownNow() { shutdowns.incrementAndGet(); }
         public Optional<CookieHandler> cookieHandler() { return Optional.empty(); }
         public Optional<Duration> connectTimeout() { return Optional.of(Duration.ofSeconds(20)); }
         public Redirect followRedirects() { return Redirect.NEVER; }

@@ -40,27 +40,38 @@ jobs:
               exit 1
             fi
             cat profile-conflict.log
-            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with another native build profile' profile-conflict.log
+            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with native-fork or native-synthetic' profile-conflict.log
           done
-          test ! -e standalone/target/native-synthetic/CMakeCache.txt
-          test ! -e standalone/target/native-fork/CMakeCache.txt
-          for mode in fork synthetic; do
+          for mode in pinned-fork synthetic; do
             if mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic,fork-native \
                 -Dchromellm.native.mode="$mode" validate > fork-profile-conflict.log 2>&1; then
               echo 'Synthetic and pinned fork profiles unexpectedly passed validate' >&2
               exit 1
             fi
             cat fork-profile-conflict.log
-            grep -E 'native-synthetic and (native-fork|fork-native) cannot be active together' fork-profile-conflict.log
+            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with native-fork or native-synthetic' fork-profile-conflict.log
           done
-          test ! -e standalone/target/fork-native/CMakeCache.txt
-          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn \
+          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,dawn-binary \
               -Dchromellm.fork.webgpu=OFF validate > dawn-profile-conflict.log 2>&1; then
-            echo 'Dawn and a disabled pinned fork WebGPU backend unexpectedly passed validate' >&2
+            echo 'Dawn binary and a disabled pinned fork WebGPU backend unexpectedly passed validate' >&2
             exit 1
           fi
           cat dawn-profile-conflict.log
-          grep -F 'native-dawn requires the pinned fork WebGPU=ON' dawn-profile-conflict.log
+          grep -F 'dawn-binary requires chromellm.fork.webgpu=ON' dawn-profile-conflict.log
+          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn validate > dawn-owner-conflict.log 2>&1; then
+            echo 'Pinned fork and the other Dawn installer unexpectedly passed validate' >&2
+            exit 1
+          fi
+          cat dawn-owner-conflict.log
+          grep -F 'native-dawn cannot be used with native-synthetic or fork-native; use dawn-binary with fork-native' dawn-owner-conflict.log
+          if mvn -B -ntp -f standalone/pom.xml -Pnative-dawn,dawn-binary validate > dawn-provisioning-conflict.log 2>&1; then
+            echo 'Both Dawn provisioning profiles unexpectedly passed validate' >&2
+            exit 1
+          fi
+          cat dawn-provisioning-conflict.log
+          grep -F 'native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile' dawn-provisioning-conflict.log
+          test ! -e standalone/target/native-synthetic/CMakeCache.txt
+          test ! -e standalone/target/native-fork/CMakeCache.txt
           test ! -e standalone/target/fork-native/CMakeCache.txt
       - name: Verify JDK-only runtime modules
         shell: bash
@@ -129,31 +140,54 @@ jobs:
         run: java -Xcheck:jni -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}"
       - name: Bound JNI prompt encoding before allocation
         run: java -Xcheck:jni -Xmx32m -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}" oversize-memory
-  chrome-ai-live:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
-    runs-on: [self-hosted, linux, chrome-ai]
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    concurrency:
-      group: ${{ github.repository }}-chrome-ai-live
-      cancel-in-progress: false
-    env:
-      CHROME_BIN: ${{ vars.CHROME_BIN }}
-      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          persist-credentials: false
   native-binaries:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/chromellm
+          key: linux-x64-chromellm-binaries-${{ hashFiles('standalone/src/main/java/io/synexia/chromellm/standalone/NativeBuildArtifacts.java') }}
+          restore-keys: linux-x64-chromellm-binaries-
+      - name: Install the software Vulkan test driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+          driver=$(find /usr/share/vulkan/icd.d -maxdepth 1 -name '*lvp*.json' -print -quit)
+          test -n "$driver"
+          echo "VK_ICD_FILENAMES=$driver" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Maven downloads, verifies and executes the Dawn binary
+        run: mvn -B -ntp -f standalone/pom.xml -Pdawn-binary verify
+      - name: Checkout the public source used by the existing real-model CI
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+          path: external/llama.cpp
+          persist-credentials: false
+      - name: Maven builds JNI and downloads the pinned real model for inference
+        shell: bash
+        run: |
+          mvn -B -ntp -f standalone/pom.xml -Pfork-native,real-model verify \
+            -Dchromellm.fork.source="$GITHUB_WORKSPACE/external/llama.cpp" \
+            -Dchromellm.fork.commit=889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+      - name: Verify binary cache reuse without network access
+        run: mvn -o -B -ntp -f standalone/pom.xml -Pdawn-binary,real-model process-classes
   real-cpu-smart-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -173,57 +207,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Require an explicitly configured dedicated profile
-        run: |
-          test -n "$CHROMELLM_CHROME_PROFILE"
-          test -n "$CHROME_BIN"
-          test -x "$CHROME_BIN"
-      - name: Read installed Chrome availability without provisioning
-        run: |
-          set -o pipefail
-          mvn -B -ntp -f standalone/pom.xml -Pchrome-status \
-            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
-            -Dchromellm.chrome.timeoutSeconds=60 verify | tee chrome-status.log
-      - name: Run real built-in AI inference without fallback
-        run: |
-          set -o pipefail
-          printf '%s\n' 'Reply with a short greeting.' > "$RUNNER_TEMP/chromellm-smoke-prompt.txt"
-          mvn -B -ntp -f standalone/pom.xml -Pchrome-infer \
-            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
-            -Dchromellm.chrome.promptFile="$RUNNER_TEMP/chromellm-smoke-prompt.txt" \
-            -Dchromellm.chrome.maxTokens=128 \
-            -Dchromellm.chrome.timeoutSeconds=180 verify | tee chrome-infer.log
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: installed-chrome-ai-smoke
-          path: |
-            chrome-status.log
-            chrome-infer.log
-          retention-days: 7
-          cache: maven
-          cache-dependency-path: standalone/pom.xml
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/chromellm
-          key: linux-x64-chromellm-binaries-${{ hashFiles('standalone/src/main/java/io/synexia/chromellm/standalone/NativeBuildArtifacts.java') }}
-          restore-keys: linux-x64-chromellm-binaries-
-      - name: Install the software Vulkan test driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers
-          driver=$(find /usr/share/vulkan/icd.d -maxdepth 1 -name '*lvp*.json' -print -quit)
-          test -n "$driver"
-          echo "VK_ICD_FILENAMES=$driver" >> "$GITHUB_ENV"
-          echo "XDG_RUNTIME_DIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
-      - name: Maven downloads, verifies and executes the Dawn binary
-        run: mvn -B -ntp -f standalone/pom.xml -Pdawn-binary verify
-      - name: Checkout the public source used by the existing real-model CI
       - name: Check out exact public llama.cpp source for the CPU test
         uses: actions/checkout@v4
         with:
@@ -231,14 +219,6 @@ jobs:
           ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
           path: external/llama.cpp
           persist-credentials: false
-      - name: Maven builds JNI and downloads the pinned real model for inference
-        shell: bash
-        run: |
-          mvn -B -ntp -f standalone/pom.xml -Pfork-native,real-model verify \
-            -Dchromellm.fork.source="$GITHUB_WORKSPACE/external/llama.cpp" \
-            -Dchromellm.fork.commit=889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
-      - name: Verify binary cache reuse without network access
-        run: mvn -o -B -ntp -f standalone/pom.xml -Pdawn-binary,real-model process-classes
       - name: Build the current real CPU JNI bridge through Maven
         run: |
           set -euo pipefail
@@ -311,3 +291,60 @@ jobs:
             echo 'Real-model native contract JNI warning gate failed' >&2
             exit 1
           fi
+  chrome-ai-live:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
+    runs-on: [self-hosted, linux, chrome-ai]
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.repository }}-chrome-ai-live
+      cancel-in-progress: false
+    env:
+      CHROME_BIN: ${{ vars.CHROME_BIN }}
+      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require an explicitly configured dedicated profile
+        run: |
+          test -n "$CHROMELLM_CHROME_PROFILE"
+          test -n "$CHROME_BIN"
+          test -x "$CHROME_BIN"
+      - name: Read installed Chrome availability without provisioning
+        run: |
+          set -o pipefail
+          mvn -B -ntp -f standalone/pom.xml -Pchrome-status \
+            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
+            -Dchromellm.chrome.timeoutSeconds=60 verify | tee chrome-status.log
+      - name: Run real built-in AI inference without fallback
+        run: |
+          set -o pipefail
+          printf '%s\n' 'Reply with a short greeting.' > "$RUNNER_TEMP/chromellm-smoke-prompt.txt"
+          mvn -B -ntp -f standalone/pom.xml -Pchrome-infer \
+            -Dchromellm.chrome.profile="$CHROMELLM_CHROME_PROFILE" \
+            -Dchromellm.chrome.promptFile="$RUNNER_TEMP/chromellm-smoke-prompt.txt" \
+            -Dchromellm.chrome.maxTokens=128 \
+            -Dchromellm.chrome.timeoutSeconds=180 verify | tee chrome-infer.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installed-chrome-ai-smoke
+          path: |
+            chrome-status.log
+            chrome-infer.log
+          retention-days: 7

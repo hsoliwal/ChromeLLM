@@ -22,12 +22,6 @@ and an incomplete or mismatched download is removed without replacing existing
 unowned paths. Missing artifacts use HTTPS GET with at most five validated HTTPS
 redirects. Downgrades, credentials and fragments are rejected on every hop. Transfer
 size is bounded to 64 GiB; transient failures have no automatic retry or provider
-unowned paths. Missing artifacts use HTTPS GET. An explicit GitHub release-download URL may follow
-up to three HTTPS redirects within GitHub release-download endpoints and
-`release-assets.githubusercontent.com`, on the default HTTPS port only and without
-user-info or fragments. Other redirects remain refused. The full pinned SHA-256
-is checked after transfer; redirected responses are closed before the next request.
-Transfer size is bounded to 64 GiB; transient failures have no automatic retry or provider
 fallback. Files are staged in the same directory and published via an exclusive
 hard link only on successful verification. The cache owner itself does not create
 directories or silently repair corrupt artifacts. Maven offline mode revalidates
