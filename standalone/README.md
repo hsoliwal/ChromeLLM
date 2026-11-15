@@ -28,6 +28,32 @@ boundary. This does **not** extract Chrome-managed Gemini Nano weights.
 
 
 
+## MCP JSON-RPC stdio (opt-in)
+
+Standalone mode now exposes an MCP-compatible stdio server separately from the legacy
+`--stdio true` CLM1 binary transport. The MCP server supports an explicit
+`2025-06-18` initialization handshake, `tools/list`, `tools/call`,
+`ping`, and two bounded tools: `backend_status` and `infer_text`.
+No browser engine, Node, or HTTP listener is required.
+
+```sh
+java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+  --module io.synexia.chromellm.standalone/io.synexia.chromellm.standalone.StandaloneMain \
+  --mcp-stdio true --backend cli --llama-bin /path/to/llama-cli \
+  --model /path/to/licensed.gguf
+```
+
+Alternatively, replace the local `--model` argument with the three explicit
+lazy-acquisition flags `--model-url`, `--model-sha256`, `--model-cache-dir`.
+MCP initialization and listing tools do not download or initialize a lazy model;
+`infer_text` initiates acquisition at first use.
+
+This endpoint is an MCP **server**, not browser WebMCP. Chrome WebMCP currently
+registers client-side page tools through `document.modelContext` and requires
+a separate browser integration. The existing CLM1 framing remains available,
+unmodified. The protocol restrictions and error semantics are specified in
+[MCP_STDIO_CONTRACT.md](MCP_STDIO_CONTRACT.md).
+
 ## Gemini 4 Hydrogen
 
 Set `GEMINI_API_KEY` in the process environment, then run:
