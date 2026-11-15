@@ -50,7 +50,7 @@ public final class NativeBuildArtifacts {
             if (Files.size(model) != MODEL_BYTES) throw new IOException("model binary length mismatch");
             System.out.println("Verified model binary: " + MODEL_SHA);
         } else {
-            Path archive = new ModelArtifactCache(DAWN_URL, DAWN_SHA, cache, DAWN_BYTES).resolveWithOfflinePolicy(offline);
+            Path archive = ModelArtifactCache.binaryArtifact(DAWN_URL, DAWN_SHA, cache, DAWN_BYTES).resolveWithOfflinePolicy(offline);
             installDawn(archive, target, args[5]);
             System.out.println("Verified Dawn binary: " + DAWN_SHA);
         }

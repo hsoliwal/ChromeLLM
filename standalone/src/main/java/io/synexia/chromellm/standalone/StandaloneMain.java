@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 // Agent additions: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project; Apache-2.0.
 package io.synexia.chromellm.standalone;
 
@@ -25,8 +26,7 @@ public final class StandaloneMain {
         Map<String, String> options = parse(args);
         validateAgentMode(options);
         validateChromeModes(options);
-        boolean endpointAgent = options.containsKey("--agent-endpoint");
-        if (flag(options, "--agent") && endpointAgent) {
+        if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
             Path goalFile = Path.of(required(options, "--prompt-file"));
             AgentSession.Limits limits = agentLimits(options);
             String goal = readAgentGoal(goalFile, limits);
@@ -40,8 +40,8 @@ public final class StandaloneMain {
             }
             return;
         }
-        Path workspace = endpointAgent ? null : agentWorkspace(options);
-        List<AgentTool> workspaceTools = workspace == null ? null : new WorkspaceTools(workspace).tools();
+        Path workspace = agentWorkspace(options);
+        List<AgentTool> tools = workspace == null ? null : new WorkspaceTools(workspace).tools();
         if (flag(options, "--chrome-status") || flag(options, "--chrome-prepare")) {
             Duration timeout = setupTimeout(options);
             try (ModelBackend selected = backend(options, System.getenv())) {
@@ -57,17 +57,14 @@ public final class StandaloneMain {
                     || options.containsKey("--prompt-file")) {
                 throw new IllegalArgumentException("MCP stdio requires its own exclusive session mode");
             }
-            AgentSession.Limits limits = options.containsKey("--agent-endpoint")
+            AgentSession.Limits endpointLimits = options.containsKey("--agent-endpoint")
                     ? agentLimits(options) : AgentSession.Limits.defaults();
-            try (CodingAgentTools tools = options.containsKey("--agent-endpoint")
+            try (CodingAgentTools endpointTools = options.containsKey("--agent-endpoint")
                          ? agentTools(options, System.getenv()) : null;
                  ModelBackend backend = backend(options, System.getenv());
                  FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
-                if (tools == null) {
-                    McpStdioServer.serveTools(backend, System.in, output, workspaceTools);
-                } else {
-                    McpStdioServer.serve(backend, System.in, output, tools.tools(), limits);
-                }
+                McpStdioServer.serve(backend, System.in, output, tools,
+                        endpointTools == null ? List.of() : endpointTools.tools(), endpointLimits);
             }
             return;
         }
@@ -107,56 +104,58 @@ public final class StandaloneMain {
             if (limits == null) {
                 System.out.print(backend.infer(request).text());
             } else {
-                AgentEngine agent = new AgentEngine(backend, workspaceTools, event ->
+                AgentEngine agent = new AgentEngine(backend, tools, event ->
                         System.err.println("agent " + event.sequence() + " " + event.phase() + " " + event.tool()));
                 System.out.print(agent.run(request.prompt(), request.maxTokens(), limits).answer());
             }
         }
     }
 
-    /** Reject mode mistakes before loading a provider or touching the model cache. */
+    /** Authority validation runs before provider or cache initialization. */
     private static Path agentWorkspace(Map<String, String> options) {
+        return options.containsKey("--workspace") ? Path.of(required(options, "--workspace")) : null;
+    }
+
+    /** CLI execution selects one agent engine; MCP can expose both independently configured tools. */
+    static void validateAgentMode(Map<String, String> options) {
         boolean agent = flag(options, "--agent");
         boolean mcp = flag(options, "--mcp-stdio");
-        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
-            throw new IllegalArgumentException("agent mode requires its own exclusive session mode");
+        boolean workspace = options.containsKey("--workspace");
+        boolean endpoint = options.containsKey("--agent-endpoint");
+        boolean endpointControls = endpoint || options.containsKey("--agent-token-env")
+                || options.containsKey("--agent-max-context-bytes")
+                || options.containsKey("--agent-max-tool-result-bytes");
+        boolean configured = options.keySet().stream().anyMatch(key -> key.startsWith("--agent-"));
+        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices")
+                || flag(options, "--chrome-status") || flag(options, "--chrome-prepare"))) {
+            throw new IllegalArgumentException("agent execution requires its own exclusive session mode");
         }
-        if (!agent && (options.containsKey("--agent-max-steps") || options.containsKey("--agent-max-calls"))) {
-            throw new IllegalArgumentException("agent limits require --agent true");
+        if (agent && workspace && endpoint) {
+            throw new IllegalArgumentException("agent execution requires either --workspace or --agent-endpoint, not both");
         }
-        if (options.containsKey("--workspace") && !agent && !mcp) {
+        if (configured && !agent && !mcp) {
+            throw new IllegalArgumentException("agent controls require --agent true or --mcp-stdio true");
+        }
+        if (workspace && !agent && !mcp) {
             throw new IllegalArgumentException("workspace requires --agent true or --mcp-stdio true");
         }
-        if (agent || options.containsKey("--workspace")) return Path.of(required(options, "--workspace"));
-        return null;
+        if (endpointControls) {
+            required(options, "--agent-endpoint");
+            required(options, "--agent-token-env");
+            agentLimits(options);
+        }
+        if (agent && !endpoint) required(options, "--workspace");
+        if (options.containsKey("--agent-max-calls") && (!agent || endpoint)) {
+            throw new IllegalArgumentException("agent model-call limit requires workspace agent execution");
+        }
+        if (!agent && !endpoint && options.containsKey("--agent-max-steps")) {
+            throw new IllegalArgumentException("agent limits require an enabled agent engine");
+        }
     }
 
     private static AgentEngine.Limits agentLimits(Map<String, String> options, Duration timeout) {
         return new AgentEngine.Limits(Integer.parseInt(options.getOrDefault("--agent-max-steps", "16")),
                 Integer.parseInt(options.getOrDefault("--agent-max-calls", "8")), 65536, 32768, timeout);
-    }
-
-    /** Agent options are explicit and cannot silently change the existing inference modes. */
-    static void validateAgentMode(Map<String, String> options) {
-        boolean agent = flag(options, "--agent");
-        boolean mcp = flag(options, "--mcp-stdio");
-        boolean configured = options.containsKey("--agent-endpoint") || options.containsKey("--agent-token-env")
-                || options.containsKey("--agent-max-context-bytes")
-                || options.containsKey("--agent-max-tool-result-bytes");
-        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
-            throw new IllegalArgumentException("agent execution requires its own exclusive session mode");
-        }
-        if (configured && !agent && !mcp) {
-            throw new IllegalArgumentException("agent controls require --agent true or --mcp-stdio true");
-        }
-        if (configured) {
-            rejectOptions(options, "--workspace", "--agent-max-calls");
-            required(options, "--agent-endpoint");
-            required(options, "--agent-token-env");
-            agentLimits(options);
-        } else {
-            agentWorkspace(options);
-        }
     }
 
     static AgentSession.Limits agentLimits(Map<String, String> options) {
@@ -424,9 +423,9 @@ public final class StandaloneMain {
                 "--timeout-seconds", "--stdio", "--list-devices", "--device-backend", "--device",
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
-                "--model-cache-dir", "--mcp-stdio", "--agent", "--agent-endpoint", "--agent-token-env",
-                "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes",
-                "--workspace", "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
+                "--model-cache-dir", "--mcp-stdio", "--agent", "--workspace",
+                "--agent-max-steps", "--agent-max-calls", "--agent-endpoint", "--agent-token-env",
+                "--agent-max-context-bytes", "--agent-max-tool-result-bytes", "--chrome-bin", "--chrome-profile", "--chrome-headless",
                 "--chrome-download", "--chrome-status", "--chrome-prepare");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
