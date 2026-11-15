@@ -2,6 +2,8 @@
 // Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
+// Synexia modification: use the existing canonical workspace variable in the recovered test calls.
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -128,9 +130,9 @@ public final class SmartBuildContractTestMain {
             canonicalWorkspaceAliases(root);
             lazyModelOptions(root, target);
             lazyRecipe(root, target);
-            offlineModels(canonicalRoot, target.toRealPath());
-            downloadRecipe(canonicalRoot, target.toRealPath());
-            offlineRecipe(canonicalRoot, target.toRealPath());
+            offlineModels(root, target.toRealPath());
+            downloadRecipe(root, target.toRealPath());
+            offlineRecipe(root, target.toRealPath());
             nativePin(root);
         } finally {
             try (var files = Files.walk(root)) {

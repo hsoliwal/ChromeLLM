@@ -39,18 +39,6 @@ final class McpStdioServer {
         this.sessionTools = List.copyOf(sessionTools);
         this.agentLimits = Objects.requireNonNull(agentLimits, "agentLimits");
         this.workspaceTools = workspaceTools == null ? null : List.copyOf(workspaceTools);
-    private final List<AgentSession.Tool> sessionAgentTools;
-    private final AgentSession.Limits agentLimits;
-    private final List<AgentTool> agentTools;
-    private boolean negotiated;
-    private boolean initialized;
-
-    private McpStdioServer(ModelBackend backend, List<AgentSession.Tool> sessionAgentTools,
-                           AgentSession.Limits agentLimits, List<AgentTool> agentTools) {
-        this.backend = Objects.requireNonNull(backend, "backend");
-        this.sessionAgentTools = List.copyOf(sessionAgentTools);
-        this.agentLimits = Objects.requireNonNull(agentLimits, "agentLimits");
-        this.agentTools = agentTools == null ? null : List.copyOf(agentTools);
     }
 
     /** Caller owns model, input and output streams. All processing is sequential. */
@@ -62,8 +50,6 @@ final class McpStdioServer {
     static void serve(ModelBackend backend, InputStream input, OutputStream output,
                       List<AgentSession.Tool> agentTools, AgentSession.Limits limits) throws IOException {
         serveSession(new McpStdioServer(backend, agentTools, limits, null), input, output);
-                      List<AgentSession.Tool> tools, AgentSession.Limits limits) throws IOException {
-        serveSession(new McpStdioServer(backend, tools, limits), input, output);
     }
 
     /** Workspace access is explicitly enabled by the process owner, never by a model argument. */
@@ -74,7 +60,6 @@ final class McpStdioServer {
     static void serveTools(ModelBackend backend, InputStream input, OutputStream output, List<AgentTool> tools)
             throws IOException {
         serveSession(new McpStdioServer(backend, List.of(), AgentSession.Limits.defaults(), tools), input, output);
-        serveSession(new McpStdioServer(backend, tools), input, output);
     }
 
     /** Independently configured workspace and endpoint capabilities share one bounded MCP stream. */
@@ -190,11 +175,6 @@ final class McpStdioServer {
             return runSessionAgent(id, arguments);
         }
         if ("agent_run".equals(tool) && workspaceTools != null) return runWorkspaceAgent(id, arguments);
-        if ("run_agent".equals(tool) && !sessionTools.isEmpty()) return runSession(id, arguments);
-        if ("run_agent".equals(tool) && !sessionAgentTools.isEmpty()) {
-            return runSessionAgent(id, arguments);
-        }
-        if ("agent_run".equals(tool) && agentTools != null) return runAgent(id, arguments);
         if (!"infer_text".equals(tool)) return encoded(error(id, -32602, "Unknown tool"));
         if (!(arguments.get("prompt") instanceof String prompt) || prompt.isBlank()
                 || arguments.keySet().stream().anyMatch(k -> !List.of("prompt", "maxTokens", "timeoutSeconds").contains(k))) {
@@ -226,7 +206,6 @@ final class McpStdioServer {
     }
 
     private String runSessionAgent(Object id, Map<?, ?> arguments) throws IOException {
-    private String runSession(Object id, Map<?, ?> arguments) throws IOException {
         if (!(arguments.get("goal") instanceof String goal) || goal.isBlank()
                 || arguments.keySet().stream().anyMatch(key -> !List.of(
                         "goal", "maxSteps", "maxTokens", "timeoutSeconds").contains(key))) {
@@ -245,7 +224,7 @@ final class McpStdioServer {
             return encoded(error(id, -32602, "Invalid agent arguments or operator budget exceeded"));
         }
         try {
-            AgentSession.Result result = new AgentSession(backend, sessionAgentTools, selected).run(goal);
+            AgentSession.Result result = new AgentSession(backend, sessionTools, selected).run(goal);
             Map<String, Object> response = new LinkedHashMap<>(toolResult(result.answer(), false));
             response.put("structuredContent", result.structured());
             return encoded(success(id, response));
@@ -262,7 +241,6 @@ final class McpStdioServer {
     }
 
     private String runWorkspaceAgent(Object id, Map<?, ?> arguments) throws IOException {
-    private String runAgent(Object id, Map<?, ?> arguments) throws IOException {
         if (!(arguments.get("goal") instanceof String goal) || goal.isBlank()
                 || arguments.keySet().stream().anyMatch(key -> !List.of(
                         "goal", "maxTokens", "timeoutSeconds", "maxSteps", "maxModelCalls").contains(key))) {
@@ -324,7 +302,7 @@ final class McpStdioServer {
                                         "maxTokens", Map.of("type", "integer", "minimum", 1, "maximum", 32768),
                                         "timeoutSeconds", Map.of("type", "integer", "minimum", 1, "maximum", 3600)),
                                 "required", List.of("prompt")))));
-        if (!sessionAgentTools.isEmpty()) {
+        if (!sessionTools.isEmpty()) {
             tools.add(Map.of("name", "run_agent", "description",
                     "Run a bounded Java/JNI coding-agent session against operator-configured repository tools; "
                             + "candidate previews do not authorize source application or prove behavior.",
@@ -341,7 +319,6 @@ final class McpStdioServer {
                             "idempotentHint", false, "openWorldHint", false)));
         }
         if (workspaceTools != null) {
-        if (agentTools != null) {
             tools.add(Map.of("name", "agent_run", "description",
                     "Run a bounded plan/tool/result loop over the explicitly configured workspace using the selected model provider.",
                     "inputSchema", Map.of("type", "object", "additionalProperties", false,

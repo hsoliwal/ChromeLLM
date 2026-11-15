@@ -661,3 +661,116 @@ In MCP mode, an operator-configured repository service adds `run_agent`; an
 operator-configured `--workspace` adds `agent_run`. The existing `plan_steps`,
 `backend_status` and `infer_text` tools remain available. Tool discovery and provider
 status do not trigger model acquisition or inference.
+
+## Smart Build diagnostics from AST facts and Maven logs
+
+The existing `smart-build` profile can send a completed build's explicit AST-facts
+receipt and log to the configured local CLI or JNI model. It returns a structured,
+reviewable diagnostic candidate under the analyzed project's `target/smart-build`.
+The existing `promptFile`-only recipe still produces the same plain-text candidate.
+
+Use a recipe inside the project being analyzed. For example, the following
+properties extend an existing working native-model recipe. Replace the digest
+and UUID placeholders with the identities of the specific completed build:
+
+```properties
+promptFile=build-context/question.txt
+backend=jni
+jniLib=/absolute/path/to/libchromellm_llama_jni.so
+model=/absolute/path/to/verified-model.gguf
+computeBackend=cpu
+gpuLayers=0
+contextTokens=8192
+maxTokens=1024
+timeoutSeconds=120
+
+buildInvocationId=<fresh canonical UUID identifying this build>
+buildExitCode=1
+buildLogFile=build-context/maven.log
+buildLogSha256=<lowercase SHA-256 of the complete log>
+
+# Optional: use the original compiler invocation's exact receipt and UUID.
+astFactsFile=target/m3-ast-build-facts/compile-<compiler UUID>.tsv
+astFactsSha256=<lowercase SHA-256 of the complete receipt>
+astFactsId=<the compiler UUID in that receipt's header>
+```
+
+`question.txt` might contain `Explain the compilation failure and suggest the
+smallest source correction supported by the evidence.` The question is task data;
+the diagnostic schema and read-only boundary remain fixed by Smart Build.
+
+The Maven fork's existing `-Dm3.ast.buildFacts=true` option asks the M3AST javac
+producer for `M3AST_BUILD_FACTS_V1` receipts. Their coverage remains `PARTIAL`.
+They are not a replacement AST or a complete dependency graph. A compiler failure
+can produce no fresh receipt; use log-only diagnostics in that case. Supply an
+explicit known invocation rather than selecting the newest file left in `target`.
+The digest and UUID checks bind the caller-selected evidence; they do not discover
+or independently prove which build produced a caller-supplied file.
+
+Run the profile from the ChromeLLM standalone POM, pointing it at the project:
+
+```sh
+mvn -o -f /path/to/ChromeLLM/standalone/pom.xml -Psmart-build \
+  -Dchromellm.smart.workspace=/path/to/project \
+  -Dchromellm.smart.recipe=build-context/diagnostics.properties verify
+```
+
+The default workspace is the standalone project itself. The output directory
+defaults to `${chromellm.smart.workspace}/target` and must be that existing,
+in-project Maven target directory. All question, recipe, AST and log input paths
+must remain inside the analyzed project; evidence paths cannot traverse symlinks.
+Local model/native-library paths retain the existing provider's explicit selection.
+Relative provider paths resolve against the analyzed project. Maven offline mode
+is forwarded to the existing digest-verified model cache.
+
+### Evidence and response contract
+
+| Input | Complete input limit | Model excerpt |
+| --- | ---: | --- |
+| Task/question | 8 KiB UTF-8 in context mode | Complete text |
+| AST facts | 1 MiB | First 8 KiB, preferring complete lines |
+| Maven log | 8 MiB | Last 16 KiB, preferring complete lines |
+| Complete encoded model request | 64 KiB | Includes instructions, JSON escaping and all evidence |
+
+Each excerpt carries its original SHA-256, 1-based line range, byte offsets and
+omitted-byte count. A single line larger than its budget remains a bounded,
+UTF-8-safe fragment with an explicit partial-line marker. Inputs are strictly
+decoded; mismatched pins, invocation headers, malformed UTF-8, NUL and oversized
+inputs fail before the provider opens. The bridge transports the producer's
+original TSV text, whose string columns use base64url UTF-8; it does not parse
+source files or rebuild compiler facts. Model context capacity remains the
+selected provider's responsibility and should match the evidence workload.
+
+Context mode asks for strict JSON such as:
+
+```json
+{
+  "schema": "CHROMELLM_BUILD_DIAGNOSTICS_V1",
+  "summary": "Compilation failed because a referenced type was unavailable.",
+  "diagnostics": [
+    {
+      "severity": "ERROR",
+      "evidenceId": "build-log",
+      "startLine": 42,
+      "endLine": 43,
+      "message": "The compiler reports an unresolved symbol.",
+      "suggestion": "Check the named import and the module's declared dependency."
+    }
+  ]
+}
+```
+
+The real response must reference an evidence ID and line range actually supplied
+in that request. At most 32 diagnostics are accepted; unknown fields, invalid
+severities, invented references and malformed JSON are refused without publishing
+a candidate. A tiny native smoke-test model proves runtime transport, not useful
+build reasoning or compliance with this response schema. Use a model qualified
+for the diagnostic workload.
+
+Accepted results are immutable `candidate-<request-key>.json` files. The adjacent
+receipt binds the recipe, full assembled prompt, context JSON and candidate by
+SHA-256 and records the supplied build invocation and exit code. The model's text
+is advice: Smart Build does not apply patches, execute suggested commands, bypass
+Maven goals or change the recorded exit code. Invoke it after the original build
+completes, and preserve that build's exit status in any calling CI wrapper; the
+diagnostics invocation has its own success/failure status.
