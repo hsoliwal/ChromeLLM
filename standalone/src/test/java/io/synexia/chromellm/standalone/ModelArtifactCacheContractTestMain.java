@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.ByteArrayInputStream;
@@ -124,7 +125,7 @@ public final class ModelArtifactCacheContractTestMain {
             }
             redirectContracts(fixture);
             binaryContracts(dir, fixture, hash, url);
-            redirectContracts(fixture);
+            transportRedirectContracts(fixture);
             bodyDeadlineContract();
         } finally {
             try (var all = Files.walk(dir)) {
@@ -287,7 +288,11 @@ public final class ModelArtifactCacheContractTestMain {
         boolean closed;
         TrackedInputStream(byte[] bytes) { super(bytes); }
         @Override public void close() throws IOException { closed = true; super.close(); }
+    }
+
     private static void binaryContracts(Path dir, byte[] fixture, String hash, String url) throws Exception {
+        // Establish the model fixture independently of the earlier partial-download refusal.
+        Files.write(dir.resolve(hash + ".gguf"), fixture);
         AtomicInteger opens = new AtomicInteger();
         ModelArtifactCache.Downloader download = ignored -> {
             opens.incrementAndGet();
@@ -302,6 +307,8 @@ public final class ModelArtifactCacheContractTestMain {
         check(opens.get() == 0, "offline miss opened the downloader");
         Path file = binary.resolve();
         check(file.getFileName().toString().equals(hash + ".bin"), "native cache must use its own suffix");
+        check(new ModelArtifactCache(url, hash, dir, fixture.length).resolveWithOfflinePolicy(true).equals(file),
+                "four-argument binary constructor lost exact-size cache role");
         check(binary.resolveWithOfflinePolicy(true).equals(file) && opens.get() == 1, "offline verified binary hit downloaded");
         check(Files.exists(dir.resolve(hash + ".gguf")), "native artifact replaced existing model cache");
         ModelArtifactCache wrongLength = new ModelArtifactCache(url, hash, dir, download, 100,
@@ -321,7 +328,7 @@ public final class ModelArtifactCacheContractTestMain {
         }
     }
 
-    private static void redirectContracts(byte[] fixture) throws Exception {
+    private static void transportRedirectContracts(byte[] fixture) throws Exception {
         URI start = URI.create("https://release.example.invalid/download");
         TrackedStream first = new TrackedStream(new byte[0]);
         TrackedStream second = new TrackedStream(new byte[0]);

@@ -118,7 +118,79 @@ on Linux. The commit-validated `fork-native` profile defaults to
 ## Admission and boundaries
 
 - The default `mvn -f standalone/pom.xml verify` is unchanged: Java-only, no CMake, network, model or native build prerequisite.
-- Choose exactly one native build profile: `native-fork`, commit-validated `fork-native`, or `native-synthetic`. Maven's `validate` stage fails when any two are activated together, **before** CMake or native artifact writes. The optional `native-dawn` dependency profile can accompany either real native build profile.
+- Choose exactly one native build profile: `native-fork`, commit-validated `fork-native`, or `native-synthetic`. Maven's `validate` stage fails when any two are activated together, **before** CMake or native artifact writes. The optional `native-dawn` dependency profile accompanies `native-fork`; use `dawn-binary` with commit-validated `fork-native`, and select only one Dawn provisioning owner.
 - The operator pins and audits the donor source, native dependencies and model licenses. The local build does not copy native artifacts or weights into the Java JAR.
 - Source-build acceptance requires an independently supplied real model, runtime observation, licensing review, the supported OS and (when selected) measured WebGPU device execution. A passing Maven/CTest/synthetic JNI build does **not** supply these proofs.
 - Canonical source mutation, qualification receipts and evidence belong in `hsoliwal/com.synexia`, not ChromeLLM. M3JDK21 integration remains a separate, explicitly qualified receiving change.
+
+## Attach a platform native distribution
+
+Both existing real-source profiles can attach a separate native runtime ZIP:
+
+```sh
+mvn -f standalone/pom.xml -Pnative-fork,native-dist \
+  -Dchromellm.native.source=/absolute/path/to/qualified/source \
+  -Dchromellm.native.classifier=linux-x86_64 \
+  -Dchromellm.native.notices=/absolute/path/to/reviewed-notices install
+```
+
+The pinned source entry point also supports `-Pfork-native,native-dist` with
+its existing `chromellm.fork.source` and `chromellm.fork.commit` properties.
+The explicit classifier must match the build host: `linux`, `macos` or
+`windows`, followed by `x86_64` or `arm64`. This is a host build, not a cross
+compilation request. The attachment uses the Java artifact's group, name
+and version, type `zip`, and the supplied classifier. Maven `install` and
+`deploy` therefore handle the JAR and native ZIP together. The JAR remains
+Java-only. Normal builds and `native-synthetic` never attach a native ZIP;
+`native-dist` refuses synthetic and prebuilt-library modes.
+
+CMake stages the linked JNI runtime closure under a fresh target directory,
+retaining library names and soname symlink chains. Unresolved libraries,
+test stubs and non-baseline runtime libraries outside the producer build tree
+fail packaging. This lane disables donor OpenMP to avoid silently depending on
+or redistributing an unqualified compiler OpenMP runtime; ordinary native builds
+retain their existing OpenMP selection. Shared external BLAS/Dawn/provider
+libraries require a separately qualified source-linked runtime. The packager
+does not silently copy arbitrary external dependencies. The archive contains `lib/` and
+`licenses/`, including the supplied source's LICENSE, ChromeLLM notices, and the explicit
+`chromellm.native.notices` directory. This nonempty directory must contain
+operator-reviewed notices for all compiled and linked native code, including
+embedded source notices such as Mozilla's llamafile license. Directory presence
+is enforced; automated license completeness is not claimed. The archive
+contains no model, checkout, headers or CMake build tree. The producing
+operator must still review licenses for any additional linked dependency
+and qualify CPU instruction requirements and host ABI compatibility.
+The platform classifier alone does not establish those qualifications.
+
+Extract the ZIP before use and pass the absolute bridge path through the
+existing `--jni-lib` option. On Unix the staged libraries use relative
+loader paths. On Windows add the extracted `lib` directory to process
+`PATH` before starting Java so dependent DLLs can be resolved. System runtime
+libraries are supplied by the receiving OS; they are not bundled. Optional
+GPU drivers and model weights retain their existing separate requirements.
+
+The native contract suite builds a small versioned dependency and JNI
+bridge, archives and extracts them, deletes all producer binaries, then
+loads the extracted bridge in a fresh JVM. It separately checks missing
+runtime dependency, test-stub, missing-source and invalid-classifier refusal.
+These are packaging/loader checks, independent of model quality or GPU
+execution. The test fixture is never attached as a Maven distribution.
+
+After `install`, the independent smoke consumer under
+`standalone/native/tests/consumer/pom.xml` resolves the JAR and classified ZIP
+from the Maven repository. Copy that POM into an empty writable directory,
+then invoke Maven `validate` with `-Dnative.classifier=linux-x86_64` and
+`-Dnative.bridge=/absolute/consumer/lib/libchromellm_llama_jni.so` (adjust the
+bridge filename and Windows process PATH for the host). The consumer extracts
+the resolved archive and invokes the existing model-free device inventory.
+For a relocation check, move the producer build directory out of its original
+path before invoking the consumer. Existing Dawn CI keeps its source-build
+and inventory checks; it does not assert a distributable license closure.
+A real distribution CI run must supply the reviewed source-derived notices.
+Successful packaging and loading do not imply model or physical GPU inference.
+
+The current optional installed-Chrome Java provider's Apache-2.0 notice and
+license are retained in `licenses/ChromeLLM/standalone/NOTICE.md` and
+`licenses/ChromeLLM/LICENSES/Apache-2.0.txt`, so the bundled THIRD_PARTY links
+remain usable. This preserves current attribution; the native archive does
+not include Chrome, Chrome model assets, or that provider's Java classes.

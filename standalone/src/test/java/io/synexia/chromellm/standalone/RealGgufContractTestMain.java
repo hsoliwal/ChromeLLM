@@ -1,18 +1,28 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Reader;
+import java.io.Writer;
 import java.lang.management.ManagementFactory;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
+
 
 /** Opt-in real GGUF CPU gate: obtains pinned weights and invokes the supplied JNI runtime. */
 public final class RealGgufContractTestMain {
@@ -23,20 +33,6 @@ public final class RealGgufContractTestMain {
     private static final String OTHER_PROMPT = "<|im_start|>user\n"
             + "Write one short sentence about a river.<|im_end|>\n"
             + "<|im_start|>assistant\n";
-import java.io.Reader;
-import java.io.Writer;
-import java.nio.ByteBuffer;
-import java.nio.channels.SeekableByteChannel;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.time.Duration;
-import java.util.HexFormat;
-import java.util.Map;
-import java.util.Properties;
-import java.util.TreeMap;
 
 /**
  * Explicit real-model CPU gate; never included in the ordinary offline verify suite.
@@ -49,7 +45,7 @@ import java.util.TreeMap;
  * Notice: https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/NOTICE.txt
  * The test never executes model output or asserts factual or coding accuracy.
  */
-public final class RealGgufContractTestMain {
+
     private static final String MODEL_SHA256 =
             "8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684";
     private static final long MODEL_BYTES = 105_454_144L;
@@ -63,6 +59,11 @@ public final class RealGgufContractTestMain {
     private RealGgufContractTestMain() { }
 
     public static void main(String[] args) throws Exception {
+        if (args.length == 5) { smartBuildGate(args); return; }
+        modelGate(args);
+    }
+
+    private static void modelGate(String[] args) throws Exception {
         if (args.length != 6) {
             throw new IllegalArgumentException("expected JNI library, model HTTPS URL, SHA-256, "
                     + "cache directory, exact model byte length and offline flag");
@@ -140,7 +141,9 @@ public final class RealGgufContractTestMain {
                 "bounded native output");
     }
 
-    private static String digest(String text) throws Exception {
+    private static String digest(String text) throws Exception { return hash(text); }
+
+    private static void smartBuildGate(String[] args) throws Exception {
         if (args.length != 5) {
             throw new IllegalArgumentException(
                     "usage: RealGgufContractTestMain <jni-library> <cache-dir> <work-dir> <model-url> <sha256>");
@@ -307,8 +310,6 @@ public final class RealGgufContractTestMain {
                 .digest(text.getBytes(StandardCharsets.UTF_8)));
     }
 
-    private static void check(boolean success, String contract) {
-        if (!success) throw new AssertionError("real GGUF contract failed: " + contract);
     private static String hash(Path path) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream input = Files.newInputStream(path)) {
