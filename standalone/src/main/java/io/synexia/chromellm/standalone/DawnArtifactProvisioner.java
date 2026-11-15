@@ -210,6 +210,7 @@ public final class DawnArtifactProvisioner {
                     readFully(source, raw, raw.length);
                     if (type == 'x') extendedName = paxPath(raw);
                     else if (type == 'L') extendedName = new String(raw, java.nio.charset.StandardCharsets.UTF_8).replace("\u0000", "").strip();
+                    total += size;
                     skipPadding(source, size);
                     continue;
                 }
