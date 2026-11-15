@@ -4,6 +4,22 @@ The standalone Java/JNI runtime stays browser-free. Legacy `--model` and tier-sp
 paths remain authoritative. A local CLI or JNI invocation may instead supply all
 three options `--model-url`, `--model-sha256`, and `--model-cache-dir`; these are
 exclusive with `--model`, `--tier`, and all tier-specific paths. The cache directory
+must already exist and be writable for the direct CLI; acquisition never creates
+an implicit user-home cache. Explicit Maven binary profiles prepare their documented
+cache directories. Smart-build creates only selected caches under the verified
+project target directory. Hosted Gemini rejects these options.
+
+`--model-url` must be an explicitly supplied HTTPS URL, without user-info or fragment.
+`--model-sha256` is a 64-hex-character digest of the entire licensed GGUF artifact.
+The model is fetched no earlier than the first inference request, never during
+argument parsing or ordinary compilation. An explicitly selected Maven `smart-build`
+profile runs inference during verify and can therefore acquire the model then.
+The explicit `real-model` profile may provision its pinned model before verification.
+The `real-model-test` profile resolves its selected model during integration-test;
+its configured cache defaults to `${settings.localRepository}/io/synexia/chromellm/models`.
+Both explicit Maven paths verify cache hits and honor offline mode.
+The CLI executable remains separately installed; JNI can use an explicit library
+path or the matching packaged native artifact.
 must already exist and be writable for the direct CLI; acquisition never creates an
 implicit user-home cache. The explicitly selected Maven binary profiles and smart-build
 entrypoint prepare their documented cache directories. The opt-in `real-model-test`
@@ -23,6 +39,23 @@ The caller must review model redistribution, export, and use rights.
 The implementation stores verified model bytes as `<sha256>.gguf` in the specified
 cache. Every cache hit is SHA-256 checked, a corrupt cache entry fails closed,
 and an incomplete or mismatched download is removed without replacing existing
+unowned paths. Missing artifacts use HTTPS GET. An explicit GitHub release-download
+URL may follow up to three HTTPS redirects within GitHub release-download endpoints
+and `release-assets.githubusercontent.com`, on the default HTTPS port only and
+without user-info or fragments. Other redirects remain refused by default.
+`--model-follow-redirects true` explicitly permits at most five HTTPS redirects,
+with no user-info, fragments, or HTTPS downgrade at any hop. Cookies and authorization
+headers are never forwarded. Redirected responses are closed before the next request;
+the complete pinned SHA-256 is checked after transfer. Transfer size defaults to 64 GiB and may be reduced
+using `--model-max-bytes`. Transient failures have no automatic retry or provider
+fallback. Files are staged in the same directory and published via an exclusive
+hard link only on successful verification. The cache owner does not create directories or write implicitly to home/root,
+and never silently repairs corrupt entries. The Maven smart-build wrapper may
+create a selected cache under the verified project target directory. Its relative
+paths resolve against the standalone project; external cache paths must exist.
+Maven offline mode revalidates cached binary inputs and refuses misses before
+opening the downloader. Exact-size native binary artifacts use `.bin` cache entries;
+GGUF model entries retain the `.gguf` suffix.
 unowned paths. Missing artifacts use HTTPS GET.
 
 Pinned native binary acquisition distinguishes an explicit URL of the form
@@ -43,7 +76,8 @@ revalidates existing binary inputs and refuses cache misses before opening the d
 
 The artifact is acquired before native or subprocess model initialization. The
 request's inference timeout applies to inference after successful acquisition.
-Acquisition has a separate one-hour deadline covering coordination, cache verification,
+Acquisition has a separate deadline, configurable with `--model-download-timeout-seconds`
+(1–3600 seconds, default 3600), covering coordination, cache verification,
 connection establishment and the complete streamed response. The waiting caller returns
 with an HTTP timeout error if that deadline expires. Interruption cancels only that caller's
 attempt. Cancellation interrupts its worker and closes its active stream asynchronously;

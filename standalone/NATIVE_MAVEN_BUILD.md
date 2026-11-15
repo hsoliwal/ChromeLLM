@@ -22,7 +22,7 @@ mvn -B -ntp -f standalone/pom.xml -Pnative-fork \
   -Dchromellm.native.webgpu=ON verify
 ```
 
-The supplied checkout must actually support GGML WebGPU and CMake must be able to find a compatible Dawn package (for example, through the operator's `CMAKE_PREFIX_PATH` or `Dawn_DIR`). There is no silent GPU-to-CPU substitution when WebGPU is explicitly requested. No native model or device inference test runs automatically because a licensed GGUF and a supported device are operator-specific. The normal `--jni-lib` and `--model` runtime parameters remain mandatory.
+The supplied checkout must actually support GGML WebGPU and CMake must be able to find a compatible Dawn package (for example, through the operator's `CMAKE_PREFIX_PATH` or `Dawn_DIR`). There is no silent GPU-to-CPU substitution when WebGPU is explicitly requested. This local source profile does not select a model or run model inference. Use an explicit JNI library and local model path, or select the packaged-runtime and lazy-model options documented below.
 
 ## Lazy, verified Dawn artifacts
 
@@ -118,11 +118,25 @@ on Linux. The commit-validated `fork-native` profile defaults to
 ## Admission and boundaries
 
 - The default `mvn -f standalone/pom.xml verify` is unchanged: Java-only, no CMake, network, model or native build prerequisite.
+- The source build profiles are opt-in and mutually exclusive. Select only one of `native`, `native-fork`, `fork-native`, or `native-synthetic`; Maven rejects conflicting selections during validation before CMake or native writes.
 - Choose exactly one native build profile: `native-fork`, commit-validated `fork-native`, or `native-synthetic`. Maven's `validate` stage fails when any two are activated together, **before** CMake or native artifact writes. The optional `native-dawn` dependency profile accompanies either `native-fork` or commit-validated `fork-native`, enabling both WebGPU properties and supplying the shared Dawn prefix. The `dawn-binary` installer also accompanies `fork-native`. Select one Dawn installer; both installers together, synthetic mode and explicit disabled-WebGPU overrides are refused.
 - The operator pins and audits the donor source, native dependencies and model licenses. The local build does not copy native artifacts or weights into the Java JAR.
 - Source-build acceptance requires an independently supplied real model, runtime observation, licensing review, the supported OS and (when selected) measured WebGPU device execution. A passing Maven/CTest/synthetic JNI build does **not** supply these proofs.
 - Canonical source mutation, qualification receipts and evidence belong in `hsoliwal/com.synexia`, not ChromeLLM. M3JDK21 integration remains a separate, explicitly qualified receiving change.
 
+## Distributable runtime and downloaded model tests
+
+The existing local-only profiles above remain available. The `native` profile additionally orchestrates pinned source acquisition, creates separate CPU/WebGPU platform JARs and verifies loading from those artifacts. The existing `native-synthetic` profile now also exercises resource packaging without attaching a synthetic distribution. See [the complete Maven artifact workflow](README.md#build-and-consume-native-maven-artifacts).
+
+For real inference through Maven, the existing `smart-build` recipe owner accepts the explicit model URL/digest/cache fields. `examples/smart-build-packaged-smoke.properties` is the small pinned download-and-inference smoke recipe. The source fork CI builds the JNI artifact, uploads it, downloads it into a clean consumer job, and invokes that same Maven smart-build path. Native/model blobs stay in build caches and CI artifacts.
+
+The existing `native-dawn` installer composes with `native-fork`, commit-validated
+`fork-native`, and the new `native` artifact profile. The pinned local `fork-native`
+profile may alternatively use `dawn-binary`, which also runs its Vulkan/WGSL
+compute test. Choose one installer; each passes its verified prefix to CMake. Native JAR packaging still requires the complete Dawn/dependency
+notice bundle: use `-Dchromellm.dawn.licenses=/path/to/notices` unless the
+installation already includes populated `share/licenses`. Download verification
+alone does not prove that a release archive contains all redistribution notices.
 ## Attach a platform native distribution
 
 Both existing real-source profiles can attach a separate native runtime ZIP:

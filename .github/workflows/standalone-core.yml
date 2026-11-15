@@ -30,16 +30,22 @@ jobs:
         with:
           node-version: '22'
       - run: mvn -B -ntp -f standalone/pom.xml verify
-      - name: Reject conflicting native profiles with the configured regex diagnostic
+      - name: Reject conflicting native Maven profiles before CMake
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          for profiles in native-synthetic,native-fork fork-native,native-synthetic fork-native,native-fork; do
+          for profiles in native-synthetic,native-fork fork-native,native-synthetic fork-native,native-fork native,native-fork native,fork-native native,native-synthetic native-synthetic,real-model native-synthetic,real-model-test; do
             if mvn -B -ntp -f standalone/pom.xml -P"$profiles" -Dchromellm.native.source=/unavailable-for-validation validate > profile-conflict.log 2>&1; then
               echo "Conflicting native profiles unexpectedly passed validate: $profiles" >&2
               exit 1
             fi
             cat profile-conflict.log
+            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with another native build profile|Select exactly one native build profile|real-model(-test)? cannot be used with native-synthetic' profile-conflict.log
+          done
+          test ! -e standalone/target/native-synthetic/CMakeCache.txt
+          test ! -e standalone/target/native-fork/CMakeCache.txt
+          test ! -e standalone/target/native-build/CMakeCache.txt
+          for mode in fork synthetic; do
             grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with (another native build profile|native-fork or native-synthetic)' profile-conflict.log
           done
           for mode in fork synthetic pinned-fork; do
@@ -49,6 +55,23 @@ jobs:
               exit 1
             fi
             cat fork-profile-conflict.log
+            grep -E 'native-synthetic and (native-fork|fork-native) cannot be active together|fork-native cannot be combined with another native build profile|Select exactly one native build profile' fork-profile-conflict.log
+          done
+          test ! -e standalone/target/fork-native/CMakeCache.txt
+          for profiles in native-dawn,dawn-binary native-fork,dawn-binary native,dawn-binary; do
+            if mvn -B -ntp -f standalone/pom.xml -P"$profiles" validate > dawn-profile-conflict.log 2>&1; then
+              echo "Conflicting Dawn profiles unexpectedly passed validate: $profiles" >&2
+              exit 1
+            fi
+            cat dawn-profile-conflict.log
+            grep -E 'select one Dawn provisioning profile|native-dawn cannot be used with|dawn-binary requires fork-native' dawn-profile-conflict.log
+          done
+          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,dawn-binary \
+              -Dchromellm.fork.webgpu=OFF validate > dawn-disabled.log 2>&1; then
+            echo 'Dawn and a disabled pinned fork WebGPU backend unexpectedly passed validate' >&2
+            exit 1
+          fi
+          grep -F 'dawn-binary requires chromellm.fork.webgpu=ON' dawn-disabled.log
             grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with (another native build profile|native-fork or native-synthetic)' fork-profile-conflict.log
           done
           if mvn -B -ntp -f standalone/pom.xml -Pfork-native,dawn-binary \
@@ -117,7 +140,7 @@ jobs:
           test ! -e docs/OPENAI_COMPAT_API.md
           test ! -e docs/M3_REBUILD_AND_DISTILLATION.md
           test ! -e '关键数据.md'
-      - name: Maven native-synthetic build and CTest regressions
+      - name: Maven synthetic native build, packaging and CTest regressions
         run: mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic verify
       - name: Verify relocated fixture archive with a fresh Java consumer
         run: java -cp standalone/target/test-classes io.synexia.chromellm.standalone.NativeDistributionTestMain "${{ github.workspace }}/standalone/native"
@@ -147,6 +170,13 @@ jobs:
         run: java -Xcheck:jni -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}"
       - name: Bound JNI prompt encoding before allocation
         run: java -Xcheck:jni -Xmx32m -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}" oversize-memory
+  native-binaries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
   real-model:
     # Public CI uses the same immutable, public source donor as the prior real GGUF gate.
     # Locally, fork-native accepts an independently checked-out private Synexia fork too.
@@ -170,6 +200,9 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -259,6 +292,7 @@ jobs:
           echo "XDG_RUNTIME_DIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Maven downloads, verifies and executes the Dawn binary
         run: mvn -B -ntp -f standalone/pom.xml -Pdawn-binary verify
+      - name: Check out the exact public source for the real-model binary test
       - name: Checkout the public source used by the existing real-model CI
         uses: actions/checkout@v4
         with:
@@ -377,6 +411,84 @@ jobs:
             echo 'Real-model native contract JNI warning gate failed' >&2
             exit 1
           fi
+
+  real-model:
+    # Public CI uses the same immutable, public source donor as the prior real GGUF gate.
+    # Locally, fork-native accepts an independently checked-out private Synexia fork too.
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      LLAMA_COMMIT: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+          path: external/llama.cpp
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select model cache directory
+        shell: bash
+        run: echo "MODEL_CACHE=$RUNNER_TEMP/chromellm-models" >> "$GITHUB_ENV"
+      - name: Reuse checksum-verified model cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.MODEL_CACHE }}
+          key: chromellm-gguf-8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684
+      - name: Maven build, model acquisition and real JNI inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -f standalone/pom.xml -Pfork-native,real-model-test \
+            -Dchromellm.fork.source="$PWD/external/llama.cpp" \
+            -Dchromellm.fork.commit="$LLAMA_COMMIT" \
+            -Dchromellm.real.model.cache="$MODEL_CACHE" verify \
+            2>&1 | tee "$RUNNER_TEMP/real-model-first.log"
+          grep -F 'PASS: licensed GGUF CPU inference, deterministic repeat, receipts and close' "$RUNNER_TEMP/real-model-first.log"
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' "$RUNNER_TEMP/real-model-first.log"; then
+            exit 1
+          fi
+      - name: Reuse the downloaded model in an offline Maven smart build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > standalone/target/real-smart-build.properties <<EOF
+          promptFile=examples/smart-build-prompt.txt
+          backend=jni
+          jniLib=$PWD/standalone/target/fork-native/libchromellm_llama_jni.so
+          modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/weights.bin
+          modelSha256=8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684
+          modelCacheDir=$MODEL_CACHE
+          contextTokens=512
+          threads=2
+          gpuLayers=0
+          computeBackend=cpu
+          maxTokens=48
+          timeoutSeconds=120
+          EOF
+          mvn -o -B -ntp -f standalone/pom.xml -Pfork-native,real-model-test,smart-build \
+            -Dchromellm.fork.source="$PWD/external/llama.cpp" \
+            -Dchromellm.fork.commit="$LLAMA_COMMIT" \
+            -Dchromellm.real.model.cache="$MODEL_CACHE" \
+            -Dchromellm.smart.recipe=target/real-smart-build.properties verify \
+            2>&1 | tee "$RUNNER_TEMP/real-model-offline.log"
+          grep -F 'Model artifact: verified cache hit' "$RUNNER_TEMP/real-model-offline.log"
+          grep -F 'ChromeLLM smart-build candidate SHA-256:' "$RUNNER_TEMP/real-model-offline.log"
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' "$RUNNER_TEMP/real-model-offline.log"; then
+            exit 1
+          fi
+
   chrome-ai-live:
     if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
     runs-on: [self-hosted, linux, chrome-ai]

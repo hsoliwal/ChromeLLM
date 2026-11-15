@@ -25,6 +25,10 @@ public final class StandaloneMain {
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
         validateAgentMode(options);
+        Path workspace = agentWorkspace(options);
+        List<AgentTool> workspaceTools = workspace == null ? null : new WorkspaceTools(workspace).tools();
+        validateChromeModes(options);
+        if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
         validateChromeModes(options);
         if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
             Path goalFile = Path.of(required(options, "--prompt-file"));
@@ -63,6 +67,11 @@ public final class StandaloneMain {
                          ? agentTools(options, System.getenv()) : null;
                  ModelBackend backend = backend(options, System.getenv());
                  FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
+                if (tools != null) {
+                    McpStdioServer.serve(backend, System.in, output, tools.tools(), limits);
+                } else {
+                    McpStdioServer.serveTools(backend, System.in, output, workspaceTools);
+                }
                 McpStdioServer.serve(backend, System.in, output, tools,
                         endpointTools == null ? List.of() : endpointTools.tools(), endpointLimits);
             }
@@ -72,8 +81,7 @@ public final class StandaloneMain {
             if (!"jni".equals(options.getOrDefault("--backend", "jni"))) {
                 throw new IllegalArgumentException("device listing requires the JNI backend");
             }
-            for (LlamaCppJniBackend.Device device : LlamaCppJniBackend.availableDevices(
-                    Path.of(required(options, "--jni-lib")))) {
+            for (LlamaCppJniBackend.Device device : LlamaCppJniBackend.availableDevices(jniLibrary(options))) {
                 System.out.println(field(device.backend()) + "\t" + field(device.name()) + "\t"
                         + device.type() + "\t" + field(device.description()));
             }
@@ -104,7 +112,7 @@ public final class StandaloneMain {
             if (limits == null) {
                 System.out.print(backend.infer(request).text());
             } else {
-                AgentEngine agent = new AgentEngine(backend, tools, event ->
+                AgentEngine agent = new AgentEngine(backend, workspaceTools, event ->
                         System.err.println("agent " + event.sequence() + " " + event.phase() + " " + event.tool()));
                 System.out.print(agent.run(request.prompt(), request.maxTokens(), limits).answer());
             }
@@ -113,6 +121,25 @@ public final class StandaloneMain {
 
     /** Authority validation runs before provider or cache initialization. */
     private static Path agentWorkspace(Map<String, String> options) {
+        boolean agent = flag(options, "--agent");
+        boolean mcp = flag(options, "--mcp-stdio");
+        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
+            throw new IllegalArgumentException("agent mode requires its own exclusive session mode");
+        }
+        if (options.containsKey("--agent-endpoint")) {
+            if (options.containsKey("--workspace") || options.containsKey("--agent-max-calls")) {
+                throw new IllegalArgumentException("remote agent controls and workspace controls are exclusive");
+            }
+            return null;
+        }
+        if (!agent && (options.containsKey("--agent-max-steps") || options.containsKey("--agent-max-calls"))) {
+            throw new IllegalArgumentException("agent limits require --agent true");
+        }
+        if (options.containsKey("--workspace") && !agent && !mcp) {
+            throw new IllegalArgumentException("workspace requires --agent true or --mcp-stdio true");
+        }
+        if (agent || options.containsKey("--workspace")) return Path.of(required(options, "--workspace"));
+        return null;
         return options.containsKey("--workspace") ? Path.of(required(options, "--workspace")) : null;
     }
 
@@ -126,6 +153,10 @@ public final class StandaloneMain {
                 || options.containsKey("--agent-max-context-bytes")
                 || options.containsKey("--agent-max-tool-result-bytes");
         boolean configured = options.keySet().stream().anyMatch(key -> key.startsWith("--agent-"));
+        boolean remote = options.containsKey("--agent-endpoint") || options.containsKey("--agent-token-env")
+                || options.containsKey("--agent-max-context-bytes")
+                || options.containsKey("--agent-max-tool-result-bytes");
+        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
         if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices")
                 || flag(options, "--chrome-status") || flag(options, "--chrome-prepare"))) {
             throw new IllegalArgumentException("agent execution requires its own exclusive session mode");
@@ -136,6 +167,13 @@ public final class StandaloneMain {
         if (configured && !agent && !mcp) {
             throw new IllegalArgumentException("agent controls require --agent true or --mcp-stdio true");
         }
+        if (remote && (options.containsKey("--workspace") || options.containsKey("--agent-max-calls"))) {
+            throw new IllegalArgumentException("remote agent controls and workspace controls are exclusive");
+        }
+        if (agent && !remote && !options.containsKey("--workspace")) {
+            throw new IllegalArgumentException("agent execution requires --workspace or --agent-endpoint with --agent-token-env");
+        }
+        if (remote) {
         if (workspace && !agent && !mcp) {
             throw new IllegalArgumentException("workspace requires --agent true or --mcp-stdio true");
         }
@@ -212,13 +250,15 @@ public final class StandaloneMain {
             rejectOptions(options, "--model", "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
                     "--gpu-layers", "--compute-backend", "--device-backend", "--device", "--tier",
                     "--fast-model", "--reasoning-model", "--frontier-model", "--model-url",
-                    "--model-sha256", "--model-cache-dir", "--thinking-level", "--api-key-env", "--list-devices");
+                    "--model-sha256", "--model-cache-dir", "--model-follow-redirects",
+                    "--model-download-timeout-seconds", "--model-max-bytes", "--thinking-level", "--api-key-env", "--list-devices");
             return new ChromeAiBackend(chromeExecutable(options, environment),
                     Path.of(required(options, "--chrome-profile")),
                     flag(options, "--chrome-headless"), flag(options, "--chrome-download"));
         }
         if ("gemini".equals(provider)) {
-            rejectOptions(options, "--model-url", "--model-sha256", "--model-cache-dir");
+            rejectOptions(options, "--model-url", "--model-sha256", "--model-cache-dir",
+                    "--model-follow-redirects", "--model-download-timeout-seconds", "--model-max-bytes");
             rejectOptions(options, "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
                     "--gpu-layers", "--compute-backend", "--device-backend", "--device", "--tier",
                     "--fast-model", "--reasoning-model", "--frontier-model");
@@ -236,7 +276,8 @@ public final class StandaloneMain {
         }
         rejectOptions(options, "--thinking-level", "--api-key-env");
         if (options.containsKey("--model-url") || options.containsKey("--model-sha256")
-                || options.containsKey("--model-cache-dir")) {
+                || options.containsKey("--model-cache-dir") || options.containsKey("--model-follow-redirects")
+                || options.containsKey("--model-download-timeout-seconds") || options.containsKey("--model-max-bytes")) {
             return lazyLocalModel(options, environment, provider);
         }
         Path model = localModel(options);
@@ -253,7 +294,7 @@ public final class StandaloneMain {
             }
             case "jni" -> {
                 rejectOptions(options, "--llama-bin");
-                Path library = Path.of(required(options, "--jni-lib"));
+                Path library = jniLibrary(options);
                 int context = Integer.parseInt(options.getOrDefault("--context-tokens", "4096"));
                 int threads = Integer.parseInt(options.getOrDefault("--threads", "4"));
                 int layers = Integer.parseInt(options.getOrDefault("--gpu-layers", "0"));
@@ -280,7 +321,9 @@ public final class StandaloneMain {
         boolean prepare = flag(options, "--chrome-prepare");
         if (status && prepare) throw new IllegalArgumentException("Chrome status and preparation are exclusive modes");
         if (status || prepare) {
-            rejectOptions(options, "--prompt-file", "--stdio", "--mcp-stdio", "--list-devices", "--max-tokens");
+            rejectOptions(options, "--prompt-file", "--stdio", "--mcp-stdio", "--list-devices", "--max-tokens",
+                    "--agent", "--workspace", "--agent-endpoint", "--agent-token-env", "--agent-max-steps",
+                    "--agent-max-calls", "--agent-max-context-bytes", "--agent-max-tool-result-bytes");
         }
     }
 
@@ -343,18 +386,24 @@ public final class StandaloneMain {
             required(options, "--llama-bin");
         } else {
             rejectOptions(options, "--llama-bin");
-            required(options, "--jni-lib");
+            if (options.containsKey("--jni-lib")) required(options, "--jni-lib");
             if (options.containsKey("--device-backend") || options.containsKey("--device")) {
                 rejectOptions(options, "--compute-backend");
                 required(options, "--device-backend");
                 required(options, "--device");
             }
         }
-        ModelArtifactCache artifact = new ModelArtifactCache(url, sha256, cacheDir);
+        ModelArtifactCache artifact = new ModelArtifactCache(url, sha256, cacheDir,
+                flag(options, "--model-follow-redirects"),
+                Duration.ofSeconds(Long.parseLong(options.getOrDefault("--model-download-timeout-seconds", "3600"))),
+                Long.parseLong(options.getOrDefault("--model-max-bytes", Long.toString(ModelArtifactCache.MAX_BYTES))));
         Map<String, String> retained = new HashMap<>(options);
         retained.remove("--model-url");
         retained.remove("--model-sha256");
         retained.remove("--model-cache-dir");
+        retained.remove("--model-follow-redirects");
+        retained.remove("--model-download-timeout-seconds");
+        retained.remove("--model-max-bytes");
         String backendId = "cli".equals(provider) ? "llama.cpp-cli" : "llama.cpp-jni";
         return new LazyModelBackend(backendId, artifact, resolved -> {
             Map<String, String> local = new HashMap<>(retained);
@@ -392,6 +441,11 @@ public final class StandaloneMain {
         }
     }
 
+    private static Path jniLibrary(Map<String, String> options) throws IOException {
+        return options.containsKey("--jni-lib")
+                ? Path.of(required(options, "--jni-lib")) : NativeLibraryLoader.libraryPath();
+    }
+
     private static String required(Map<String, String> options, String key) {
         String value = options.get(key);
         if (value == null || value.isBlank()) throw new IllegalArgumentException("missing " + key);
@@ -423,6 +477,10 @@ public final class StandaloneMain {
                 "--timeout-seconds", "--stdio", "--list-devices", "--device-backend", "--device",
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
+                "--model-cache-dir", "--model-follow-redirects", "--model-download-timeout-seconds",
+                "--model-max-bytes", "--mcp-stdio", "--agent", "--agent-endpoint", "--agent-token-env",
+                "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes",
+                "--workspace", "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
                 "--model-cache-dir", "--mcp-stdio", "--agent", "--workspace",
                 "--agent-max-steps", "--agent-max-calls", "--agent-endpoint", "--agent-token-env",
                 "--agent-max-context-bytes", "--agent-max-tool-result-bytes", "--chrome-bin", "--chrome-profile", "--chrome-headless",

@@ -7,6 +7,8 @@ find_package(Threads REQUIRED)
 option(CHROMELLM_SYNTHETIC_TEST "Build test-only fake llama API (never for distribution)" OFF)
 set(CHROMELLM_LLAMA_SOURCE_DIR "" CACHE PATH "Operator-supplied llama.cpp checkout to build with the JNI bridge")
 option(CHROMELLM_WEBGPU "Build the supplied llama.cpp checkout with its native Dawn/WebGPU provider" OFF)
+include(cmake/NativePackaging.cmake)
+chromellm_configure_native_packaging()
 option(CHROMELLM_NATIVE_DISTRIBUTION "Stage and attach a real source-built runtime" OFF)
 set(CHROMELLM_NATIVE_CLASSIFIER "" CACHE STRING "Explicit host os-architecture classifier")
 if(CHROMELLM_NATIVE_DISTRIBUTION)
@@ -212,6 +214,7 @@ file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/chromellm-native-$<CONFIG>.txt
 if(MSVC)
   target_compile_options(chromellm_llama_jni PRIVATE /utf-8)
 endif()
+chromellm_install_native_runtime(chromellm_llama_jni)
 
 if(CHROMELLM_SYNTHETIC_TEST)
   include(CTest)
@@ -231,6 +234,16 @@ if(CHROMELLM_SYNTHETIC_TEST)
         "-DCHROMELLM_TEST_JAVA_AWT_LIBRARY=${JAVA_AWT_LIBRARY}"
         "-DCHROMELLM_TEST_JAVA_JVM_LIBRARY=${JAVA_JVM_LIBRARY}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/library_discovery/CMakeLists.txt")
+    add_test(NAME native-resource-package
+      COMMAND ${CMAKE_COMMAND}
+        "-DCHROMELLM_NATIVE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DCHROMELLM_TEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/native-package-test"
+        "-DCHROMELLM_TEST_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCHROMELLM_TEST_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCHROMELLM_TEST_GENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCHROMELLM_TEST_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCHROMELLM_TEST_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/native_package/CMakeLists.txt")
   endif()
 endif()
 
