@@ -7,6 +7,12 @@ Maven can acquire ChromeLLM's published model binary and execute it as part of
 miss, verifies its full SHA-256 and byte count, then invokes the real CPU JNI
 provider in a separate JVM with `-Xcheck:jni`.
 
+The existing `real-model` profile and `dawn-binary` profile remain available for
+the native binary smoke checks described in [FORK_NATIVE_SMART_BUILD.md](FORK_NATIVE_SMART_BUILD.md).
+The existing five-argument real-GGUF runner still checks SmartBuild receipts,
+same-size cache corruption and native lifecycle; `real-model-test` uses its
+six-argument entry point for a caller-pinned model, exact size and Maven offline policy.
+
 ## Build and test with one Maven invocation
 
 Supply a clean, pinned llama.cpp source checkout, including your existing
@@ -65,7 +71,7 @@ mvn -o -B -ntp -f standalone/pom.xml -Pfork-native,real-model-test \
   -Dchromellm.fork.commit=YOUR_CHECKOUT_FULL_40_HEX_COMMIT verify
 ```
 
-`${settings.offline}` reaches the model resolver. A missing cache entry fails
+`${session.offline}` reaches the model resolver. A missing cache entry fails
 before any download. A valid cache is reused even after `mvn clean`, because its
 default location is outside `target`. GitHub Actions caches the exact model
 digest and still revalidates all restored bytes.
