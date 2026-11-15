@@ -135,6 +135,20 @@ public final class LlamaCppCliBackend implements ModelBackend {
     private static void stopProcess(Process process) {
         process.destroy();
         if (process.isAlive()) process.destroyForcibly();
+        // Termination is asynchronous. Wait for handle release before deleting redirected
+        // files, especially on Windows where an exiting child can still hold them open.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        boolean interrupted = false;
+        while (process.isAlive()) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) break;
+            try {
+                process.waitFor(remaining, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException duringCleanup) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) Thread.currentThread().interrupt();
         // Child-process trees require a separate operating-system-specific containment policy.
     }
 

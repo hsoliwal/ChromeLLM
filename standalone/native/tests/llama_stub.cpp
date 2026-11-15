@@ -5,16 +5,41 @@
 #include <thread>
 #include <algorithm>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 struct llama_model {};
 struct llama_vocab {};
 struct llama_context { llama_context_params p; int sampled = 0; int mode = 2; };
 struct llama_sampler {};
+struct ggml_backend_reg {};
+struct ggml_backend_device { ggml_backend_reg_t registry; };
+static ggml_backend_reg cpu_registry, webgpu_registry;
+static ggml_backend_device cpu_device{&cpu_registry}, webgpu_device{&webgpu_registry};
+static bool HasWebGpu() {
+    const char* disabled = std::getenv("CHROMELLM_TEST_NO_WEBGPU");
+    return disabled == nullptr || std::strcmp(disabled, "1") != 0;
+}
 extern "C" {
+ggml_backend_reg_t ggml_backend_reg_by_name(const char* name) {
+    return HasWebGpu() && std::strcmp(name, "WebGPU") == 0 ? &webgpu_registry : nullptr;
+}
+size_t ggml_backend_dev_count() { return HasWebGpu() ? 2 : 1; }
+ggml_backend_dev_t ggml_backend_dev_get(size_t index) {
+    return index == 0 ? &cpu_device : (index == 1 && HasWebGpu() ? &webgpu_device : nullptr);
+}
+ggml_backend_reg_t ggml_backend_dev_backend_reg(ggml_backend_dev_t device) { return device->registry; }
 void llama_backend_init() {}
-llama_model_params llama_model_default_params() { return {0}; }
-llama_model* llama_model_load_from_file(const char* path, llama_model_params) {
-    if (std::string(path).find("rejected") != std::string::npos) return nullptr;
+llama_model_params llama_model_default_params() { return {0, nullptr, LLAMA_SPLIT_MODE_LAYER, -1}; }
+llama_model* llama_model_load_from_file(const char* path, llama_model_params params) {
+    const std::string name(path);
+    if (name.find("rejected") != std::string::npos) return nullptr;
+    if (name.find("require-webgpu") != std::string::npos
+            && (params.devices == nullptr || params.devices[0] != &webgpu_device
+                || params.devices[1] != nullptr || params.n_gpu_layers <= 0
+                || params.split_mode != LLAMA_SPLIT_MODE_NONE || params.main_gpu != 0)) return nullptr;
+    if (name.find("require-cpu") != std::string::npos
+            && (params.devices == nullptr || params.devices[0] != nullptr
+                || params.n_gpu_layers != 0)) return nullptr;
     return new llama_model;
 }
 const llama_vocab* llama_model_get_vocab(const llama_model*) { static llama_vocab v; return &v; }

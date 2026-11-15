@@ -3,13 +3,20 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
+#include "ggml-backend.h"
 struct llama_model;
 struct llama_context;
 struct llama_vocab;
 struct llama_sampler;
 typedef int32_t llama_token;
 typedef bool (*ggml_abort_callback)(void*);
-struct llama_model_params { int32_t n_gpu_layers; };
+enum llama_split_mode { LLAMA_SPLIT_MODE_NONE = 0, LLAMA_SPLIT_MODE_LAYER = 1 };
+struct llama_model_params {
+  int32_t n_gpu_layers;
+  ggml_backend_dev_t* devices;
+  llama_split_mode split_mode;
+  int32_t main_gpu;
+};
 struct llama_context_params {
   uint32_t n_ctx, n_batch;
   int32_t n_threads, n_threads_batch;
