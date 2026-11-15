@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** Explicit browser-free inference with a local or hosted provider, once or through a bounded stdio session. */
+/** Explicit provider selection for local, hosted or installed-Chrome inference and bounded stdio sessions. */
 public final class StandaloneMain {
     private StandaloneMain() { }
 
@@ -33,6 +33,14 @@ public final class StandaloneMain {
                     AgentSession.Result result = new AgentSession(selected, tools.tools(), limits).run(goal);
                     System.out.println(McpJson.encode(result.structured(), StdioProtocol.MAX_RESPONSE_BYTES));
                 }
+        validateChromeModes(options);
+        if (flag(options, "--chrome-status") || flag(options, "--chrome-prepare")) {
+            Duration timeout = setupTimeout(options);
+            try (ModelBackend selected = backend(options, System.getenv())) {
+                ChromeAiBackend chrome = (ChromeAiBackend) selected;
+                Map<String, Object> result = flag(options, "--chrome-status")
+                        ? chrome.status(timeout) : chrome.prepare(timeout);
+                System.out.println(McpJson.encode(result, 64 * 1024));
             }
             return;
         }
@@ -155,6 +163,16 @@ public final class StandaloneMain {
 
     static ModelBackend backend(Map<String, String> options, Map<String, String> environment) throws Exception {
         String provider = options.getOrDefault("--backend", "cli");
+        validateChromeModes(options);
+        if ("chrome".equals(provider)) {
+            rejectOptions(options, "--model", "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
+                    "--gpu-layers", "--compute-backend", "--device-backend", "--device", "--tier",
+                    "--fast-model", "--reasoning-model", "--frontier-model", "--model-url",
+                    "--model-sha256", "--model-cache-dir", "--thinking-level", "--api-key-env", "--list-devices");
+            return new ChromeAiBackend(chromeExecutable(options, environment),
+                    Path.of(required(options, "--chrome-profile")),
+                    flag(options, "--chrome-headless"), flag(options, "--chrome-download"));
+        }
         if ("gemini".equals(provider)) {
             rejectOptions(options, "--model-url", "--model-sha256", "--model-cache-dir");
             rejectOptions(options, "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
@@ -204,8 +222,63 @@ public final class StandaloneMain {
                 yield new LlamaCppJniBackend(library, model, context, threads, layers,
                         options.getOrDefault("--compute-backend", "auto"));
             }
-            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni or gemini)");
+            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni, gemini or chrome)");
         };
+    }
+
+    private static void validateChromeModes(Map<String, String> options) {
+        if (!"chrome".equals(options.get("--backend"))) {
+            rejectOptions(options, "--chrome-bin", "--chrome-profile", "--chrome-headless",
+                    "--chrome-download", "--chrome-status", "--chrome-prepare");
+            return;
+        }
+        boolean status = flag(options, "--chrome-status");
+        boolean prepare = flag(options, "--chrome-prepare");
+        if (status && prepare) throw new IllegalArgumentException("Chrome status and preparation are exclusive modes");
+        if (status || prepare) {
+            rejectOptions(options, "--prompt-file", "--stdio", "--mcp-stdio", "--list-devices", "--max-tokens");
+        }
+    }
+
+    private static Duration setupTimeout(Map<String, String> options) {
+        long seconds = Long.parseLong(options.getOrDefault("--timeout-seconds", "120"));
+        if (seconds < 1 || seconds > 3600) throw new IllegalArgumentException("timeout must be in [1, 3600] seconds");
+        return Duration.ofSeconds(seconds);
+    }
+
+    /** Discovery selects an executable only; it never attaches to an existing browser or profile. */
+    private static Path chromeExecutable(Map<String, String> options, Map<String, String> environment) {
+        String selected = options.containsKey("--chrome-bin") ? required(options, "--chrome-bin")
+                : environment.get("CHROME_BIN");
+        if (selected != null && !selected.isBlank()) return executable(Path.of(selected));
+        java.util.ArrayList<Path> candidates = new java.util.ArrayList<>();
+        String os = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT);
+        if (os.contains("win")) {
+            for (String variable : java.util.List.of("PROGRAMFILES", "ProgramFiles", "PROGRAMFILES(X86)",
+                    "ProgramFiles(x86)", "LOCALAPPDATA")) {
+                String folder = environment.get(variable);
+                if (folder != null && !folder.isBlank()) candidates.add(Path.of(folder, "Google", "Chrome", "Application", "chrome.exe"));
+            }
+        } else if (os.contains("mac")) {
+            candidates.add(Path.of("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"));
+            candidates.add(Path.of("/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"));
+            candidates.add(Path.of("/Applications/Chromium.app/Contents/MacOS/Chromium"));
+        } else {
+            for (String path : java.util.List.of("/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
+                    "/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium")) candidates.add(Path.of(path));
+        }
+        for (Path candidate : candidates) {
+            if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) return candidate.toAbsolutePath().normalize();
+        }
+        throw new IllegalArgumentException("Installed Chrome was not found; set --chrome-bin or CHROME_BIN to its executable");
+    }
+
+    private static Path executable(Path path) {
+        Path absolute = path.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(absolute) || !Files.isExecutable(absolute)) {
+            throw new IllegalArgumentException("Chrome executable is not an executable regular file");
+        }
+        return absolute;
     }
 
     /** Optional model URL is downloaded only on the first inference; existing paths remain untouched. */
@@ -308,6 +381,8 @@ public final class StandaloneMain {
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
                 "--model-cache-dir", "--mcp-stdio", "--agent", "--agent-endpoint", "--agent-token-env",
                 "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes");
+                "--model-cache-dir", "--mcp-stdio", "--chrome-bin", "--chrome-profile", "--chrome-headless",
+                "--chrome-download", "--chrome-status", "--chrome-prepare");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String option = args[i];
