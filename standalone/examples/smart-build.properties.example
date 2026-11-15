@@ -1,0 +1,13 @@
+# Copy to an approved recipe inside standalone/ and replace all operator paths.
+# Model assets and native executables must be licensed, installed and explicitly selected.
+# The default Maven build does not read this file or run model inference.
+promptFile=examples/smart-build-prompt.txt
+backend=jni
+jniLib=/approved/ChromeLLM/standalone/target/fork-native/libchromellm_llama_jni.so
+model=/approved/models/licensed.gguf
+maxTokens=256
+timeoutSeconds=120
+# For pinned on-demand HTTPS artifacts, remove model and instead supply:
+# modelUrl=https://models.example.invalid/licensed.gguf
+# modelSha256=REPLACE_WITH_REAL_64_HEX_SHA256
+# modelCacheDir=/approved/model-cache

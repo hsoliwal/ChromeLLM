@@ -383,11 +383,13 @@ jlong OpenModel(JNIEnv* env, jbyteArray model_path, jint context, jint threads, 
             devices.push_back(nullptr);
             params.devices = devices.data();
             params.split_mode = LLAMA_SPLIT_MODE_NONE;
-            params.main_gpu = 0;
+            // llama.cpp validates main_gpu even with zero offload layers. Its negative
+            // sentinel selects CPU when the explicitly supplied device list is empty.
+            params.main_gpu = compute_backend == 1 ? -1 : 0;
         } else if (selection) {
             params.devices = selection->offload_devices.data();
             params.split_mode = LLAMA_SPLIT_MODE_NONE;
-            params.main_gpu = 0;
+            params.main_gpu = selection->type == "CPU" ? -1 : 0;
         }
         // Own the model even when validation or shared_ptr allocation throws.
         std::unique_ptr<llama_model, decltype(&llama_model_free)> raw(
