@@ -1,0 +1,13 @@
+ChromeLLM standalone agent additions
+Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
+
+The new agent engine, bounded workspace tools, and their tests are licensed under
+the Apache License, Version 2.0. Agent additions to existing MIT-licensed files
+retain the existing MIT grant for the original code and identify the Apache-2.0
+additions in the source headers. Both license texts accompany this artifact.
+
+The plan/provider/progress design was informed by the MIT-licensed
+guberm/ChromeAIAgent project, revision b590a51891e6bd30bc9b1804914578854147fbb4.
+The Java implementation uses ChromeLLM's existing inference and JNI contracts.
+The category review uses LeetCode, HackerRank and GeeksforGeeks as algorithm
+references; no challenge statements, editorials or submission bodies are bundled.

@@ -27,6 +27,8 @@ first-party authorship of donor code.
 
 ## Maven profiles
 
+The default `mvn -f standalone/pom.xml verify` remains Java-only and performs
+no model acquisition or native compilation.
 The existing `mvn -f standalone/pom.xml verify` runs Java contracts without
 provisioning native or model inputs. Maven plugin dependencies still follow ordinary
 Maven resolution and offline settings.
@@ -74,6 +76,8 @@ Model acquisition starts on the first inference through the existing lazy provid
 with the bounded acquisition and shutdown behavior in
 [`LAZY_MODEL_CONTRACT.md`](LAZY_MODEL_CONTRACT.md). Reading the recipe and selecting
 the provider do not fetch weights or initialize a native model.
+The selected JNI/CLI runtime is supplied or built from the pinned source. Model bytes
+may be acquired through the explicit checksum-pinned URL or the `real-model-test` profile.
 `modelUrl` is an explicit, checksum-pinned HTTPS artifact, not a Chrome-managed
 proprietary model component.
 
@@ -96,6 +100,36 @@ and, where needed, `-Dchromellm.fork.dawnDir=/approved/dawn/install/lib64/cmake/
 If Dawn, compiler, or native dependencies are missing, CMake fails; there is
 no automatic browser, GPU or provider substitution.
 
+`-Dchromellm.fork.webgpu=ON -Dchromellm.fork.prefix=/approved/dawn/install`.
+If Dawn, compiler, or native dependencies are missing, CMake fails; there is
+no automatic browser, GPU or provider substitution.
+
+The `native-dawn` installer can accompany the commit-validated fork build in
+one invocation: `-Pfork-native,native-dawn`. It stages the verified dependency,
+enables WebGPU, and supplies the staged Dawn prefix to CMake. The existing
+`native-fork,native-dawn` combination remains supported.
+
+Separate staging remains available with
+`mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources`, followed by
+`fork-native` with `-Dchromellm.fork.webgpu=ON` and `-Dchromellm.fork.prefix`
+pointing to the absolute `standalone/target/native-deps/dawn` directory.
+See [`NATIVE_MAVEN_BUILD.md`](NATIVE_MAVEN_BUILD.md) for dependency qualification.
+To use Maven's pinned Dawn binary installer, select `-Pfork-native,native-dawn`
+with the same source and commit properties. The `native-dawn` profile enables
+WebGPU for the pinned source build and supplies the verified Dawn CMake prefix.
+Its platform support, archive hashes and cache-integrity contract are described
+in [NATIVE_MAVEN_BUILD.md](NATIVE_MAVEN_BUILD.md). The existing
+`-Pnative-fork,native-dawn` entry point remains available as well.
+To use the receiving baseline's `native-dawn` installer with a pinned fork build,
+first stage the verified dependency with
+`mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources`.
+Then run `fork-native` in a separate Maven invocation with
+`-Dchromellm.fork.webgpu=ON` and `-Dchromellm.fork.prefix` set to the absolute
+`standalone/target/native-deps/dawn` directory. The existing `native-dawn` profile
+also supports the existing `native-fork` profile as documented in
+[`NATIVE_MAVEN_BUILD.md`](NATIVE_MAVEN_BUILD.md). Its admission rules remain unchanged;
+do not combine `native-dawn` and `fork-native` in one invocation.
+
 Run the model **from the Maven build**, not from Chrome:
 
 ```sh
@@ -108,6 +142,13 @@ model. When explicitly requested, both profiles can be selected:
 `-Pfork-native,smart-build`. The smart-build recipe is a *candidate generator*,
 not an automatic source patcher or a guaranteed deterministic model runner.
 
+## Maven model acquisition and offline reuse
+
+The `real-model-test` profile downloads and tests the published, pinned model during
+integration-test. It creates the configured cache directory and verifies every hit.
+The `smart-build` profile accepts the same model URL/SHA/cache triple; Maven `-o`
+requires a verified cached artifact before initializing the selected provider.
+See [MAVEN_MODEL_TEST.md](MAVEN_MODEL_TEST.md) for the combined command and pins.
 ## Download and test the published model
 
 For a small CPU smoke test, choose a writable cache directory and put this

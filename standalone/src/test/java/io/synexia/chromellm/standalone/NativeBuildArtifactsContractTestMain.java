@@ -15,7 +15,7 @@ public final class NativeBuildArtifactsContractTestMain {
     private NativeBuildArtifactsContractTestMain() { }
 
     public static void main(String[] args) throws Exception {
-        Path root = Files.createTempDirectory("native-binary-contract-");
+        Path root = Files.createTempDirectory("native-binary-contract-").toRealPath();
         try {
             Path target = Files.createDirectory(root.resolve("target"));
             if (!NativeBuildArtifacts.buildDirectory(root, target).equals(target)) throw new AssertionError("target");
