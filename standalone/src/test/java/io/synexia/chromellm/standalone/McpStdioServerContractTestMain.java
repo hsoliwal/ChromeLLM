@@ -55,6 +55,7 @@ public final class McpStdioServerContractTestMain {
         check(inferCalls.get() == 2, "invalid calls invoked backend");
         check(McpJson.parse("{\"x\":1e1}") instanceof Map, "JSON numeric parse failed");
         rejectJson("{\"x\":\"\\ud800\"}");
+        rejectJson("{\"x\":\"" + "\\" + "u٠٠٠٠\"}");
         rejectJson("[1,2,]");
         rejectJson("{\"x\":1,\"x\":2}");
         rejectIo(() -> McpStdioServer.serve(provider,
