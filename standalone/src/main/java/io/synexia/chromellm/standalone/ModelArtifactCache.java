@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.FilterInputStream;
@@ -84,6 +85,10 @@ final class ModelArtifactCache {
     ModelArtifactCache(String url, String sha256, Path directory, boolean followRedirects,
                        Duration timeout, long maxBytes) {
         this(url, sha256, directory, downloader(followRedirects, timeout, maxBytes), maxBytes, timeout);
+    /** Legacy native archive constructor; bounded models use the five-argument overload. */
+    ModelArtifactCache(String url, String sha256, Path directory, long expectedBytes) {
+        this(url, sha256, directory, uri -> fetchRelease(uri, expectedBytes),
+                expectedBytes, ACQUISITION_TIMEOUT, expectedBytes, ".bin", false);
     }
 
     /** Bounded GGUF acquisition; the offline flag can only further restrict resolution. */
@@ -97,7 +102,7 @@ final class ModelArtifactCache {
         this(url, sha256, directory, downloader(true, ACQUISITION_TIMEOUT, expectedBytes),
                 expectedBytes, expectedBytes, ".bin");
     static ModelArtifactCache binaryArtifact(String url, String sha256, Path directory, long expectedBytes) {
-        return new ModelArtifactCache(url, sha256, directory, uri -> fetch(uri, expectedBytes),
+        return new ModelArtifactCache(url, sha256, directory, uri -> fetchRelease(uri, expectedBytes),
                 expectedBytes, ACQUISITION_TIMEOUT, expectedBytes, ".bin", false);
     }
 
@@ -445,11 +450,21 @@ final class ModelArtifactCache {
     private static InputStream fetch(URI url, long maxBytes) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(Duration.ofSeconds(20)).build();
+        return fetch(url, transport(client), ACQUISITION_TIMEOUT, false, maxBytes);
+    }
+
+    private static InputStream fetchRelease(URI url, long maxBytes) throws IOException, InterruptedException {
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)
+                .connectTimeout(Duration.ofSeconds(20)).build();
         return fetch(url, transport(client), ACQUISITION_TIMEOUT, githubRelease(url), maxBytes);
     }
 
     static InputStream fetch(URI url, HttpClient client) throws IOException, InterruptedException {
-        return fetch(url, transport(client), ACQUISITION_TIMEOUT, githubRelease(url), MAX_BYTES);
+        return fetch(url, transport(client), ACQUISITION_TIMEOUT, false, MAX_BYTES);
+    }
+
+    static InputStream fetchRelease(URI url, HttpClient client) throws IOException, InterruptedException {
+        return fetch(url, transport(client), ACQUISITION_TIMEOUT, true, MAX_BYTES);
     }
 
     static InputStream fetch(URI url, long maxBytes, ResponseSender sender)
@@ -459,7 +474,7 @@ final class ModelArtifactCache {
             @Override public HttpResponse<InputStream> send(HttpRequest request)
                     throws IOException, InterruptedException { return sender.send(request); }
             @Override public void close() { /* The sender owns no client resources. */ }
-        }, ACQUISITION_TIMEOUT, githubRelease(url), maxBytes);
+        }, ACQUISITION_TIMEOUT, false, maxBytes);
     }
 
     private static Transport transport(HttpClient client) {
@@ -484,6 +499,11 @@ final class ModelArtifactCache {
     static InputStream fetch(URI initialUrl, long maxBytes, Transport transport, Duration timeout)
             throws IOException, InterruptedException {
         return fetch(initialUrl, transport, timeout, githubRelease(initialUrl), maxBytes);
+    }
+
+    static InputStream fetch(URI initialUrl, Transport transport, Duration timeout, long maxBytes)
+            throws IOException, InterruptedException {
+        return fetch(initialUrl, transport, timeout, false, maxBytes);
     }
 
     private static InputStream fetch(URI initialUrl, Transport transport, Duration timeout,

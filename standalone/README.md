@@ -127,7 +127,9 @@ for cache, platform, model and recipe settings.
 Standalone mode now exposes an MCP-compatible stdio server separately from the legacy
 `--stdio true` CLM1 binary transport. The MCP server supports an explicit
 `2025-06-18` initialization handshake, `tools/list`, `tools/call`,
-`ping`, and two bounded tools: `backend_status` and `infer_text`.
+`ping`, and three bounded tools: `backend_status`, `infer_text`, and `plan_steps`.
+The planning tool returns candidate steps without executing them; its admission
+rules are documented in [AGENT_PLANNING_CONTRACT.md](AGENT_PLANNING_CONTRACT.md).
 The stdio transport does not require Node or a browser. The explicitly selected Chrome provider owns its separate localhost page and browser process.
 
 ```sh
@@ -644,7 +646,18 @@ for their source pins, platform limits and supported Dawn/profile combinations.
 
 ## Bounded coding-agent sessions
 
-Run `--agent true` with an explicitly configured headless repository service to
-use the existing Java/JNI model provider for multi-step source inspection and
+Run `--agent true` with `--agent-endpoint` and `--agent-token-env` to use an
+explicitly configured headless repository service for source inspection and
 candidate previews. See [AGENT.md](AGENT.md) for setup, tools, MCP integration,
-budgets, source-hash checks and qualification boundaries.
+budgets and source-hash checks. This mode emits its final result as structured JSON.
+
+For read-only local workspace tools, select `--agent true --workspace /absolute/project`
+with the existing model-provider and prompt-file options. `--agent-max-steps` and
+`--agent-max-calls` bound this workspace loop. It writes the final answer to stdout
+and ordered progress metadata to stderr. Repository-service and workspace controls
+are exclusive, and neither mode changes the selected inference provider.
+
+In MCP mode, an operator-configured repository service adds `run_agent`; an
+operator-configured `--workspace` adds `agent_run`. The existing `plan_steps`,
+`backend_status` and `infer_text` tools remain available. Tool discovery and provider
+status do not trigger model acquisition or inference.
