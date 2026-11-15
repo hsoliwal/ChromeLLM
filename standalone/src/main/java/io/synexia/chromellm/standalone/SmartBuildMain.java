@@ -42,16 +42,14 @@ public final class SmartBuildMain {
         if ((args.length != 3 && args.length != 4) || args[0].isBlank()) {
             throw new IllegalArgumentException("expected recipe, standalone root, Maven target directory, and optional offline flag");
         }
-        String offline = args.length == 4 ? args[3] : "false";
+        String offline = args.length == 4 ? args[3] : System.getProperty("chromellm.offline", "false");
         if (offline.startsWith("--offline=")) offline = offline.substring("--offline=".length());
+        else if (offline.startsWith("offline=")) offline = offline.substring("offline=".length());
         if (!offline.equals("true") && !offline.equals("false")) {
             throw new IllegalArgumentException("offline flag requires true or false");
         }
         return run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), environment, providerFactory,
                 offline.equals("true"));
-        run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), System.getenv(), StandaloneMain::backend,
-                "offline=true".equals(System.getProperty("chromellm.offline"))
-                        || Boolean.getBoolean("chromellm.offline"));
     }
 
     static Path run(Path recipe, Path workspace, Path buildDirectory,
@@ -62,11 +60,6 @@ public final class SmartBuildMain {
     static Path run(Path recipe, Path workspace, Path buildDirectory,
                     Map<String, String> environment, ProviderFactory providerFactory, boolean offline) throws Exception {
         Path root = workspace.toRealPath();
-        // Reject the destination before any artifact acquisition or provider initialization.
-        Path outputRoot = validateOutputRoot(root, buildDirectory);
-        // Reject the destination before cache preparation or provider initialization.
-        Path outputRoot = validateOutputRoot(root, buildDirectory);
-        NativeBuildArtifacts.buildDirectory(root, outputRoot.getParent());
         Path recipePath = confined(root, recipe, "recipe");
         byte[] recipeBytes;
         try (InputStream input = Files.newInputStream(recipePath)) {
@@ -124,39 +117,22 @@ public final class SmartBuildMain {
             String value = options.get(key);
             if (value != null) options.put(key, root.resolve(value).normalize().toString());
         }
+        // Reject the destination before any artifact acquisition or provider initialization.
+        Path outputRoot = validateOutputRoot(root, buildDirectory);
         if (options.containsKey("--model-url")) {
-            Path cache = Path.of(required(config, "modelCacheDir"));
-            cache = root.resolve(cache).normalize();
-            Files.createDirectories(cache);
+            // The existing lazy provider validates the complete option combination without I/O.
+            StandaloneMain.backend(Map.copyOf(options), environment).close();
+            Path cache = Path.of(options.get("--model-cache-dir"));
+            if (!offline) Files.createDirectories(cache);
             if (!cache.toRealPath().equals(cache)) throw new IOException("model cache must not traverse symlinks");
             if (offline) {
-                Path model = new ModelArtifactCache(required(config, "modelUrl"),
-                        required(config, "modelSha256"), cache).resolveWithOfflinePolicy(true);
+                Path model = new ModelArtifactCache(options.get("--model-url"), options.get("--model-sha256"),
+                        cache, ModelArtifactCache.MAX_BYTES, true).resolve();
                 options.remove("--model-url");
                 options.remove("--model-sha256");
                 options.remove("--model-cache-dir");
-                if (options.putIfAbsent("--model", model.toString()) != null) {
-                    throw new IllegalArgumentException("model and modelUrl are exclusive");
-                }
+                options.put("--model", model.toString());
             }
-        }
-        Path outputRoot = target.resolve("smart-build");
-        Files.createDirectories(outputRoot);
-        if (!outputRoot.toRealPath().startsWith(root) || Files.isSymbolicLink(outputRoot)) {
-            throw new IOException("smart-build outputs must stay inside the project build directory");
-        }
-        // Reject the destination before any artifact acquisition or provider initialization.
-        Path outputRoot = validateOutputRoot(root, buildDirectory);
-        if (offline && options.containsKey("--model-url")) {
-            // Reuse the engine's lazy-provider admission before changing its model options.
-            // Construction and close do not infer, open the provider, or acquire the model.
-            StandaloneMain.backend(Map.copyOf(options), environment).close();
-            Path model = new ModelArtifactCache(options.get("--model-url"), options.get("--model-sha256"),
-                    Path.of(options.get("--model-cache-dir")), ModelArtifactCache.MAX_BYTES, true).resolve();
-            options.remove("--model-url");
-            options.remove("--model-sha256");
-            options.remove("--model-cache-dir");
-            options.put("--model", model.toString());
         }
         // The selected provider and all options are admitted by the pre-existing engine contract.
         byte[] candidate;
@@ -185,7 +161,6 @@ public final class SmartBuildMain {
     }
 
     private static Path validateOutputRoot(Path root, Path buildDirectory) throws IOException {
-        Path target = NativeBuildArtifacts.buildDirectory(root, buildDirectory);
         Path suppliedTarget = buildDirectory.toAbsolutePath().normalize();
         Path target = root.resolve("target");
         // Resolve ancestor aliases consistently with workspace.toRealPath(), while

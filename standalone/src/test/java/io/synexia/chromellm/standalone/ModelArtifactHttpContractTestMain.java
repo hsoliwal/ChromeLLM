@@ -81,7 +81,7 @@ public final class ModelArtifactHttpContractTestMain {
         for (int i = 0; i < ModelArtifactCache.MAX_REDIRECTS + 2; i++) {
             TrackedStream body = new TrackedStream("redirect");
             cycleBodies.add(body);
-            cycle.add(response(302, Map.of("Location", List.of(ASSET.toString())), body));
+            cycle.add(response(302, Map.of("Location", List.of(ASSET + "?hop=" + i)), body));
         }
         ScriptedClient cycleClient = new ScriptedClient(cycle);
         expectIo(() -> ModelArtifactCache.fetch(RELEASE, cycleClient));
@@ -91,6 +91,16 @@ public final class ModelArtifactHttpContractTestMain {
                 "redirect-limit refusal leaked a response");
         check(!cycleBodies.getLast().closed && cycleClient.shutdowns.get() == 1,
                 "redirect limit consumed an extra response or leaked its client");
+
+        TrackedStream firstCycle = new TrackedStream("first");
+        TrackedStream secondCycle = new TrackedStream("second");
+        ScriptedClient repeatedClient = new ScriptedClient(
+                response(302, Map.of("Location", List.of(ASSET.toString())), firstCycle),
+                response(302, Map.of("Location", List.of(RELEASE.toString())), secondCycle));
+        expectIo(() -> ModelArtifactCache.fetch(RELEASE, repeatedClient));
+        check(repeatedClient.requests.size() == 2 && firstCycle.closed && secondCycle.closed
+                        && repeatedClient.shutdowns.get() == 1,
+                "redirect cycle repeated a request or leaked body/client");
 
         TrackedStream direct = new TrackedStream("direct");
         ScriptedClient directClient = new ScriptedClient(response(200, Map.of(), direct));

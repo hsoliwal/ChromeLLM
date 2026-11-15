@@ -29,9 +29,9 @@ first-party authorship of donor code.
 
 The default `mvn -f standalone/pom.xml verify` remains Java-only and performs
 no model acquisition or native compilation.
-The existing `mvn -f standalone/pom.xml verify` runs Java contracts without
-provisioning native or model inputs. Maven plugin dependencies still follow ordinary
-Maven resolution and offline settings.
+Maven plugin dependencies must already be cached to run with `-o`.
+Its Java contract suite also verifies the fork-source pin and inference recipe;
+no native library or model is required by those offline test fixtures.
 
 The existing `native-fork` and `native-synthetic` profiles remain available.
 Choose `fork-native` when the build must validate a complete Git commit pin before
@@ -100,35 +100,19 @@ and, where needed, `-Dchromellm.fork.dawnDir=/approved/dawn/install/lib64/cmake/
 If Dawn, compiler, or native dependencies are missing, CMake fails; there is
 no automatic browser, GPU or provider substitution.
 
-`-Dchromellm.fork.webgpu=ON -Dchromellm.fork.prefix=/approved/dawn/install`.
-If Dawn, compiler, or native dependencies are missing, CMake fails; there is
-no automatic browser, GPU or provider substitution.
+For a combined pinned-source build and tested Dawn binary, use
+`-Pfork-native,dawn-binary` with the same source and commit properties. The
+`dawn-binary` profile supplies its verified Dawn SDK to CMake and runs an actual
+Vulkan/WGSL compute and readback test.
 
-The `native-dawn` installer can accompany the commit-validated fork build in
-one invocation: `-Pfork-native,native-dawn`. It stages the verified dependency,
-enables WebGPU, and supplies the staged Dawn prefix to CMake. The existing
-`native-fork,native-dawn` combination remains supported.
-
-Separate staging remains available with
-`mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources`, followed by
-`fork-native` with `-Dchromellm.fork.webgpu=ON` and `-Dchromellm.fork.prefix`
-pointing to the absolute `standalone/target/native-deps/dawn` directory.
-See [`NATIVE_MAVEN_BUILD.md`](NATIVE_MAVEN_BUILD.md) for dependency qualification.
-To use Maven's pinned Dawn binary installer, select `-Pfork-native,native-dawn`
-with the same source and commit properties. The `native-dawn` profile enables
-WebGPU for the pinned source build and supplies the verified Dawn CMake prefix.
-Its platform support, archive hashes and cache-integrity contract are described
-in [NATIVE_MAVEN_BUILD.md](NATIVE_MAVEN_BUILD.md). The existing
-`-Pnative-fork,native-dawn` entry point remains available as well.
-To use the receiving baseline's `native-dawn` installer with a pinned fork build,
-first stage the verified dependency with
+The separate `native-dawn` installer supports `native-fork`, or dependency staging
+on its own. To use that installer with a pinned `fork-native` build, first run
 `mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources`.
-Then run `fork-native` in a separate Maven invocation with
-`-Dchromellm.fork.webgpu=ON` and `-Dchromellm.fork.prefix` set to the absolute
-`standalone/target/native-deps/dawn` directory. The existing `native-dawn` profile
-also supports the existing `native-fork` profile as documented in
-[`NATIVE_MAVEN_BUILD.md`](NATIVE_MAVEN_BUILD.md). Its admission rules remain unchanged;
-do not combine `native-dawn` and `fork-native` in one invocation.
+Then run `fork-native` separately with `-Dchromellm.fork.webgpu=ON` and
+`-Dchromellm.fork.prefix` set to the absolute `standalone/target/native-deps/dawn`
+directory. Do not combine `native-dawn` with `fork-native`, `dawn-binary`, or
+`native-synthetic` in one invocation. See
+[`NATIVE_MAVEN_BUILD.md`](NATIVE_MAVEN_BUILD.md) for platform and archive qualification.
 
 Run the model **from the Maven build**, not from Chrome:
 
@@ -142,19 +126,12 @@ model. When explicitly requested, both profiles can be selected:
 `-Pfork-native,smart-build`. The smart-build recipe is a *candidate generator*,
 not an automatic source patcher or a guaranteed deterministic model runner.
 
-## Maven model acquisition and offline reuse
-
-The `real-model-test` profile downloads and tests the published, pinned model during
-integration-test. It creates the configured cache directory and verifies every hit.
-The `smart-build` profile accepts the same model URL/SHA/cache triple; Maven `-o`
-requires a verified cached artifact before initializing the selected provider.
-See [MAVEN_MODEL_TEST.md](MAVEN_MODEL_TEST.md) for the combined command and pins.
 ## Download and test the published model
 
 For a small CPU smoke test, choose a writable cache directory and put this
 recipe in `standalone/examples/smart-build-release.properties`. Set `jniLib`
 to the library built for your platform and `modelCacheDir` to the chosen
-directory. Smart Build creates the directory if it is missing:
+directory. Smart Build creates it when online and refuses a missing cache offline:
 
 ```properties
 promptFile=examples/smart-build-prompt.txt
@@ -194,6 +171,20 @@ refusal, output receipts, deterministic CPU repetition and native close under
 Dawn compute binary and the `real-model` Maven profile described below.
 Physical GPU execution requires its own qualification.
 
+The `native-synthetic` profile cannot be combined with either `native-fork`
+or `fork-native`. Choose one native build mode per Maven invocation.
+The optional `native-dawn` profile also refuses synthetic mode. Add `smart-build`
+to the selected native profiles when you want the configured inference recipe
+to run after the native build; choose the compute backend explicitly in that recipe.
+
+## Maven model acquisition and offline reuse
+
+The `real-model-test` profile downloads and tests the published, pinned model during
+integration-test. It creates the configured cache directory and verifies every hit.
+The `smart-build` profile accepts the same model URL/SHA/cache triple; Maven `-o`
+requires a verified cached artifact before initializing the selected provider.
+See [MAVEN_MODEL_TEST.md](MAVEN_MODEL_TEST.md) for the combined command and pins.
+
 ## Artifact and safety contract
 
 The smart recipe reads a bounded UTF-8 prompt inside the standalone project.
@@ -232,7 +223,7 @@ Maven `-o` permits verified cache reuse and refuses a missing binary.
 | --- | --- |
 | `dawn-binary` | Download the native fork CI's Linux x86_64 Dawn v2.0.0 binary; verify both ZIP and nested TAR; extract a fresh installation; build and run an actual Vulkan/WGSL compute and readback test. |
 | `real-model` | Download the pinned Apache-2.0 SmolLM2 model; run the real JNI provider, selected-device and response-identity smoke test with `-Xcheck:jni`. |
-| `smart-build` | Resolve an explicitly configured `modelUrl` lazily when inference is requested. Relative recipe paths resolve against `standalone/`; missing cache directories are created. |
+| `smart-build` | Resolve an explicitly configured `modelUrl` lazily when inference is requested. Relative recipe paths resolve against `standalone/`; missing cache directories are created when online. |
 
 The default cache for these two binary profiles is `${user.home}/.cache/chromellm`;
 set `-Dchromellm.artifact.cache=/path/to/cache` to change it. The smart-build recipe
@@ -316,11 +307,11 @@ The `native-dawn` source-file installer and its Linux/macOS workflow remain
 available. Its `native-fork` integration uses `chromellm.native.source` and
 `chromellm.native.dawn.prefix`. The `fork-native,dawn-binary` path uses
 `chromellm.fork.source`, a full `chromellm.fork.commit`, and the independently
-verified runtime tests documented above. Maven rejects combinations that select
-multiple native source builds, or pair a Dawn installer with the other source
-profile; each supported pairing provisions Dawn before its CMake configuration.
+verified runtime tests documented above. Maven rejects multiple native source
+builds, both Dawn installers together, and either installer paired with the other
+source profile; each supported pairing provisions Dawn before its CMake configuration.
 
-Maven's offline setting is enforced by `dawn-binary`, `real-model` and
+Maven's offline setting is enforced by `dawn-binary`, `real-model`, `real-model-test` and
 `smart-build`. The `native-dawn` source-file installer controls acquisition
 independently of Maven's offline setting, so use an already verified installer
 cache when running that profile without network access.

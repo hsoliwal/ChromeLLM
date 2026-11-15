@@ -118,7 +118,7 @@ on Linux. The commit-validated `fork-native` profile defaults to
 ## Admission and boundaries
 
 - The default `mvn -f standalone/pom.xml verify` is unchanged: Java-only, no CMake, network, model or native build prerequisite.
-- Choose exactly one native build profile: `native-fork`, commit-validated `fork-native`, or `native-synthetic`. Maven's `validate` stage fails when any two are activated together, **before** CMake or native artifact writes. The optional `native-dawn` dependency profile can accompany either real native build profile.
+- Choose exactly one native build profile: `native-fork`, commit-validated `fork-native`, or `native-synthetic`. Maven's `validate` stage fails when any two are activated together, **before** CMake or native artifact writes. The optional `native-dawn` dependency profile accompanies `native-fork`; the `dawn-binary` installer accompanies commit-validated `fork-native`. Each installer refuses the other source profile and synthetic mode. Select only one Dawn installer per invocation.
 - The operator pins and audits the donor source, native dependencies and model licenses. The local build does not copy native artifacts or weights into the Java JAR.
 - Source-build acceptance requires an independently supplied real model, runtime observation, licensing review, the supported OS and (when selected) measured WebGPU device execution. A passing Maven/CTest/synthetic JNI build does **not** supply these proofs.
 - Canonical source mutation, qualification receipts and evidence belong in `hsoliwal/com.synexia`, not ChromeLLM. M3JDK21 integration remains a separate, explicitly qualified receiving change.
