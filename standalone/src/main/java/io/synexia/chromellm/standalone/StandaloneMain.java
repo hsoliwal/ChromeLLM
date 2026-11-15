@@ -20,6 +20,17 @@ public final class StandaloneMain {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
+        if (flag(options, "--mcp-stdio")) {
+            if (flag(options, "--stdio") || flag(options, "--list-devices")
+                    || options.containsKey("--prompt-file")) {
+                throw new IllegalArgumentException("MCP stdio requires its own exclusive session mode");
+            }
+            try (ModelBackend backend = backend(options, System.getenv());
+                 FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
+                McpStdioServer.serve(backend, System.in, output);
+            }
+            return;
+        }
         if (flag(options, "--list-devices")) {
             if (!"jni".equals(options.getOrDefault("--backend", "jni"))) {
                 throw new IllegalArgumentException("device listing requires the JNI backend");
@@ -225,7 +236,7 @@ public final class StandaloneMain {
                 "--timeout-seconds", "--stdio", "--list-devices", "--device-backend", "--device",
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
-                "--model-cache-dir");
+                "--model-cache-dir", "--mcp-stdio");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String option = args[i];
