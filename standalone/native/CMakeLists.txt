@@ -39,6 +39,15 @@ elseif(CHROMELLM_LLAMA_SOURCE_DIR)
   set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "Build llama.cpp examples" FORCE)
   set(LLAMA_BUILD_SERVER OFF CACHE BOOL "Build llama.cpp server" FORCE)
   set(LLAMA_CURL OFF CACHE BOOL "Enable llama.cpp downloads" FORCE)
+  # Maven's opt-in native-dawn profile stages a pinned release outside donor source.
+  # A blank prefix preserves existing operator-managed Dawn discovery.
+  if(CHROMELLM_WEBGPU AND CHROMELLM_DAWN_PREFIX)
+    if(NOT EXISTS "${CHROMELLM_DAWN_PREFIX}/lib64/cmake/Dawn/DawnConfig.cmake"
+        AND NOT EXISTS "${CHROMELLM_DAWN_PREFIX}/lib/cmake/Dawn/DawnConfig.cmake")
+      message(FATAL_ERROR "CHROMELLM_DAWN_PREFIX lacks a DawnConfig.cmake: ${CHROMELLM_DAWN_PREFIX}")
+    endif()
+    list(PREPEND CMAKE_PREFIX_PATH "${CHROMELLM_DAWN_PREFIX}")
+  endif()
   # The existing GGML WebGPU provider discovers Dawn through find_package(Dawn REQUIRED).
   # Supply Dawn_DIR or CMAKE_PREFIX_PATH for an independently built Dawn installation.
   add_subdirectory("${CHROMELLM_LLAMA_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/llama.cpp" EXCLUDE_FROM_ALL)
