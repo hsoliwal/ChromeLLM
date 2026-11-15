@@ -1,0 +1,1 @@
+Propose a minimal, contract-preserving Java/JNI improvement from the evidence supplied in this prompt. Explain the invariant, intended patch, and required verification. Do not claim that files were modified, tests passed, or native code executed unless evidence is present.
