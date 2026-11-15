@@ -7,40 +7,68 @@
 #include <cstring>
 #include <cstdlib>
 #include <string>
-struct llama_model {};
+struct ggml_backend_reg { const char* name; };
+struct ggml_backend_device {
+    ggml_backend_reg_t backend;
+    const char* name;
+    const char* description;
+    enum ggml_backend_dev_type type;
+};
+// These are synthetic inventory entries. They never create or execute a GPU device.
+static ggml_backend_reg cpu{"CPU"}, webgpu{"WebGPU"}, vulkan{"Vulkan"}, blas{"BLAS"}, duplicate{"Duplicate"};
+static ggml_backend_device devices[]{
+    {&cpu, "CPU", "synthetic CPU", GGML_BACKEND_DEVICE_TYPE_CPU},
+    {&webgpu, "WebGPU", "synthetic WebGPU, not Dawn execution", GGML_BACKEND_DEVICE_TYPE_GPU},
+    {&vulkan, "Vulkan0", "synthetic integrated GPU नमस्ते", GGML_BACKEND_DEVICE_TYPE_IGPU},
+    {&blas, "BLAS", "synthetic CPU accelerator", GGML_BACKEND_DEVICE_TYPE_ACCEL},
+    {&duplicate, "same", "synthetic ambiguous device one", GGML_BACKEND_DEVICE_TYPE_GPU},
+    {&duplicate, "same", "synthetic ambiguous device two", GGML_BACKEND_DEVICE_TYPE_GPU}
+};
+struct llama_model { llama_model_params params; std::string path; };
 struct llama_vocab {};
 struct llama_context { llama_context_params p; int sampled = 0; int mode = 2; };
 struct llama_sampler {};
-struct ggml_backend_reg {};
-struct ggml_backend_device { ggml_backend_reg_t registry; };
-static ggml_backend_reg cpu_registry, webgpu_registry;
-static ggml_backend_device cpu_device{&cpu_registry}, webgpu_device{&webgpu_registry};
 static bool HasWebGpu() {
     const char* disabled = std::getenv("CHROMELLM_TEST_NO_WEBGPU");
     return disabled == nullptr || std::strcmp(disabled, "1") != 0;
 }
 extern "C" {
 ggml_backend_reg_t ggml_backend_reg_by_name(const char* name) {
-    return HasWebGpu() && std::strcmp(name, "WebGPU") == 0 ? &webgpu_registry : nullptr;
+    return HasWebGpu() && std::strcmp(name, "WebGPU") == 0 ? &webgpu : nullptr;
 }
-size_t ggml_backend_dev_count() { return HasWebGpu() ? 2 : 1; }
-ggml_backend_dev_t ggml_backend_dev_get(size_t index) {
-    return index == 0 ? &cpu_device : (index == 1 && HasWebGpu() ? &webgpu_device : nullptr);
-}
-ggml_backend_reg_t ggml_backend_dev_backend_reg(ggml_backend_dev_t device) { return device->registry; }
 void llama_backend_init() {}
-llama_model_params llama_model_default_params() { return {0, nullptr, LLAMA_SPLIT_MODE_LAYER, -1}; }
-llama_model* llama_model_load_from_file(const char* path, llama_model_params params) {
+// Without the WebGPU provider the registry simply has no entry at the WebGPU position.
+size_t ggml_backend_dev_count() { return sizeof(devices) / sizeof(devices[0]) - (HasWebGpu() ? 0 : 1); }
+ggml_backend_dev_t ggml_backend_dev_get(size_t index) {
+    if (index >= ggml_backend_dev_count()) return nullptr;
+    return &devices[!HasWebGpu() && index >= 1 ? index + 1 : index];
+}
+const char* ggml_backend_dev_name(ggml_backend_dev_t device) { return device->name; }
+const char* ggml_backend_dev_description(ggml_backend_dev_t device) { return device->description; }
+enum ggml_backend_dev_type ggml_backend_dev_type(ggml_backend_dev_t device) { return device->type; }
+ggml_backend_reg_t ggml_backend_dev_backend_reg(ggml_backend_dev_t device) { return device->backend; }
+const char* ggml_backend_reg_name(ggml_backend_reg_t backend) { return backend->name; }
+llama_model_params llama_model_default_params() { return {nullptr, 0, LLAMA_SPLIT_MODE_LAYER, 7}; }
+static bool correctSelection(const char* path, const llama_model_params& p) {
     const std::string name(path);
-    if (name.find("rejected") != std::string::npos) return nullptr;
-    if (name.find("require-webgpu") != std::string::npos
-            && (params.devices == nullptr || params.devices[0] != &webgpu_device
-                || params.devices[1] != nullptr || params.n_gpu_layers <= 0
-                || params.split_mode != LLAMA_SPLIT_MODE_NONE || params.main_gpu != 0)) return nullptr;
-    if (name.find("require-cpu") != std::string::npos
-            && (params.devices == nullptr || params.devices[0] != nullptr
-                || params.n_gpu_layers != 0)) return nullptr;
-    return new llama_model;
+    if (name.find("require-webgpu") != std::string::npos) {
+        return p.devices != nullptr && p.devices[0] == &devices[1] && p.devices[1] == nullptr
+            && p.n_gpu_layers == 3 && p.split_mode == LLAMA_SPLIT_MODE_NONE && p.main_gpu == 0;
+    }
+    if (name.find("require-cpu") != std::string::npos) {
+        return p.devices != nullptr && p.devices[0] == nullptr && p.n_gpu_layers == 0
+            && p.split_mode == LLAMA_SPLIT_MODE_NONE && p.main_gpu == 0;
+    }
+    if (name.find("require-default") != std::string::npos) {
+        return p.devices == nullptr && p.n_gpu_layers == 0
+            && p.split_mode == LLAMA_SPLIT_MODE_LAYER && p.main_gpu == 7;
+    }
+    return true;
+}
+llama_model* llama_model_load_from_file(const char* path, llama_model_params params) {
+    if (std::string(path).find("rejected") != std::string::npos) return nullptr;
+    if (!correctSelection(path, params)) return nullptr;
+    return new llama_model{params, path};
 }
 const llama_vocab* llama_model_get_vocab(const llama_model*) { static llama_vocab v; return &v; }
 bool llama_model_has_encoder(const llama_model*) { return false; }
@@ -56,7 +84,10 @@ int32_t llama_tokenize(const llama_vocab*, const char* input, int32_t len, llama
     return 1;
 }
 llama_context_params llama_context_default_params() { return {0, 0, 0, 0, nullptr, nullptr}; }
-llama_context* llama_init_from_model(llama_model*, llama_context_params p) { return new llama_context{p}; }
+llama_context* llama_init_from_model(llama_model* model, llama_context_params p) {
+    // Re-read the stored device pointer after model load: selection storage must outlive loading.
+    return correctSelection(model->path.c_str(), model->params) ? new llama_context{p} : nullptr;
+}
 void llama_free(llama_context* c) { delete c; }
 llama_sampler_chain_params llama_sampler_chain_default_params() { return {}; }
 llama_sampler* llama_sampler_chain_init(llama_sampler_chain_params) { return new llama_sampler; }

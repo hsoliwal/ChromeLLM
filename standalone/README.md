@@ -58,9 +58,10 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
 
 The `--device` and `--gpu-layers` options are passed as separate, checked
 arguments to the explicitly provided `llama-cli`; unsupported devices fail
-without CPU substitution. `--device` is currently **CLI-only**. JNI still
-supports its existing `--gpu-layers` hint but does not prove which GPU API
-executed. These flags do not install Dawn, validate a driver, prove actual GPU
+without CPU substitution. With `--backend cli`, `--device` names the llama.cpp
+CLI device. With `--backend jni`, `--device` is one half of an exact
+`--device-backend`/`--device` pair (see "JNI device inventory and stdio
+sessions" below). These flags do not install Dawn, validate a driver, prove actual GPU
 offload, or establish numerical parity. The offline tests prove bounded argv,
 receipt checks and routing only; real WebGPU inference, driver compatibility,
 and performance remain unverified.
@@ -115,6 +116,25 @@ The source-build option uses linked GGML providers (`GGML_BACKEND_DL=OFF`) and d
 `--compute-backend auto` is the JNI default and preserves the original provider behavior and JNI entry point. `cpu` explicitly selects the CPU provider and requires `--gpu-layers 0`. `webgpu` explicitly selects the WebGPU provider and requires a positive layer count; an absent provider fails instead of silently substituting CPU. These options are valid only with `--backend jni`. The original public Java constructor and JNI `nOpen` entry point remain available.
 
 Selecting a WebGPU device and requesting layers does not measure which model operations execute on the device. Validate actual inference with your chosen GGUF model, Dawn build and driver before making performance or device-execution claims.
+
+## JNI device inventory and stdio sessions
+
+`--list-devices true --jni-lib /absolute/path/libchromellm_llama_jni.so` prints
+one line per device registered by the supplied llama.cpp build: backend, device
+name, type (`CPU`, `GPU`, `IGPU` or `ACCEL`) and description, tab-separated.
+
+`--backend jni --device-backend <backend> --device <name>` selects exactly one
+listed pair. Both options are required together, the match is case-sensitive, a
+missing or ambiguous pair fails, a GPU/IGPU device requires a positive
+`--gpu-layers` and a CPU device requires `--gpu-layers 0`. The pair cannot be
+combined with `--compute-backend`, which selects a whole provider instead.
+
+`--stdio true` keeps the one selected backend and model loaded and serves
+sequential requests on stdin/stdout instead of reading `--prompt-file`. Requests
+and responses are length-framed binary messages carrying UTF-8 text; frames are
+bounded, end of input between frames ends the session, and a partial frame is an
+error. A llama.cpp build that prints diagnostics to stdout is incompatible with
+this mode.
 
 ## Synthetic JNI test (not a real model run)
 

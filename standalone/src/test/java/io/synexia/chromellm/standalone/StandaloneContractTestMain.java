@@ -75,6 +75,7 @@ public final class StandaloneContractTestMain {
             Files.deleteIfExists(temp);
         }
         TieredInferenceTestMain.main(new String[0]);
+        checks += StdioProtocolContractTestMain.run();
         System.out.println("standalone contract checks passed: " + checks);
     }
 

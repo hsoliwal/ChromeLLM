@@ -53,7 +53,7 @@ else()
   endif()
   find_path(LLAMA_INCLUDE_DIR NAMES llama.h REQUIRED)
   find_path(GGML_INCLUDE_DIR NAMES ggml.h REQUIRED)
-  foreach(GGML_HEADER ggml-cpu.h ggml-backend.h ggml-opt.h)
+  foreach(GGML_HEADER ggml-cpu.h ggml-backend.h ggml-alloc.h ggml-opt.h)
     if(NOT EXISTS "${GGML_INCLUDE_DIR}/${GGML_HEADER}")
       message(FATAL_ERROR "Missing llama.cpp ggml API header: ${GGML_HEADER} in ${GGML_INCLUDE_DIR}")
     endif()
@@ -75,9 +75,16 @@ else()
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
       params.main_gpu = 0;
       auto reg = ggml_backend_reg_by_name(\"WebGPU\");
-      if (ggml_backend_dev_count() > 0)
-        reg = ggml_backend_dev_backend_reg(ggml_backend_dev_get(0));
-      return reg != nullptr || params.main_gpu != 0;
+      const char* text = nullptr;
+      if (ggml_backend_dev_count() > 0) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(0);
+        reg = ggml_backend_dev_backend_reg(dev);
+        text = ggml_backend_dev_name(dev);
+        text = ggml_backend_dev_description(dev);
+        text = ggml_backend_reg_name(reg);
+        if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_ACCEL) text = nullptr;
+      }
+      return reg != nullptr || text != nullptr || params.main_gpu != 0;
     }")
   function(chromellm_check_ggml_link result)
     # A static-library try-compile cannot detect missing exported symbols.

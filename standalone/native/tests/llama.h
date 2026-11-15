@@ -10,10 +10,10 @@ struct llama_vocab;
 struct llama_sampler;
 typedef int32_t llama_token;
 typedef bool (*ggml_abort_callback)(void*);
-enum llama_split_mode { LLAMA_SPLIT_MODE_NONE = 0, LLAMA_SPLIT_MODE_LAYER = 1 };
+enum llama_split_mode { LLAMA_SPLIT_MODE_NONE = 0, LLAMA_SPLIT_MODE_LAYER = 1, LLAMA_SPLIT_MODE_ROW = 2 };
 struct llama_model_params {
-  int32_t n_gpu_layers;
   ggml_backend_dev_t* devices;
+  int32_t n_gpu_layers;
   llama_split_mode split_mode;
   int32_t main_gpu;
 };
