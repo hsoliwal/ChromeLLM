@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Agent additions: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project; Apache-2.0.
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
@@ -11,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -20,6 +22,8 @@ public final class StandaloneMain {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
+        Path workspace = agentWorkspace(options);
+        List<AgentTool> tools = workspace == null ? null : new WorkspaceTools(workspace).tools();
         if (flag(options, "--mcp-stdio")) {
             if (flag(options, "--stdio") || flag(options, "--list-devices")
                     || options.containsKey("--prompt-file")) {
@@ -27,7 +31,7 @@ public final class StandaloneMain {
             }
             try (ModelBackend backend = backend(options, System.getenv());
                  FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
-                McpStdioServer.serve(backend, System.in, output);
+                McpStdioServer.serveTools(backend, System.in, output, tools);
             }
             return;
         }
@@ -60,11 +64,40 @@ public final class StandaloneMain {
         ModelRequest request = new ModelRequest(
                 readPrompt(promptFile, "gemini".equals(options.get("--backend"))),
                 Integer.parseInt(options.getOrDefault("--max-tokens",
-                        "gemini".equals(options.get("--backend")) ? "32768" : "512")),
+                        flag(options, "--agent") ? "1024" : "gemini".equals(options.get("--backend")) ? "32768" : "512")),
                 Duration.ofSeconds(Long.parseLong(options.getOrDefault("--timeout-seconds", "120"))));
+        AgentEngine.Limits limits = flag(options, "--agent") ? agentLimits(options, request.timeout()) : null;
         try (ModelBackend backend = backend(options, System.getenv())) {
-            System.out.print(backend.infer(request).text());
+            if (limits == null) {
+                System.out.print(backend.infer(request).text());
+            } else {
+                AgentEngine agent = new AgentEngine(backend, tools, event ->
+                        System.err.println("agent " + event.sequence() + " " + event.phase() + " " + event.tool()));
+                System.out.print(agent.run(request.prompt(), request.maxTokens(), limits).answer());
+            }
         }
+    }
+
+    /** Reject mode mistakes before loading a provider or touching the model cache. */
+    private static Path agentWorkspace(Map<String, String> options) {
+        boolean agent = flag(options, "--agent");
+        boolean mcp = flag(options, "--mcp-stdio");
+        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
+            throw new IllegalArgumentException("agent mode requires its own exclusive session mode");
+        }
+        if (!agent && (options.containsKey("--agent-max-steps") || options.containsKey("--agent-max-calls"))) {
+            throw new IllegalArgumentException("agent limits require --agent true");
+        }
+        if (options.containsKey("--workspace") && !agent && !mcp) {
+            throw new IllegalArgumentException("workspace requires --agent true or --mcp-stdio true");
+        }
+        if (agent || options.containsKey("--workspace")) return Path.of(required(options, "--workspace"));
+        return null;
+    }
+
+    private static AgentEngine.Limits agentLimits(Map<String, String> options, Duration timeout) {
+        return new AgentEngine.Limits(Integer.parseInt(options.getOrDefault("--agent-max-steps", "16")),
+                Integer.parseInt(options.getOrDefault("--agent-max-calls", "8")), 65536, 32768, timeout);
     }
 
     static String readPrompt(Path promptFile, boolean hosted) throws IOException {
@@ -236,7 +269,8 @@ public final class StandaloneMain {
                 "--timeout-seconds", "--stdio", "--list-devices", "--device-backend", "--device",
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
-                "--model-cache-dir", "--mcp-stdio");
+                "--model-cache-dir", "--mcp-stdio", "--agent", "--workspace",
+                "--agent-max-steps", "--agent-max-calls");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String option = args[i];

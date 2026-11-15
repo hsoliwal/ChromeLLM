@@ -55,6 +55,13 @@
           <classpathScope>test</classpathScope>
         </configuration>
       </execution>
+      <execution>
+        <id>agent-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.AgentContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution>
       </executions>
     </plugin>
   </plugins></build>
