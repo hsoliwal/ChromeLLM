@@ -42,7 +42,9 @@ public final class SmartBuildMain {
         if ((args.length != 3 && args.length != 4) || args[0].isBlank()) {
             throw new IllegalArgumentException("expected recipe, standalone root, Maven target directory, and optional offline flag");
         }
-        String offline = args.length == 4 ? args[3] : "false";
+        String offline = args.length == 4 ? args[3]
+                : ("offline=true".equals(System.getProperty("chromellm.offline"))
+                        || Boolean.getBoolean("chromellm.offline") ? "true" : "false");
         if (offline.startsWith("--offline=")) offline = offline.substring("--offline=".length());
         if (!offline.equals("true") && !offline.equals("false")) {
             throw new IllegalArgumentException("offline flag requires true or false");
@@ -61,7 +63,6 @@ public final class SmartBuildMain {
         Path root = workspace.toRealPath();
         // Reject the destination before any artifact acquisition or provider initialization.
         Path outputRoot = validateOutputRoot(root, buildDirectory);
-        NativeBuildArtifacts.buildDirectory(root, outputRoot.getParent());
         Path recipePath = confined(root, recipe, "recipe");
         byte[] recipeBytes;
         try (InputStream input = Files.newInputStream(recipePath)) {
@@ -125,7 +126,7 @@ public final class SmartBuildMain {
             if (!offline) Files.createDirectories(cache);
             if (!cache.toRealPath().equals(cache)) throw new IOException("model cache must not traverse symlinks");
             if (offline) {
-                // Preserve lazy-provider argument admission before replacing remote model options.
+                // Admit the original provider options before substituting a verified local cache entry.
                 StandaloneMain.backend(Map.copyOf(options), environment).close();
                 Path model = new ModelArtifactCache(required(config, "modelUrl"),
                         required(config, "modelSha256"), cache).resolveWithOfflinePolicy(true);
@@ -166,8 +167,6 @@ public final class SmartBuildMain {
     private static Path validateOutputRoot(Path root, Path buildDirectory) throws IOException {
         Path suppliedTarget = buildDirectory.toAbsolutePath().normalize();
         Path target = root.resolve("target");
-        // Resolve ancestor aliases consistently with workspace.toRealPath(), while
-        // keeping the final target directory itself subject to the no-link check.
         if (suppliedTarget.getParent() == null
                 || !suppliedTarget.getParent().toRealPath().resolve(suppliedTarget.getFileName()).equals(target)
                 || !Files.isDirectory(suppliedTarget, LinkOption.NOFOLLOW_LINKS)

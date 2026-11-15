@@ -32,8 +32,6 @@ public final class SmartBuildContractTestMain {
                     "model=/explicit/model.gguf", "maxTokens=8", "timeoutSeconds=10") + "\n");
             AtomicInteger requests = new AtomicInteger();
             SmartBuildMain.ProviderFactory provider = (options, ignored) -> {
-                check(Path.of(options.get("--llama-bin")).equals(root.resolve("/explicit/llama-cli").normalize()), "launcher selection lost");
-                check(Path.of(options.get("--model")).equals(root.resolve("/explicit/model.gguf").normalize()), "model selection lost");
                 check(options.get("--llama-bin").equals(canonicalRoot.resolve("/explicit/llama-cli").normalize().toString()), "launcher selection lost");
                 check(options.get("--model").equals(canonicalRoot.resolve("/explicit/model.gguf").normalize().toString()), "model selection lost");
                 return new ModelBackend() {
@@ -118,8 +116,8 @@ public final class SmartBuildContractTestMain {
             rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider, true));
             check(requests.get() == beforeInvalidTarget, "offline cache miss opened provider");
             canonicalWorkspaceAliases(root);
+            absoluteLazyModelOptions(root, target);
             lazyModelOptions(root, target);
-            relativeLazyModelOptions(root, target);
             lazyRecipe(root, target);
             offlineModels(root, target);
             nativePin(root);
@@ -210,7 +208,7 @@ public final class SmartBuildContractTestMain {
 
     }
 
-    private static void lazyModelOptions(Path root, Path target) throws Exception {
+    private static void absoluteLazyModelOptions(Path root, Path target) throws Exception {
         Path cache = root.toRealPath().resolve("forwarded-cache");
         Files.writeString(root.resolve("lazy.properties"), String.join("\n",
                 "promptFile=prompt.txt", "backend=jni", "jniLib=/explicit/chromellm-jni",
@@ -241,7 +239,7 @@ public final class SmartBuildContractTestMain {
                 "lazy model recipe was not executed");
     }
 
-    private static void relativeLazyModelOptions(Path root, Path target) throws Exception {
+    private static void lazyModelOptions(Path root, Path target) throws Exception {
         Path canonicalRoot = root.toRealPath();
         Files.writeString(root.resolve("lazy.properties"), String.join("\n",
                 "promptFile=prompt.txt", "backend=jni", "jniLib=lib/chromellm-jni",

@@ -33,16 +33,18 @@ final class McpStdioServer {
     private boolean initialized;
 
     private McpStdioServer(ModelBackend backend, List<AgentTool> agentTools) {
-        this.backend = Objects.requireNonNull(backend, "backend");
-        this.agentTools = agentTools == null ? null : List.copyOf(agentTools);
-        this.sessionTools = List.of();
-        this.sessionLimits = AgentSession.Limits.defaults();
+        this(backend, agentTools, List.of(), AgentSession.Limits.defaults());
     }
 
     private McpStdioServer(ModelBackend backend, List<AgentSession.Tool> sessionTools,
                            AgentSession.Limits sessionLimits) {
+        this(backend, null, sessionTools, sessionLimits);
+    }
+
+    private McpStdioServer(ModelBackend backend, List<AgentTool> agentTools,
+                           List<AgentSession.Tool> sessionTools, AgentSession.Limits sessionLimits) {
         this.backend = Objects.requireNonNull(backend, "backend");
-        this.agentTools = null;
+        this.agentTools = agentTools == null ? null : List.copyOf(agentTools);
         this.sessionTools = List.copyOf(sessionTools);
         this.sessionLimits = Objects.requireNonNull(sessionLimits, "sessionLimits");
     }
@@ -66,6 +68,13 @@ final class McpStdioServer {
     static void serveTools(ModelBackend backend, InputStream input, OutputStream output, List<AgentTool> tools)
             throws IOException {
         serveSession(new McpStdioServer(backend, tools), input, output);
+    }
+
+    /** Independently configured workspace and endpoint capabilities may share one MCP session. */
+    static void serve(ModelBackend backend, InputStream input, OutputStream output,
+                      List<AgentTool> workspaceTools, List<AgentSession.Tool> endpointTools,
+                      AgentSession.Limits limits) throws IOException {
+        serveSession(new McpStdioServer(backend, workspaceTools, endpointTools, limits), input, output);
     }
 
     private static void serveSession(McpStdioServer session, InputStream input, OutputStream output)

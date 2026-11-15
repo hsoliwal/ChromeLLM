@@ -10,17 +10,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Comparator;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Uses the real JNI bridge with synthetic model output; does not claim model quality or GPU execution. */
+/** Both Java/JNI agent engines against scripted C++ output; not trained-model inference. */
 public final class JniAgentContractTestMain {
     private JniAgentContractTestMain() { }
 
     public static void main(String[] args) throws Exception {
         if (args.length != 1) throw new IllegalArgumentException("pass synthetic JNI library path");
-        // Actual Java/JNI session wiring against the scripted fixture, not trained-model inference.
         Path model = Files.createTempFile("agent-require-cpu-", ".gguf");
         try {
             Files.writeString(model, "synthetic protocol fixture, not model weights");
