@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Agent additions: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project; Apache-2.0.
 package io.synexia.chromellm.standalone;
 
 import java.io.BufferedInputStream;
@@ -10,6 +11,7 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -34,6 +36,13 @@ final class McpStdioServer {
         this.backend = Objects.requireNonNull(backend, "backend");
         this.agentTools = List.copyOf(agentTools);
         this.agentLimits = Objects.requireNonNull(agentLimits, "agentLimits");
+    private final List<AgentTool> agentTools;
+    private boolean negotiated;
+    private boolean initialized;
+
+    private McpStdioServer(ModelBackend backend, List<AgentTool> agentTools) {
+        this.backend = Objects.requireNonNull(backend, "backend");
+        this.agentTools = agentTools == null ? null : List.copyOf(agentTools);
     }
 
     /** Caller owns model, input and output streams. All processing is sequential. */
@@ -45,6 +54,17 @@ final class McpStdioServer {
     static void serve(ModelBackend backend, InputStream input, OutputStream output,
                       List<AgentSession.Tool> agentTools, AgentSession.Limits limits) throws IOException {
         McpStdioServer session = new McpStdioServer(backend, agentTools, limits);
+        serveTools(backend, input, output, null);
+    }
+
+    /** Workspace access is explicitly enabled by the process owner, never by a model argument. */
+    static void serve(ModelBackend backend, InputStream input, OutputStream output, Path workspace) throws IOException {
+        serveTools(backend, input, output, workspace == null ? null : new WorkspaceTools(workspace).tools());
+    }
+
+    static void serveTools(ModelBackend backend, InputStream input, OutputStream output, List<AgentTool> tools)
+            throws IOException {
+        McpStdioServer session = new McpStdioServer(backend, tools);
         BufferedInputStream incoming = new BufferedInputStream(input);
         while (true) {
             String line = readLine(incoming);
@@ -136,6 +156,7 @@ final class McpStdioServer {
         if ("run_agent".equals(tool) && !agentTools.isEmpty()) {
             return runAgent(id, arguments);
         }
+        if ("agent_run".equals(tool) && agentTools != null) return runAgent(id, arguments);
         if (!"infer_text".equals(tool)) return encoded(error(id, -32602, "Unknown tool"));
         if (!(arguments.get("prompt") instanceof String prompt) || prompt.isBlank()
                 || arguments.keySet().stream().anyMatch(k -> !List.of("prompt", "maxTokens", "timeoutSeconds").contains(k))) {
@@ -198,6 +219,30 @@ final class McpStdioServer {
         } catch (InterruptedException interruption) {
             Thread.currentThread().interrupt();
             return encoded(success(id, toolResult("Agent interrupted", true)));
+                        "goal", "maxTokens", "timeoutSeconds", "maxSteps", "maxModelCalls").contains(key))) {
+            return encoded(error(id, -32602, "Invalid agent arguments"));
+        }
+        final int maxTokens;
+        final AgentEngine.Limits limits;
+        try {
+            maxTokens = integer(arguments, "maxTokens", 1024, 1, 32768);
+            int seconds = integer(arguments, "timeoutSeconds", 120, 1, 3600);
+            limits = new AgentEngine.Limits(integer(arguments, "maxSteps", 16, 1, 128),
+                    integer(arguments, "maxModelCalls", 8, 1, 64), 65536, 32768, Duration.ofSeconds(seconds));
+            StdioProtocol.encode(goal, StdioProtocol.MAX_PROMPT_BYTES);
+        } catch (IOException | IllegalArgumentException | ArithmeticException invalid) {
+            return encoded(error(id, -32602, "Invalid agent arguments"));
+        }
+        try {
+            AgentEngine.Result run = new AgentEngine(backend, agentTools, event -> { }).run(goal, maxTokens, limits);
+            Map<String, Object> result = new LinkedHashMap<>(toolResult(run.answer(), false));
+            result.put("structuredContent", run.asMap());
+            return encoded(success(id, result));
+        } catch (IOException | TimeoutException | IllegalArgumentException failure) {
+            return encoded(success(id, toolResult("Agent run failed", true)));
+        } catch (InterruptedException interruption) {
+            Thread.currentThread().interrupt();
+            return encoded(success(id, toolResult("Agent run interrupted", true)));
         }
     }
 
@@ -246,6 +291,17 @@ final class McpStdioServer {
                             "required", List.of("goal")),
                     "annotations", Map.of("readOnlyHint", false, "destructiveHint", false,
                             "idempotentHint", false, "openWorldHint", false)));
+        if (agentTools != null) {
+            tools.add(Map.of("name", "agent_run", "description",
+                    "Run a bounded plan/tool/result loop over the explicitly configured workspace using the selected model provider.",
+                    "inputSchema", Map.of("type", "object", "additionalProperties", false,
+                            "properties", Map.of("goal", Map.of("type", "string"),
+                                    "maxTokens", Map.of("type", "integer", "minimum", 1, "maximum", 32768),
+                                    "timeoutSeconds", Map.of("type", "integer", "minimum", 1, "maximum", 3600),
+                                    "maxSteps", Map.of("type", "integer", "minimum", 1, "maximum", 128),
+                                    "maxModelCalls", Map.of("type", "integer", "minimum", 1, "maximum", 64)),
+                            "required", List.of("goal")),
+                    "annotations", Map.of("readOnlyHint", true)));
         }
         return List.copyOf(tools);
     }

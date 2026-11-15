@@ -110,6 +110,7 @@ public final class SmartBuildContractTestMain {
             check(requests.get() == beforeInvalidTarget, "offline cache miss opened provider");
             lazyModelOptions(root, target);
             lazyRecipe(root, target);
+            offlineModels(root, target);
             nativePin(root);
         } finally {
             try (var files = Files.walk(root)) {
@@ -178,6 +179,111 @@ public final class SmartBuildContractTestMain {
         };
         Path output = SmartBuildMain.run(Path.of("lazy.properties"), root, target, Map.of(), selection);
         check(Files.readString(output).equals("lazy selection fixture"), "lazy recipe result changed");
+    }
+
+    private static void offlineModels(Path root, Path target) throws Exception {
+        Path cache = Files.createDirectories(root.resolve("model-cache"));
+        String bytes = "offline cache fixture, not a real model";
+        String digest = hash(bytes);
+        Path model = cache.resolve(digest + ".gguf");
+        Files.writeString(model, bytes);
+        String recipeText = String.join("\n", "promptFile=prompt.txt", "backend=cli",
+                "llamaBin=/explicit/llama-cli", "modelUrl=https://example.invalid/model.bin",
+                "modelSha256=" + digest,
+                "modelCacheDir=" + cache.toString().replace("\\", "\\\\"),
+                "maxTokens=8", "timeoutSeconds=10") + "\n";
+        Files.writeString(root.resolve("remote.properties"), recipeText);
+        AtomicInteger providers = new AtomicInteger();
+        SmartBuildMain.ProviderFactory offlineProvider = (options, ignored) -> {
+            providers.incrementAndGet();
+            check(options.get("--backend").equals("cli")
+                            && options.get("--llama-bin").equals("/explicit/llama-cli"),
+                    "offline model changed provider selection");
+            check(Path.of(options.get("--model")).equals(model.toAbsolutePath()),
+                    "offline model path was not the pinned cache entry");
+            check(!options.containsKey("--model-url") && !options.containsKey("--model-sha256")
+                            && !options.containsKey("--model-cache-dir"),
+                    "offline provider retained remote acquisition options");
+            return fixtureBackend();
+        };
+        Path output = SmartBuildMain.run(Path.of("remote.properties"), root, target,
+                Map.of(), offlineProvider, true);
+        check(Files.readString(output).equals("offline-candidate") && providers.get() == 1,
+                "verified offline model was not passed to provider");
+        Path argvOutput = SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                target.toString(), "true"}, Map.of(), offlineProvider);
+        check(output.equals(argvOutput) && providers.get() == 2, "four-argument offline mode lost cache reuse");
+
+        SmartBuildMain.ProviderFactory onlineProvider = (options, ignored) -> {
+            providers.incrementAndGet();
+            check(options.get("--model-url").equals("https://example.invalid/model.bin")
+                            && options.get("--model-sha256").equals(digest)
+                            && !options.containsKey("--model"),
+                    "default smart-build changed lazy model acquisition options");
+            return fixtureBackend();
+        };
+        check(output.equals(SmartBuildMain.run(Path.of("remote.properties"), root, target,
+                Map.of(), onlineProvider)), "original run signature lost default behavior");
+        check(output.equals(SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                target.toString()}, Map.of(), onlineProvider)), "three-argument invocation lost default behavior");
+        check(output.equals(SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                target.toString(), "false"}, Map.of(), onlineProvider)), "explicit online flag changed behavior");
+
+        check(output.equals(SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                target.toString(), "--offline=true"}, Map.of(), offlineProvider)),
+                "Maven offline argument lost verified cache reuse");
+        check(output.equals(SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                target.toString(), "--offline=false"}, Map.of(), onlineProvider)),
+                "Maven online argument changed lazy acquisition");
+
+        int opened = providers.get();
+        for (String invalid : new String[] {"TRUE", "yes", "", "${settings.offline}",
+                "--offline=", "--offline=TRUE", "--offline=--offline=false"}) {
+            rejectIllegal(() -> SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                    target.toString(), invalid}, Map.of(), offlineProvider));
+        }
+        rejectIllegal(() -> SmartBuildMain.run(new String[] {"remote.properties", root.toString()},
+                Map.of(), offlineProvider));
+        rejectIllegal(() -> SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                target.toString(), "false", "extra"}, Map.of(), offlineProvider));
+        rejectIo(() -> SmartBuildMain.run(Path.of("remote.properties"), root, root.resolve("wrong-target"),
+                Map.of(), onlineProvider));
+        check(providers.get() == opened, "invalid arguments or target directory opened provider");
+
+        for (String invalidOptions : new String[] {"model=/explicit/conflicting.gguf\n",
+                "jniLib=/explicit/foreign-provider.so\n", "computeBackend=cpu\n"}) {
+            Files.writeString(root.resolve("remote.properties"), recipeText + invalidOptions);
+            rejectIllegal(() -> SmartBuildMain.run(Path.of("remote.properties"), root, target,
+                    Map.of(), offlineProvider, true));
+        }
+        check(providers.get() == opened, "offline substitution bypassed provider admission");
+        Files.writeString(root.resolve("remote.properties"), recipeText);
+
+        Files.writeString(model, "corrupt cached bytes");
+        rejectIo(() -> SmartBuildMain.run(Path.of("remote.properties"), root, target,
+                Map.of(), offlineProvider, true));
+        check(providers.get() == opened && Files.readString(model).equals("corrupt cached bytes"),
+                "offline corrupt cache was repaired or passed to provider");
+        Files.delete(model);
+        rejectIo(() -> SmartBuildMain.run(Path.of("remote.properties"), root, target,
+                Map.of(), offlineProvider, true));
+        try (var entries = Files.list(cache)) {
+            check(entries.findAny().isEmpty() && providers.get() == opened,
+                    "offline miss downloaded, wrote staging state, or opened provider");
+        }
+        Files.delete(cache);
+        rejectIo(() -> SmartBuildMain.run(new String[] {"remote.properties", root.toString(),
+                target.toString(), "true"}, Map.of(), offlineProvider));
+        check(!Files.exists(cache) && providers.get() == opened, "offline mode created a missing cache directory");
+    }
+
+    private static ModelBackend fixtureBackend() {
+        return new ModelBackend() {
+            public String id() { return "llama.cpp-cli"; }
+            public ModelResponse infer(ModelRequest request) {
+                return new ModelResponse("offline-candidate", id(), hash(request.prompt()));
+            }
+        };
     }
 
     private static void nativePin(Path root) throws Exception {

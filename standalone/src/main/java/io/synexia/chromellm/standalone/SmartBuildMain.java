@@ -35,9 +35,20 @@ public final class SmartBuildMain {
     private SmartBuildMain() { }
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 3 || args[0].isBlank()) {
-            throw new IllegalArgumentException("expected recipe, standalone root, and Maven target directory");
+        run(args, System.getenv(), StandaloneMain::backend);
+    }
+
+    static Path run(String[] args, Map<String, String> environment, ProviderFactory providerFactory) throws Exception {
+        if ((args.length != 3 && args.length != 4) || args[0].isBlank()) {
+            throw new IllegalArgumentException("expected recipe, standalone root, Maven target directory, and optional offline flag");
         }
+        String offline = args.length == 4 ? args[3] : "false";
+        if (offline.startsWith("--offline=")) offline = offline.substring("--offline=".length());
+        if (!offline.equals("true") && !offline.equals("false")) {
+            throw new IllegalArgumentException("offline flag requires true or false");
+        }
+        return run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), environment, providerFactory,
+                offline.equals("true"));
         run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), System.getenv(), StandaloneMain::backend,
                 "offline=true".equals(System.getProperty("chromellm.offline"))
                         || Boolean.getBoolean("chromellm.offline"));
@@ -134,6 +145,17 @@ public final class SmartBuildMain {
         }
         // Reject the destination before any artifact acquisition or provider initialization.
         Path outputRoot = validateOutputRoot(root, buildDirectory);
+        if (offline && options.containsKey("--model-url")) {
+            // Reuse the engine's lazy-provider admission before changing its model options.
+            // Construction and close do not infer, open the provider, or acquire the model.
+            StandaloneMain.backend(Map.copyOf(options), environment).close();
+            Path model = new ModelArtifactCache(options.get("--model-url"), options.get("--model-sha256"),
+                    Path.of(options.get("--model-cache-dir")), ModelArtifactCache.MAX_BYTES, true).resolve();
+            options.remove("--model-url");
+            options.remove("--model-sha256");
+            options.remove("--model-cache-dir");
+            options.put("--model", model.toString());
+        }
         // The selected provider and all options are admitted by the pre-existing engine contract.
         byte[] candidate;
         String provider;

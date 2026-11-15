@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Agent coverage: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project; Apache-2.0.
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
@@ -40,6 +41,7 @@ public final class JniSyntheticContractTestMain {
                 System.out.println("PASS JNI focused " + args[1] + ": " + checks + " checks");
                 return;
             }
+            JniAgentContractTestMain.run(library);
             try (LlamaCppJniBackend selected = new LlamaCppJniBackend(library, cpuModel, 1024, 2, 0, "cpu")) {
                 check(selected.infer(new ModelRequest("selected", 8, Duration.ofSeconds(1))).text().equals("OK"),
                         "CPU policy passes an explicitly empty GPU device list");
