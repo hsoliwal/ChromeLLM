@@ -1,0 +1,79 @@
+name: Maven pinned Dawn WebGPU artifact
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'standalone/**'
+      - '.github/workflows/dawn-maven.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  dawn-artifact:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            fork_compile: true
+          - os: macos-latest
+            fork_compile: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - name: Offline pinned archive and cache regressions
+        shell: bash
+        run: |
+          mkdir -p standalone/target/dawn-test-classes
+          javac --release 21 -d standalone/target/dawn-test-classes standalone/native/DawnArtifactInstaller.java standalone/native/tests/DawnArtifactInstallerTestMain.java
+          java -cp standalone/target/dawn-test-classes DawnArtifactInstallerTestMain "${{ github.workspace }}/standalone/target/dawn-offline-test"
+      - name: Reject synthetic/Dawn profile combination before native build
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          if mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic,native-dawn validate > standalone/target/dawn-invalid-profiles.log 2>&1; then
+            echo 'Expected conflicting Maven profile validation to fail' >&2
+            exit 1
+          fi
+          grep -F 'native-dawn cannot be used with native-synthetic' standalone/target/dawn-invalid-profiles.log
+          test ! -e standalone/target/native-synthetic/CMakeCache.txt
+      - name: Maven lazily fetches SHA-256-pinned Dawn binary
+        run: mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources
+      - name: Maven reuses verified Dawn cache
+        run: mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources
+      - name: Configure Dawn imported CMake target
+        shell: bash
+        run: |
+          cmake -S standalone/native/tests/dawn_probe -B standalone/target/dawn-probe -DCMAKE_PREFIX_PATH="${{ github.workspace }}/standalone/target/native-deps/dawn"
+          cmake --build standalone/target/dawn-probe
+      - name: Checkout pinned public llama.cpp donor for independent source-link check
+        if: matrix.fork_compile
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: dd099a6bf30c50627f6ae18915fbb687539a704d
+          path: standalone/target/llama-source
+          persist-credentials: false
+      - name: Build the independent native JNI/WebGPU source with Maven
+        if: matrix.fork_compile
+        shell: bash
+        run: |
+          mvn -B -ntp -f standalone/pom.xml -Pnative-fork,native-dawn \
+            -Dchromellm.native.source="${{ github.workspace }}/standalone/target/llama-source" \
+            -Dchromellm.native.webgpu=ON verify
+      - name: Inventory linked WebGPU JNI runtime without a model
+        if: matrix.fork_compile
+        shell: bash
+        run: |
+          java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+            --module io.synexia.chromellm.standalone/io.synexia.chromellm.standalone.StandaloneMain \
+            --backend jni --list-devices true \
+            --jni-lib "${{ github.workspace }}/standalone/target/native-fork/libchromellm_llama_jni.so"
