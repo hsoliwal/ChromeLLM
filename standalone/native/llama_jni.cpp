@@ -27,6 +27,102 @@ using Clock = std::chrono::steady_clock;
 struct DeadlineExceeded : std::runtime_error {
     DeadlineExceeded() : std::runtime_error("model inference exceeded configured deadline") {}
 };
+struct InferenceInterrupted : std::runtime_error {
+    InferenceInterrupted() : std::runtime_error("native inference interrupted") {}
+};
+
+// The callback can run on a GGML worker. Only the JavaVM and global references cross
+// threads; each callback obtains its own JNIEnv and detaches only threads it attached.
+class AbortState {
+    JNIEnv* owner_env_;
+    JavaVM* vm_ = nullptr;
+    jclass thread_class_ = nullptr;
+    jobject caller_ = nullptr;
+    jmethodID interrupted_method_ = nullptr;
+    Clock::time_point deadline_;
+    std::atomic<bool> interrupted_{false};
+    std::atomic<bool> observation_failed_{false};
+
+    void release() noexcept {
+        if (caller_ != nullptr) owner_env_->DeleteGlobalRef(caller_);
+        if (thread_class_ != nullptr) owner_env_->DeleteGlobalRef(thread_class_);
+    }
+public:
+    AbortState(JNIEnv* env, Clock::time_point deadline) : owner_env_(env), deadline_(deadline) {
+        try {
+            if (env->GetJavaVM(&vm_) != JNI_OK) throw std::runtime_error("unable to observe JVM interruption");
+            jclass local_class = env->FindClass("java/lang/Thread");
+            if (local_class == nullptr) throw std::runtime_error("unable to find Java thread class");
+            thread_class_ = static_cast<jclass>(env->NewGlobalRef(local_class));
+            env->DeleteLocalRef(local_class);
+            if (thread_class_ == nullptr) throw std::runtime_error("unable to retain Java thread class");
+            jmethodID current = env->GetStaticMethodID(thread_class_, "currentThread", "()Ljava/lang/Thread;");
+            if (current == nullptr) throw std::runtime_error("unable to observe current Java thread");
+            interrupted_method_ = env->GetMethodID(thread_class_, "isInterrupted", "()Z");
+            if (interrupted_method_ == nullptr) throw std::runtime_error("unable to observe interrupt status");
+            jobject local_thread = env->CallStaticObjectMethod(thread_class_, current);
+            if (env->ExceptionCheck() || local_thread == nullptr)
+                throw std::runtime_error("unable to obtain current Java thread");
+            caller_ = env->NewGlobalRef(local_thread);
+            env->DeleteLocalRef(local_thread);
+            if (caller_ == nullptr) throw std::runtime_error("unable to retain current Java thread");
+        } catch (...) {
+            release();
+            throw;
+        }
+    }
+    AbortState(const AbortState&) = delete;
+    AbortState& operator=(const AbortState&) = delete;
+    ~AbortState() { release(); } // The context and all callbacks have retired before this owner.
+
+    bool stop() noexcept {
+        if (interrupted_.load(std::memory_order_relaxed)
+                || observation_failed_.load(std::memory_order_relaxed) || Clock::now() >= deadline_) return true;
+        JNIEnv* env = nullptr;
+        const jint state = vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
+        bool attached = false;
+        if (state == JNI_EDETACHED) {
+            if (vm_->AttachCurrentThreadAsDaemon(reinterpret_cast<void**>(&env), nullptr) != JNI_OK) {
+                observation_failed_.store(true, std::memory_order_relaxed);
+                return true;
+            }
+            attached = true;
+        } else if (state != JNI_OK) {
+            observation_failed_.store(true, std::memory_order_relaxed);
+            return true;
+        }
+        // A previously attached callback thread may already have an exception. Preserve it
+        // and fail observation without invoking another Java method with it pending.
+        jboolean interrupted = JNI_FALSE;
+        if (!env->ExceptionCheck()) {
+            // Use Thread's status query, not a user Thread subclass override. It does not clear
+            // the flag. The class and method ID are resolved together from java.lang.Thread.
+            interrupted = env->CallNonvirtualBooleanMethod(caller_, thread_class_, interrupted_method_);
+        }
+        if (env->ExceptionCheck()) {
+            observation_failed_.store(true, std::memory_order_relaxed);
+            // A foreign callback cannot propagate its pending exception through the caller's
+            // JNIEnv. Fail the inference and leave no exception pending when detaching it.
+            if (attached) env->ExceptionClear();
+        } else if (interrupted == JNI_TRUE) {
+            interrupted_.store(true, std::memory_order_relaxed);
+        }
+        if (attached && vm_->DetachCurrentThread() != JNI_OK)
+            observation_failed_.store(true, std::memory_order_relaxed);
+        return interrupted_.load(std::memory_order_relaxed)
+                || observation_failed_.load(std::memory_order_relaxed) || Clock::now() >= deadline_;
+    }
+    void check() {
+        if (!stop()) return;
+        if (interrupted_.load(std::memory_order_relaxed)) throw InferenceInterrupted();
+        if (observation_failed_.load(std::memory_order_relaxed))
+            throw std::runtime_error("unable to observe Java interrupt status");
+        throw DeadlineExceeded();
+    }
+    Clock::time_point next_poll() const {
+        return std::min(deadline_, Clock::now() + std::chrono::milliseconds(10));
+    }
+};
 struct DeviceSelection {
     std::string backend, name, description, type;
     // llama_model retains a copy of its parameters, so this list lives with the model.
@@ -41,11 +137,13 @@ struct Model {
     std::vector<ggml_backend_dev_t> devices;
     // One explicitly selected backend/device pair, or null for automatic and policy selection.
     std::shared_ptr<DeviceSelection> selection;
-    std::mutex inference_mutex;
+    std::timed_mutex inference_mutex;
     Model(llama_model* m, uint32_t c, int t, std::vector<ggml_backend_dev_t> policy_devices,
           std::shared_ptr<DeviceSelection> selected)
         : model(m), vocab(llama_model_get_vocab(m)), context_tokens(c), threads(t),
-          devices(std::move(policy_devices)), selection(std::move(selected)) {}
+          devices(std::move(policy_devices)), selection(std::move(selected)) {
+        if (vocab == nullptr) throw std::runtime_error("model contains no vocabulary");
+    }
     ~Model() { llama_model_free(model); }
 };
 std::mutex registry_lock;
@@ -153,22 +251,22 @@ std::shared_ptr<Model> Lookup(jlong handle) {
     if (found == registry.end()) throw std::runtime_error("native model handle is closed or invalid");
     return found->second;
 }
-bool DeadlineCallback(void* user) {
-    return Clock::now() >= *static_cast<const Clock::time_point*>(user);
-}
-void CheckDeadline(const Clock::time_point& deadline) {
-    if (Clock::now() >= deadline) throw DeadlineExceeded();
+bool AbortCallback(void* user) {
+    return static_cast<AbortState*>(user)->stop();
 }
 std::string Generate(Model& state, const std::vector<uint8_t>& input, int max_tokens,
-                     const Clock::time_point& deadline) {
+                     AbortState& abort) {
     if (input.empty() || input.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max()))
         throw std::invalid_argument("prompt is empty or too long");
-    std::lock_guard<std::mutex> guard(state.inference_mutex);
-    CheckDeadline(deadline);
+    abort.check();
+    std::unique_lock<std::timed_mutex> guard(state.inference_mutex, std::defer_lock);
+    while (!guard.try_lock_until(abort.next_poll())) abort.check();
+    abort.check();
     const std::string prompt(input.begin(), input.end());
     if (prompt.find('\0') != std::string::npos) throw std::invalid_argument("prompt has NUL byte");
     const int32_t required = llama_tokenize(state.vocab, prompt.data(),
             static_cast<int32_t>(prompt.size()), nullptr, 0, true, true);
+    abort.check();
     if (required >= 0 || required == std::numeric_limits<int32_t>::min())
         throw std::runtime_error("unable to size prompt tokens");
     const int32_t n_prompt = -required;
@@ -178,17 +276,21 @@ std::string Generate(Model& state, const std::vector<uint8_t>& input, int max_to
     if (llama_tokenize(state.vocab, prompt.data(), static_cast<int32_t>(prompt.size()),
                        tokens.data(), n_prompt, true, true) != n_prompt)
         throw std::runtime_error("prompt tokenization failed");
+    abort.check();
 
     llama_context_params p = llama_context_default_params();
     p.n_ctx = state.context_tokens;
     p.n_batch = std::min<uint32_t>(state.context_tokens, 512);
     p.n_threads = state.threads;
     p.n_threads_batch = state.threads;
-    p.abort_callback = DeadlineCallback;
-    p.abort_callback_data = const_cast<Clock::time_point*>(&deadline);
+    // The pinned llama.cpp abort callback cooperates with CPU execution. GPU work may
+    // finish its current operation before the host-side checks below can observe abort.
+    p.abort_callback = AbortCallback;
+    p.abort_callback_data = &abort;
     std::unique_ptr<llama_context, decltype(&llama_free)> ctx(
             llama_init_from_model(state.model, p), &llama_free);
     if (!ctx) throw std::runtime_error("unable to allocate llama.cpp context");
+    abort.check();
     std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)> sampler(
             llama_sampler_chain_init(llama_sampler_chain_default_params()), &llama_sampler_free);
     if (!sampler) throw std::runtime_error("unable to create token sampler");
@@ -196,17 +298,17 @@ std::string Generate(Model& state, const std::vector<uint8_t>& input, int max_to
     if (!greedy) throw std::runtime_error("unable to allocate greedy sampler");
     llama_sampler_chain_add(sampler.get(), greedy);
     for (int32_t start = 0; start < n_prompt; ) {
-        CheckDeadline(deadline);
+        abort.check();
         const int32_t count = std::min<int32_t>(n_prompt - start, static_cast<int32_t>(p.n_batch));
         if (llama_decode(ctx.get(), llama_batch_get_one(tokens.data() + start, count)) != 0) {
-            CheckDeadline(deadline);
+            abort.check();
             throw std::runtime_error("prompt decode failed");
         }
         start += count;
     }
     std::string output;
     for (int i = 0; i < max_tokens; ++i) {
-        CheckDeadline(deadline);
+        abort.check();
         llama_token token = llama_sampler_sample(sampler.get(), ctx.get(), -1);
         if (llama_vocab_is_eog(state.vocab, token)) break;
         char piece[512];
@@ -218,23 +320,26 @@ std::string Generate(Model& state, const std::vector<uint8_t>& input, int max_to
             std::vector<char> larger(required_bytes);
             n = llama_token_to_piece(state.vocab, token, larger.data(),
                                      static_cast<int32_t>(larger.size()), 0, true);
-            if (n < 0 || output.size() + static_cast<size_t>(n) > kMaxOutput)
+            if (n < 0 || static_cast<size_t>(n) > larger.size()
+                    || output.size() + static_cast<size_t>(n) > kMaxOutput)
                 throw std::runtime_error("token piece exceeds output limit");
             output.append(larger.data(), static_cast<size_t>(n));
         } else {
+            if (static_cast<size_t>(n) > sizeof(piece))
+                throw std::runtime_error("token piece exceeds supplied buffer");
             if (output.size() + static_cast<size_t>(n) > kMaxOutput)
                 throw std::runtime_error("native inference exceeds output limit");
             output.append(piece, static_cast<size_t>(n));
         }
         if (i + 1 < max_tokens) {
-            CheckDeadline(deadline);
+            abort.check();
             if (llama_decode(ctx.get(), llama_batch_get_one(&token, 1)) != 0) {
-                CheckDeadline(deadline);
+                abort.check();
                 throw std::runtime_error("generation decode failed");
             }
         }
     }
-    CheckDeadline(deadline);
+    abort.check();
     return output;
 }
 // compute_backend: 0 automatic, 1 CPU only, 2 every registered WebGPU device. An explicit
@@ -361,22 +466,44 @@ Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nGenerate(
     try {
         if (tokens < 1 || tokens > 32768 || timeout_ms < 1 || timeout_ms > 3600000)
             throw std::invalid_argument("invalid generation limit or deadline");
-        const auto bytes = Bytes(env, prompt);
         const Clock::time_point deadline = Clock::now() + std::chrono::milliseconds(timeout_ms);
+        AbortState abort(env, deadline);
+        abort.check();
+        const auto bytes = Bytes(env, prompt);
+        abort.check();
         auto state = Lookup(handle);
-        const std::string text = Generate(*state, bytes, tokens, deadline);
+        const std::string text = Generate(*state, bytes, tokens, abort);
         jbyteArray result = env->NewByteArray(static_cast<jsize>(text.size()));
         if (result != nullptr && !text.empty()) env->SetByteArrayRegion(result, 0,
             static_cast<jsize>(text.size()), reinterpret_cast<const jbyte*>(text.data()));
+        if (!env->ExceptionCheck()) abort.check();
         return result;
+    } catch (const InferenceInterrupted& ex) {
+        if (!env->ExceptionCheck()) Throw(env, "java/lang/InterruptedException", ex.what());
+        return nullptr;
     } catch (const DeadlineExceeded& ex) {
-        Throw(env, "java/util/concurrent/TimeoutException", ex.what()); return nullptr;
+        if (!env->ExceptionCheck()) Throw(env, "java/util/concurrent/TimeoutException", ex.what());
+        return nullptr;
     } catch (const std::exception& ex) { if (!env->ExceptionCheck()) Fail(env, ex.what()); return nullptr; }
       catch (...) { if (!env->ExceptionCheck()) Fail(env, "unclassified native generation failure"); return nullptr; }
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nClose(JNIEnv*, jclass, jlong handle) {
-    std::lock_guard<std::mutex> lock(registry_lock);
-    registry.erase(handle); // Shared ownership keeps in-flight inference alive.
+Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nClose(JNIEnv* env, jclass, jlong handle) {
+    try {
+        std::shared_ptr<Model> closing;
+        {
+            std::lock_guard<std::mutex> lock(registry_lock);
+            auto found = registry.find(handle);
+            if (found == registry.end()) return;
+            closing = std::move(found->second);
+            registry.erase(found);
+        }
+        // Device teardown can be slow. It must not hold the global handle registry lock;
+        // shared ownership still keeps an independently admitted inference alive.
+    } catch (const std::exception& ex) {
+        if (!env->ExceptionCheck()) Throw(env, "java/lang/IllegalStateException", ex.what());
+    } catch (...) {
+        if (!env->ExceptionCheck()) Throw(env, "java/lang/IllegalStateException", "native model close failed");
+    }
 }

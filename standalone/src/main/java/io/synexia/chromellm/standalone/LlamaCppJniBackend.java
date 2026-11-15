@@ -103,7 +103,7 @@ public final class LlamaCppJniBackend implements ModelBackend {
         byte[] deviceName = explicit ? selector(device, "device") : null;
         // Native JNI library is supplied explicitly; no auto-discovery, plugin search or download.
         System.load(bridge.toString());
-        byte[] modelPath = weights.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] modelPath = encodeNativeInput(weights.toString());
         if (explicit) {
             try {
                 this.handle = nOpenOnDevice(modelPath, contextTokens, threads, gpuLayers,
@@ -202,10 +202,20 @@ public final class LlamaCppJniBackend implements ModelBackend {
     public synchronized ModelResponse infer(ModelRequest request)
             throws IOException, InterruptedException, TimeoutException {
         Objects.requireNonNull(request, "request");
+        long deadline = System.nanoTime() + request.timeout().toNanos();
         if (handle == 0) throw new IOException("native model session is closed");
-        if (Thread.currentThread().isInterrupted()) throw new InterruptedException("interrupted before inference");
-        byte[] response = nGenerate(handle, request.prompt().getBytes(StandardCharsets.UTF_8),
-                request.maxTokens(), Math.max(1, request.timeout().toMillis()));
+        checkRequest(deadline);
+        byte[] prompt = encodeNativeInput(request.prompt());
+        checkRequest(deadline);
+        long remaining = deadline - System.nanoTime();
+        if (remaining <= 0) throw new TimeoutException("model inference exceeded configured deadline");
+        // Round up only the JNI millisecond transport. The Java deadline remains exact.
+        long timeoutMillis = Math.max(1, (remaining + 999_999L) / 1_000_000L);
+        byte[] response = nGenerate(handle, prompt, request.maxTokens(), timeoutMillis);
+        checkRequest(deadline);
+        if (response == null || response.length > StdioProtocol.MAX_RESPONSE_BYTES) {
+            throw new IOException("native backend returned an invalid response size");
+        }
         final String text;
         try {
             text = StandardCharsets.UTF_8.newDecoder()
@@ -218,11 +228,27 @@ public final class LlamaCppJniBackend implements ModelBackend {
         if (text.isBlank()) throw new IOException("native inference produced no candidate text");
         try {
             String promptHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(request.prompt().getBytes(StandardCharsets.UTF_8)));
-            return new ModelResponse(text, id(), promptHash);
+                    .digest(prompt));
+            ModelResponse result = new ModelResponse(text, id(), promptHash);
+            checkRequest(deadline);
+            return result;
         } catch (NoSuchAlgorithmException impossibleOnJava21) {
             throw new IllegalStateException("SHA-256 unavailable", impossibleOnJava21);
         }
+    }
+
+    private static void checkRequest(long deadline) throws InterruptedException, TimeoutException {
+        if (Thread.currentThread().isInterrupted()) throw new InterruptedException("native inference interrupted");
+        if (deadline - System.nanoTime() <= 0) {
+            throw new TimeoutException("model inference exceeded configured deadline");
+        }
+    }
+
+    /** Reuse the bounded strict encoder; native tokenization additionally disallows NUL. */
+    private static byte[] encodeNativeInput(String value) throws IOException {
+        if (value.length() > StdioProtocol.MAX_PROMPT_BYTES) throw new IOException("native input exceeds 16 MiB limit");
+        if (value.indexOf('\0') >= 0) throw new IOException("native input has NUL character");
+        return StdioProtocol.encode(value, StdioProtocol.MAX_PROMPT_BYTES);
     }
 
     @Override
@@ -243,6 +269,6 @@ public final class LlamaCppJniBackend implements ModelBackend {
     private static native byte[][] nAvailableDevices() throws IOException;
     private static native byte[][] nSelectedDevice(long handle) throws IOException;
     private static native byte[] nGenerate(long handle, byte[] utf8Prompt, int maxTokens, long timeoutMillis)
-            throws IOException, TimeoutException;
+            throws IOException, InterruptedException, TimeoutException;
     private static native void nClose(long handle);
 }

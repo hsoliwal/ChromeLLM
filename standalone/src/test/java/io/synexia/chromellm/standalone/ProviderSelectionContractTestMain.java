@@ -4,6 +4,10 @@ package io.synexia.chromellm.standalone;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Exercises the actual CLI selection without a network call or native model. */
@@ -35,8 +39,9 @@ public final class ProviderSelectionContractTestMain {
             check(backend.id().equals("gemini-api:gemini-4-hydrogen"));
         }
         for (String option : new String[] {"--llama-bin", "--jni-lib", "--context-tokens",
-                "--threads", "--gpu-layers", "--compute-backend"}) {
-            reject(() -> StandaloneMain.backend(Map.of("--backend", "gemini", option, "1"),
+                "--threads", "--gpu-layers", "--compute-backend", "--device-backend", "--device",
+                "--tier", "--fast-model", "--reasoning-model", "--frontier-model"}) {
+            rejectOption(option, () -> StandaloneMain.backend(Map.of("--backend", "gemini", option, "1"),
                     Map.of("GEMINI_API_KEY", "test-key")));
         }
         reject(() -> StandaloneMain.backend(Map.of("--backend", "unexpected"), Map.of()));
@@ -55,6 +60,7 @@ public final class ProviderSelectionContractTestMain {
             check(StandaloneMain.readPrompt(prompt, false).equals("नमस्ते \uD83D\uDE42"));
             Files.write(prompt, new byte[] {(byte) 0xc3, (byte) 0x28});
             rejectIo(() -> StandaloneMain.readPrompt(prompt, true));
+            rejectIo(() -> StandaloneMain.readPrompt(prompt, false));
             Files.write(prompt, new byte[GeminiApiBackend.MAX_REQUEST_BYTES + 1]);
             rejectIo(() -> StandaloneMain.readPrompt(prompt, true));
             Files.writeString(model, "synthetic fixture, not a model");
@@ -65,6 +71,34 @@ public final class ProviderSelectionContractTestMain {
             }
             reject(() -> StandaloneMain.backend(Map.of("--model", model.toString(),
                     "--llama-bin", executable.toString(), "--compute-backend", "webgpu"), Map.of()));
+            for (String option : new String[] {"--jni-lib", "--context-tokens", "--threads",
+                    "--device-backend"}) {
+                Map<String, String> incompatible = new HashMap<>(local);
+                incompatible.put(option, "1");
+                rejectOption(option, () -> StandaloneMain.backend(incompatible, Map.of()));
+            }
+            rejectOption("--llama-bin", () -> StandaloneMain.backend(Map.of("--backend", "jni",
+                    "--model", model.toString(), "--llama-bin", executable.toString()), Map.of()));
+
+            // Supported CLI device, GPU and tier options must survive provider validation.
+            for (Map<String, String> supported : List.of(
+                    Map.of("--device", "WebGPU0"),
+                    Map.of("--gpu-layers", "1"),
+                    Map.of("--device", "WebGPU0", "--gpu-layers", "1"))) {
+                Map<String, String> selected = new HashMap<>(local);
+                selected.putAll(supported);
+                try (ModelBackend backend = StandaloneMain.backend(selected, Map.of())) {
+                    check(backend.id().equals("llama.cpp-cli"));
+                }
+            }
+            for (String tier : new String[] {"fast", "reasoning", "frontier"}) {
+                try (ModelBackend backend = StandaloneMain.backend(Map.of("--llama-bin", executable.toString(),
+                        "--tier", tier, "--" + tier + "-model", model.toString()), Map.of())) {
+                    check(backend.id().equals("llama.cpp-cli"));
+                }
+            }
+            promptBoundary(prompt, true, GeminiApiBackend.MAX_REQUEST_BYTES);
+            promptBoundary(prompt, false, StdioProtocol.MAX_PROMPT_BYTES);
         } finally {
             Files.deleteIfExists(prompt);
             Files.deleteIfExists(model);
@@ -94,6 +128,33 @@ public final class ProviderSelectionContractTestMain {
         } catch (IOException expected) {
             checks++;
         }
+    }
+
+    private static void rejectOption(String option, CheckedAction action) throws Exception {
+        try {
+            action.run();
+            throw new AssertionError("incompatible option accepted: " + option);
+        } catch (IllegalArgumentException expected) {
+            check(expected.getMessage().equals(option + " is not supported by the selected backend"));
+        }
+    }
+
+    private static void promptBoundary(Path prompt, boolean hosted, int limit) throws Exception {
+        byte[] bytes = new byte[limit];
+        Arrays.fill(bytes, (byte) 'a');
+        // End exactly at the byte budget with one supplementary Unicode code point.
+        bytes[limit - 4] = (byte) 0xf0;
+        bytes[limit - 3] = (byte) 0x9f;
+        bytes[limit - 2] = (byte) 0x99;
+        bytes[limit - 1] = (byte) 0x82;
+        Files.write(prompt, bytes);
+        String decoded = StandaloneMain.readPrompt(prompt, hosted);
+        check(decoded.length() == limit - 2 && decoded.endsWith("\uD83D\uDE42"));
+        Files.write(prompt, new byte[] {'a'}, StandardOpenOption.APPEND);
+        rejectIo(() -> StandaloneMain.readPrompt(prompt, hosted));
+        // A bounded byte count must not accept a truncated final UTF-8 sequence.
+        Files.write(prompt, Arrays.copyOf(bytes, bytes.length - 1));
+        rejectIo(() -> StandaloneMain.readPrompt(prompt, hosted));
     }
 
     @FunctionalInterface

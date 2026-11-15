@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: MIT
 package io.synexia.chromellm.standalone;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.IOException;
+import java.io.File;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -58,6 +63,7 @@ public final class StandaloneContractTestMain {
                 onlyModelRemains(temp);
                 cleanupFailure(backend, temp, true);
                 cleanupFailure(backend, temp, false);
+                outputContracts(backend, temp);
             }
             reject(() -> new LlamaCppCliBackend(launcher, model, temp, "--unsafe", 16));
             reject(() -> new LlamaCppCliBackend(launcher, model, temp, "WebGPU0", -2));
@@ -69,6 +75,8 @@ public final class StandaloneContractTestMain {
             interruptBeforeStart(launcher, model, temp);
             interruptRunningChild(launcher, model, temp);
             onlyModelRemains(temp);
+            boundedEncodingMemory(java, testClasses);
+            exitTailRace();
         } catch (Exception | Error primary) {
             failure = primary;
             throw primary;
@@ -83,6 +91,114 @@ public final class StandaloneContractTestMain {
         TieredInferenceTestMain.main(new String[0]);
         checks += StdioProtocolContractTestMain.run();
         System.out.println("standalone contract checks passed: " + checks);
+    }
+
+    private static void outputContracts(ModelBackend backend, Path temp) throws Exception {
+        // The child stays alive after writing the excess. A post-exit size check times out.
+        try {
+            backend.infer(new ModelRequest("stdout-overflow", 8, Duration.ofSeconds(10)));
+            throw new AssertionError("excess stdout accepted");
+        } catch (IOException expected) {
+            check(expected.getMessage().contains("bounded limit"));
+        }
+        onlyModelRemains(temp);
+        ModelResponse full = backend.infer(new ModelRequest("stdout-limit", 8, Duration.ofSeconds(10)));
+        check(full.text().length() == 4 * 1024 * 1024 && full.text().chars().allMatch(c -> c == 'x'),
+                "exact stdout bound was truncated or corrupted");
+        onlyModelRemains(temp);
+        check(backend.infer(new ModelRequest("stderr-flood", 8, Duration.ofSeconds(10)))
+                .text().equals("synthetic reply"), "stderr blocked or contaminated the answer");
+        onlyModelRemains(temp);
+        check(backend.infer(new ModelRequest("stdin-eof", 8, Duration.ofSeconds(10)))
+                .text().equals("synthetic reply"), "stdin was left open");
+        check(backend.infer(new ModelRequest("unicode-output", 8, Duration.ofSeconds(10)))
+                .text().equals("नमस्ते 🦙"), "split UTF-8 output changed");
+        for (String prompt : List.of("empty-output", "invalid-output", "truncated-output")) {
+            try {
+                backend.infer(new ModelRequest(prompt, 8, Duration.ofSeconds(10)));
+                throw new AssertionError("invalid output accepted: " + prompt);
+            } catch (IOException expected) {
+                checks++;
+            }
+            onlyModelRemains(temp);
+        }
+        try {
+            backend.infer(new ModelRequest("stream-then-sleep", 8, Duration.ofMillis(500)));
+            throw new AssertionError("partial output bypassed the deadline");
+        } catch (TimeoutException expected) {
+            checks++;
+        }
+        onlyModelRemains(temp);
+        try {
+            backend.infer(new ModelRequest("expired", 8, Duration.ofNanos(1)));
+            throw new AssertionError("expired invocation was launched");
+        } catch (TimeoutException expected) {
+            checks++;
+        }
+        onlyModelRemains(temp);
+        try {
+            backend.infer(new ModelRequest("bad-\ud800", 8, Duration.ofSeconds(10)));
+            throw new AssertionError("malformed UTF-16 prompt accepted");
+        } catch (IOException expected) {
+            checks++;
+        }
+        onlyModelRemains(temp);
+        try {
+            backend.infer(new ModelRequest("x".repeat(StdioProtocol.MAX_PROMPT_BYTES + 1),
+                    8, Duration.ofSeconds(10)));
+            throw new AssertionError("oversized prompt accepted");
+        } catch (IOException expected) {
+            check(expected.getMessage().contains("bounded limit"));
+        }
+        onlyModelRemains(temp);
+    }
+
+    /** Final bytes arrive after the empty-pipe sample and immediately before exit is observed. */
+    private static void exitTailRace() throws Exception {
+        String expected = "last response bytes नमस्ते 🦙";
+        class ExitingProcess extends Process {
+            private boolean observedExit;
+            private final ByteArrayInputStream stdout = new ByteArrayInputStream(
+                    expected.getBytes(StandardCharsets.UTF_8)) {
+                @Override public synchronized int available() {
+                    return observedExit ? super.available() : 0;
+                }
+            };
+            @Override public OutputStream getOutputStream() { return OutputStream.nullOutputStream(); }
+            @Override public InputStream getInputStream() { return stdout; }
+            @Override public InputStream getErrorStream() { return InputStream.nullInputStream(); }
+            @Override public int waitFor() { observedExit = true; return 0; }
+            @Override public int exitValue() { return 0; }
+            @Override public void destroy() { observedExit = true; }
+            @Override public boolean isAlive() { observedExit = true; return false; }
+        }
+        var await = LlamaCppCliBackend.class.getDeclaredMethod("awaitProcess", Process.class, long.class);
+        await.setAccessible(true);
+        byte[] bytes = (byte[]) await.invoke(null, new ExitingProcess(),
+                System.nanoTime() + TimeUnit.SECONDS.toNanos(1));
+        check(new String(bytes, StandardCharsets.UTF_8).equals(expected), "final stdout lost at child exit");
+    }
+
+    private static void boundedEncodingMemory(String java, String testClasses) throws Exception {
+        String classes = Path.of(StdioProtocol.class.getProtectionDomain()
+                .getCodeSource().getLocation().toURI()).toString();
+        Process probe = new ProcessBuilder(java, "-Xmx64m", "-cp", classes + File.pathSeparator + testClasses,
+                StdioProtocolContractTestMain.class.getName(), "--bounded-memory")
+                .redirectErrorStream(true).start();
+        try {
+            if (!probe.waitFor(20, TimeUnit.SECONDS)) throw new AssertionError("bounded encoding probe timed out");
+            String output = new String(probe.getInputStream().readNBytes(64 * 1024), StandardCharsets.UTF_8);
+            check(probe.exitValue() == 0 && output.contains("bounded encoding memory check passed"),
+                    "bounded encoding probe failed: " + output);
+        } finally {
+            if (probe.isAlive()) {
+                probe.destroyForcibly();
+                probe.waitFor(5, TimeUnit.SECONDS);
+            }
+            probe.getInputStream().close();
+            probe.getErrorStream().close();
+            probe.getOutputStream().close();
+        }
     }
 
     private static void cleanupFailure(ModelBackend backend, Path temp, boolean failedProcess) throws Exception {

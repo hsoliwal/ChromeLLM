@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT
 package io.synexia.chromellm.standalone;
 
+import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileSystemException;
@@ -19,6 +24,7 @@ import java.util.concurrent.TimeoutException;
 /** Browser-free llama.cpp CLI adapter. The executable and licensed GGUF model are external. */
 public final class LlamaCppCliBackend implements ModelBackend {
     private static final long MAX_STDOUT_BYTES = 4L * 1024 * 1024;
+    private static final long OUTPUT_POLL_NANOS = TimeUnit.MILLISECONDS.toNanos(10);
     private static final String BACKEND_ID = "llama.cpp-cli";
     private static final long SCRATCH_DELETE_SECONDS = 5;
     private static final long SCRATCH_DELETE_RETRY_MILLIS = 20;
@@ -85,30 +91,33 @@ public final class LlamaCppCliBackend implements ModelBackend {
         if (Thread.currentThread().isInterrupted()) {
             throw new InterruptedException("model inference interrupted before start");
         }
-        try (InferenceFiles files = new InferenceFiles()) {
+        long deadline = System.nanoTime() + request.timeout().toNanos();
+        byte[] prompt = StdioProtocol.encode(request.prompt(), StdioProtocol.MAX_PROMPT_BYTES);
+        remaining(deadline);
+        try (InferenceFiles files = new InferenceFiles(); ProcessScope processScope = new ProcessScope()) {
             Path promptFile = files.create(scratch, "chromellm-prompt-");
-            Files.writeString(promptFile, request.prompt(), StandardCharsets.UTF_8);
-            Path stdoutFile = files.create(scratch, "chromellm-stdout-");
-            Path stderrFile = files.create(scratch, "chromellm-stderr-");
-            Process process = startProcess(request, promptFile, stdoutFile, stderrFile);
-            awaitProcess(process, request);
-            if (process.exitValue() != 0) {
-                throw new IOException("llama.cpp CLI exited with status " + process.exitValue());
-            }
-            if (Files.size(stdoutFile) > MAX_STDOUT_BYTES) {
-                throw new IOException("llama.cpp CLI output exceeds bounded limit");
-            }
-            String text = Files.readString(stdoutFile, StandardCharsets.UTF_8).strip();
+            Files.write(promptFile, prompt);
+            remaining(deadline);
+            checkInterrupted();
+            Process process = processScope.start(request, promptFile);
+            byte[] output = awaitProcess(process, deadline);
+            String text = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(output)).toString().strip();
             if (text.isEmpty()) {
                 throw new IOException("llama.cpp CLI produced no candidate text");
             }
-            return new ModelResponse(text, id(), sha256(request.prompt()));
+            ModelResponse result = new ModelResponse(text, id(), sha256(prompt));
+            remaining(deadline);
+            checkInterrupted();
+            return result;
         }
     }
 
-    /** Owns only the three files created for one invocation; never follows replacements. */
+    /** Owns only the prompt file created for one invocation; never follows replacements. */
     private static final class InferenceFiles implements AutoCloseable {
-        private final Path[] paths = new Path[3];
+        private final Path[] paths = new Path[1];
         private int count;
 
         private Path create(Path directory, String prefix) throws IOException {
@@ -136,8 +145,40 @@ public final class LlamaCppCliBackend implements ModelBackend {
         }
     }
 
+    /** Stop the owned child and release its handles before deleting its prompt. */
+    private final class ProcessScope implements AutoCloseable {
+        private Process process;
+
+        private Process start(ModelRequest request, Path prompt) throws IOException {
+            process = startProcess(request, prompt);
+            return process;
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (process == null) return;
+            Exception failure = null;
+            try {
+                stopProcess(process);
+            } catch (IOException | RuntimeException cleanup) {
+                failure = cleanup;
+            }
+            Closeable[] streams = {process.getOutputStream(), process.getInputStream(), process.getErrorStream()};
+            for (Closeable stream : streams) {
+                try {
+                    stream.close();
+                } catch (IOException | RuntimeException cleanup) {
+                    if (failure == null) failure = cleanup;
+                    else if (failure != cleanup) failure.addSuppressed(cleanup);
+                }
+            }
+            if (failure instanceof IOException io) throw io;
+            if (failure instanceof RuntimeException runtime) throw runtime;
+        }
+    }
+
     /**
-     * Deletes one scratch file. Windows can report a redirected file as in use for a short
+     * Deletes one scratch file. Windows can report a child-owned file as in use for a short
      * time after its child process has exited, so a busy file is retried within a bound.
      * A path that was replaced by a non-empty directory is not busy and fails at once.
      */
@@ -165,7 +206,7 @@ public final class LlamaCppCliBackend implements ModelBackend {
         }
     }
 
-    private Process startProcess(ModelRequest request, Path prompt, Path stdout, Path stderr) throws IOException {
+    private Process startProcess(ModelRequest request, Path prompt) throws IOException {
         List<String> args = new ArrayList<>(launcher);
         args.addAll(List.of("-m", model.toString(), "-f", prompt.toString(), "-n",
                 Integer.toString(request.maxTokens()), "--no-display-prompt", "--no-show-timings",
@@ -173,30 +214,72 @@ public final class LlamaCppCliBackend implements ModelBackend {
         if (device != null) args.addAll(List.of("--device", device));
         if (gpuLayers >= 0) args.addAll(List.of("-ngl", Integer.toString(gpuLayers)));
         return new ProcessBuilder(args)
-                .redirectOutput(stdout.toFile())
-                .redirectError(stderr.toFile())
+                // Diagnostics were never part of the response. Discard them without storing
+                // an unbounded file or leaving a second pipe that can block a chatty child.
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start();
     }
 
-    private static void awaitProcess(Process process, ModelRequest request)
-            throws InterruptedException, TimeoutException {
+    private static byte[] awaitProcess(Process process, long deadline)
+            throws IOException, InterruptedException, TimeoutException {
+        process.getOutputStream().close(); // One prompt file is the complete request: stdin is EOF.
+        InputStream input = process.getInputStream();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        boolean eof = false;
         try {
-            if (!process.waitFor(request.timeout().toMillis(), TimeUnit.MILLISECONDS)) {
-                stopProcess(process);
-                throw new TimeoutException("model inference exceeded configured deadline");
+            while (true) {
+                checkInterrupted();
+                long nanos = remaining(deadline);
+                int available = eof ? 0 : input.available();
+                if (available > 0) {
+                    // A single reader consumes only available bytes. This avoids a blocking
+                    // read/close race and a stranded reader thread when a child is cancelled.
+                    int limit = (int) Math.min(chunk.length, MAX_STDOUT_BYTES - output.size() + 1);
+                    int count = input.read(chunk, 0, Math.min(available, limit));
+                    if (count < 0) eof = true;
+                    else {
+                        if (count > MAX_STDOUT_BYTES - output.size()) {
+                            throw new IOException("llama.cpp CLI output exceeds bounded limit");
+                        }
+                        output.write(chunk, 0, count);
+                    }
+                    continue;
+                }
+                if (!process.isAlive()) {
+                    // The child may have written its final bytes after the first availability
+                    // sample and before exit was observed. Drain that stable post-exit tail.
+                    if (!eof && input.available() > 0) continue;
+                    break;
+                }
+                process.waitFor(Math.min(nanos, OUTPUT_POLL_NANOS), TimeUnit.NANOSECONDS);
             }
         } catch (InterruptedException interrupted) {
-            stopProcess(process);
             Thread.currentThread().interrupt();
             throw interrupted;
         }
+        if (process.exitValue() != 0) {
+            throw new IOException("llama.cpp CLI exited with status " + process.exitValue());
+        }
+        return output.toByteArray();
     }
 
-    private static void stopProcess(Process process) {
-        process.destroy();
-        if (process.isAlive()) process.destroyForcibly();
-        // Termination is asynchronous. Wait for handle release before deleting redirected
-        // files, especially on Windows where an exiting child can still hold them open.
+    private static long remaining(long deadline) throws TimeoutException {
+        long nanos = deadline - System.nanoTime();
+        if (nanos <= 0) throw new TimeoutException("model inference exceeded configured deadline");
+        return nanos;
+    }
+
+    private static void checkInterrupted() throws InterruptedException {
+        if (Thread.currentThread().isInterrupted()) throw new InterruptedException("model inference interrupted");
+    }
+
+    private static void stopProcess(Process process) throws IOException {
+        if (process.isAlive()) {
+            process.destroy();
+            if (process.isAlive()) process.destroyForcibly();
+        }
+        // Termination is asynchronous. Wait for the owned child before deleting its prompt.
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         boolean interrupted = false;
         while (process.isAlive()) {
@@ -209,13 +292,14 @@ public final class LlamaCppCliBackend implements ModelBackend {
             }
         }
         if (interrupted) Thread.currentThread().interrupt();
+        if (process.isAlive()) throw new IOException("llama.cpp CLI did not terminate within cleanup deadline");
         // Child-process trees require a separate operating-system-specific containment policy.
     }
 
-    private static String sha256(String prompt) {
+    private static String sha256(byte[] prompt) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(prompt.getBytes(StandardCharsets.UTF_8)));
+                    .digest(prompt));
         } catch (NoSuchAlgorithmException impossibleOnJava21) {
             throw new IllegalStateException("SHA-256 unavailable", impossibleOnJava21);
         }
