@@ -9,6 +9,20 @@ ChromeLLM now separates its independent Java 21 model runtime from Chrome2api/Ch
 
 Run `mvn -f standalone/pom.xml verify` to compile the module and run its local-process, loopback HTTP and provider-selection contract tests. No API key is required for these tests.
 
+**Download and test native binaries with Maven:** `mvn -f standalone/pom.xml
+-Pdawn-binary verify` downloads the pinned Linux x86_64 Dawn package and tests real
+Vulkan/WGSL compute. Add `-Preal-model` to a native source build to fetch the pinned
+GGUF and run Java/JNI inference. Downloads use a reverified SHA-256 cache and honor
+Maven offline mode. See the [binary build guide](standalone/FORK_NATIVE_SMART_BUILD.md#maven-downloads-and-tests-binary-inputs).
+
+**Fork-native Maven smart build:** `-Pfork-native` verifies an explicitly pinned
+local `synexia-llmcpp` source checkout and compiles the JNI bridge through CMake,
+with optional separately installed Dawn/WebGPU. `-Psmart-build` runs an explicit
+Java 21 local-inference recipe during Maven `verify` and writes a hash-bound
+candidate only under `standalone/target/smart-build/`. Neither profile requires
+or launches Chrome. The ordinary Maven build remains unchanged. See
+[the fork-native build contract](standalone/FORK_NATIVE_SMART_BUILD.md).
+
 | Selection | Execution | Required input |
 | --- | --- | --- |
 | `--backend cli` (default) | Local llama.cpp process | Executable and licensed GGUF model |
