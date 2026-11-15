@@ -60,10 +60,12 @@ checks its exact entry name, extracts it using the host `tar`, and verifies
 the existence of `DawnConfig.cmake`. CMake discovers the staged
 `standalone/target/native-deps/dawn` prefix without changing global
 machine state. Downloads use HTTPS, a bounded response size, the exact
-published SHA-256, and no unpinned `latest` lookup. The verified archive and
-installed prefix are reused when intact, instead of downloading on every build.
-Unexpected, damaged or unsupported archives **fail closed**; there is no silent
-CPU fallback, unpinned version change, or browser-provided DLL substitution.
+published SHA-256, and no unpinned `latest` lookup. The verified archive is SHA-256-checked on every run. The installed prefix
+is sealed by a deterministic digest of its extracted files, paths, and symlink
+targets; a subsequent build checks that digest before reuse. Mismatched or
+incomplete caches fail closed and require deliberate cleanup of the Maven
+target directory; there is no silent repair, CPU fallback, unpinned version
+change, or browser-provided DLL substitution.
 The installer does not redistribute native files inside the JAR.
 
 The Maven profile intentionally does not run on Windows: this pinned
