@@ -58,6 +58,17 @@ jobs:
           test ! -e '关键数据.md'
       - name: Maven native-synthetic build and CTest regressions
         run: mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic verify
+      - name: Expose synthetic DLL dependencies to the Windows loader
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $nativeDir = Join-Path $env:GITHUB_WORKSPACE 'standalone\target\native-synthetic\Release'
+          foreach ($name in @('chromellm_llama_stub.dll', 'chromellm_llama_jni.dll')) {
+            if (-not (Test-Path -PathType Leaf (Join-Path $nativeDir $name))) {
+              throw "Missing synthetic native artifact: $name"
+            }
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $nativeDir
       - name: Verify no browser runtime linkage
         if: runner.os == 'Linux'
         run: |
