@@ -52,10 +52,15 @@ The launcher forwards Chrome's extension-origin launch argument and optional Win
 
 The native host manifest on Windows must identify an executable, not a `.ps1` file.
 An operator can build the JAR with Java 21, then use Windows `jpackage --type
-app-image --win-console` with the approved configuration path as the launcher’s
-fixed argument; Chrome appends the extension origin and optional parent-window
-argument. Register the host manifest in the user's HKCU NativeMessagingHosts key
-only after reviewing the installed executable and extension ID. The installer,
+app-image --win-console` and pass `--java-options
+"-Dchromellm.agent.config=C:/approved/config.properties"` as a fixed JVM option.
+**Do not use `--arguments` for the fixed config path**: JDK 21 documents that
+those defaults apply when no launcher arguments are supplied, while Chrome
+supplies its origin as an argument. The host receives the Chrome origin and
+optional parent-window handle as runtime arguments and reads the fixed config
+path only from the operator-packaged JVM property. Register the host manifest
+in the user's HKCU NativeMessagingHosts key only after reviewing the installed
+executable and extension ID. The installer,
 Windows launcher, Chrome permissions, GPU/CPU model eligibility and live browser
 transport have **not** been tested here. No registry writes or system installs are
 performed by these sources.
