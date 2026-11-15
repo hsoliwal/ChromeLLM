@@ -119,6 +119,40 @@ requires strict UTF-8 JSON objects and rejects credential echoes. Request deadli
 cover body delivery as well as response headers. Closing the adapter cancels its
 outstanding requests and shuts down its owned client.
 
+### Canonical structure before candidate preview
+
+An operator can enable `-Dchromellm.agent.atomPatternFirst=true` on the Java
+command that runs the CLI or MCP server. The default is `false`; only the literal
+values `true` and `false` are admitted. This setting keeps the existing eight tool
+schemas and the existing repository service. It is not a model-selected argument.
+
+In this mode, `source_read` automatically requests the private service's canonical
+atom-pattern observation. The adapter admits a result only when the exact path,
+source bytes and SHA-256 match a complete, lossless type/member composition from
+the existing `JavaAtomExtractor` and `JavaFileComposition` owners. It retains at
+most 100 source bindings and clears them before each agent run, including
+successive MCP `run_agent` calls on the same connection. A failed or superseded
+read invalidates that path's binding. `candidate_preview` requires a retained
+observation for its exact path
+and source hash and sends that observation root to the service. Missing, stale or
+evicted observations require another successful source read; cached candidates
+cannot substitute for this prerequisite.
+
+The private service must have the built `m3-java-contracts` owners and their
+existing progress dependencies on its runtime classpath. Missing providers fail
+closed in this mode. Observation results remain subject to the configured agent
+tool-result and context byte limits; increase those existing limits explicitly
+when the complete source and structural evidence need more room.
+
+This preparation observes source structure without editing it or splitting method
+bodies. Physical private-method extraction remains verifier-gated work for
+`com.synexia.rewrite.M3AtomizeRecipe`; semantic pattern evidence remains unexecuted
+work for `com.synexia.rewrite.M3PatternizeRecipe`. The observation carries these
+fixed recipe names as an ordered work order, with no recipe execution authority.
+Preview still performs the existing diff, structural API lint and Java compilation
+checks. Tests, recipe replay, behavior proof and promotion retain their separate
+gates.
+
 Successful CLI output is JSON containing `status`, `answer`, `backendId`, `modelCalls`,
 `toolCalls` and `trace`. Each trace entry binds the actual prompt, model response and
 tool observation with SHA-256; it stores neither source text nor credentials.
