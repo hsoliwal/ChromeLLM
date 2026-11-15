@@ -390,6 +390,17 @@ final class ModelArtifactCache {
     private static InputStream fetch(URI url, long maxBytes) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(Duration.ofSeconds(20)).build();
+        return fetch(url, maxBytes, client);
+    }
+
+    /** HTTP compatibility seam; all requests share the owned transport and body lifecycle. */
+    static InputStream fetch(URI url, HttpClient client) throws IOException, InterruptedException {
+        return fetch(url, MAX_BYTES, client);
+    }
+
+    private static InputStream fetch(URI url, long maxBytes, HttpClient client)
+            throws IOException, InterruptedException {
+        Objects.requireNonNull(client, "HTTP client");
         return fetch(url, maxBytes, new Transport() {
             @Override public HttpResponse<InputStream> send(HttpRequest request)
                     throws IOException, InterruptedException {
@@ -613,65 +624,6 @@ final class ModelArtifactCache {
                 throw new IOException("model artifact has invalid size");
             }
         }
-    }
-
-    static InputStream fetch(URI url, HttpClient client) throws IOException, InterruptedException {
-        boolean releaseDownload = githubRelease(url);
-        URI current = url;
-        for (int redirects = 0; ; redirects++) {
-            HttpRequest request = HttpRequest.newBuilder(current).timeout(Duration.ofHours(1))
-                    .header("Accept-Encoding", "identity").GET().build();
-            HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            InputStream input = response.body();
-            int status = response.statusCode();
-            URI next;
-            try {
-                if (status == 200) {
-                    String encoding = response.headers().firstValue("Content-Encoding").orElse("identity");
-                    long length;
-                    try { length = response.headers().firstValueAsLong("Content-Length").orElse(-1); }
-                    catch (NumberFormatException invalid) {
-                        throw new IOException("invalid model artifact Content-Length", invalid);
-                    }
-                    if (!"identity".equalsIgnoreCase(encoding) || length < -1 || length > MAX_BYTES) {
-                        throw new IOException("model artifact has unsupported encoding or size");
-                    }
-                    return input;
-                }
-                if (!releaseDownload || redirects >= 3
-                        || (status != 301 && status != 302 && status != 303 && status != 307 && status != 308)) {
-                    throw new IOException("model download returned HTTP " + status + " or exceeded its redirect limit");
-                }
-                var locations = response.headers().allValues("Location");
-                if (locations.size() != 1) throw new IOException("model redirect requires one Location header");
-                try { next = current.resolve(locations.getFirst()); }
-                catch (IllegalArgumentException malformed) { throw new IOException("invalid model redirect", malformed); }
-                if (!httpsDefaultPort(next) || (!githubRelease(next)
-                        && !"release-assets.githubusercontent.com".equalsIgnoreCase(next.getHost()))) {
-                    throw new IOException("model redirect is outside GitHub release storage");
-                }
-            } catch (IOException | RuntimeException | Error failure) {
-                try { input.close(); }
-                catch (IOException closeFailure) { failure.addSuppressed(closeFailure); }
-                throw failure;
-            }
-            // Close only the intermediate response. The owning fetch closes the client
-            // after the final stream, or on failure; the same client handles the next hop.
-            input.close();
-            current = next;
-        }
-    }
-
-    private static boolean githubRelease(URI url) {
-        return httpsDefaultPort(url) && "github.com".equalsIgnoreCase(url.getHost())
-                && url.getRawPath() != null
-                && url.getRawPath().matches("/[^/]+/[^/]+/releases/download/[^/]+/[^/]+");
-    }
-
-    private static boolean httpsDefaultPort(URI url) {
-        return "https".equalsIgnoreCase(url.getScheme()) && url.getHost() != null
-                && url.getRawUserInfo() == null && url.getRawFragment() == null
-                && (url.getPort() == -1 || url.getPort() == 443);
     }
 
     private static MessageDigest digest() {

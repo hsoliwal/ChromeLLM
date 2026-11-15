@@ -59,32 +59,35 @@
           <mainClass>io.synexia.chromellm.standalone.ProviderSelectionContractTestMain</mainClass>
           <classpathScope>test</classpathScope>
         </configuration>
-      </execution><execution>
+      </execution>
+      <execution>
         <id>chrome-process-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
         <configuration>
           <mainClass>io.synexia.chromellm.standalone.ChromeProcessContractTestMain</mainClass>
           <classpathScope>test</classpathScope>
         </configuration>
-      </execution><execution>
+      </execution>
+      <execution>
         <id>chrome-devtools-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
         <configuration>
           <mainClass>io.synexia.chromellm.standalone.ChromeDevToolsContractTestMain</mainClass>
           <classpathScope>test</classpathScope>
         </configuration>
-      </execution><execution>
+      </execution>
+      <execution>
         <id>chrome-backend-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
         <configuration>
           <mainClass>io.synexia.chromellm.standalone.ChromeAiBackendContractTestMain</mainClass>
           <classpathScope>test</classpathScope>
         </configuration>
-      </execution><execution>
+      </execution>
+      <execution>
         <id>chrome-script-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
         <configuration>
           <mainClass>io.synexia.chromellm.standalone.ChromeAiScriptContractTestMain</mainClass>
           <classpathScope>test</classpathScope>
         </configuration>
-      </execution>
-      <execution>
+      </execution><execution>
         <id>fork-smart-build-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
         <configuration>
           <mainClass>io.synexia.chromellm.standalone.SmartBuildContractTestMain</mainClass>
@@ -104,6 +107,24 @@
         </configuration>
       </execution>
       <execution>
+        <id>agent-session-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.AgentSessionContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
+        <id>coding-agent-tools-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.CodingAgentToolsContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
+        <id>agent-entrypoint-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.AgentEntrypointContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
         <id>agent-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
         <configuration>
           <mainClass>io.synexia.chromellm.standalone.AgentContractTestMain</mainClass>
@@ -219,7 +240,7 @@
           <id>require-pinned-fork-build</id><phase>validate</phase><goals><goal>enforce</goal></goals>
           <configuration><rules><requireProperty>
             <property>chromellm.native.mode</property><regex>^pinned-fork$</regex>
-            <message>fork-native cannot be combined with native-fork or native-synthetic</message>
+            <regexMessage>fork-native cannot be combined with native-fork or native-synthetic</regexMessage>
           </requireProperty></rules></configuration>
         </execution></executions>
       </plugin><plugin>
@@ -244,8 +265,8 @@
                 <argument>-B</argument><argument>${project.build.directory}/fork-native</argument>
                 <argument>-DCHROMELLM_LLAMA_SOURCE_DIR=${chromellm.fork.source}</argument>
                 <argument>-DCHROMELLM_WEBGPU=${chromellm.fork.webgpu}</argument>
-                <argument>-DCMAKE_PREFIX_PATH=${chromellm.fork.prefix}</argument>
                 <argument>-DCHROMELLM_DAWN_PREFIX=${chromellm.native.dawn.prefix}</argument>
+                <argument>-DCMAKE_PREFIX_PATH=${chromellm.fork.prefix}</argument>
                 <argument>-DDawn_DIR=${chromellm.fork.dawnDir}</argument>
                 <argument>-DCMAKE_BUILD_TYPE=${chromellm.fork.configuration}</argument>
                 <argument>-DGGML_NATIVE=OFF</argument>
@@ -303,15 +324,15 @@
           <configuration><rules>
             <requireProperty>
               <property>chromellm.native.mode</property><regex>^(none|pinned-fork)$</regex>
-              <message>dawn-binary requires fork-native or standalone binary verification</message>
+              <regexMessage>dawn-binary requires fork-native or standalone binary verification</regexMessage>
             </requireProperty>
             <requireProperty>
               <property>chromellm.dawn.owner</property><regex>^dawn-binary$</regex>
-              <message>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</message>
+              <regexMessage>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</regexMessage>
             </requireProperty>
             <requireProperty>
               <property>chromellm.fork.webgpu</property><regex>^ON$</regex>
-              <message>dawn-binary requires chromellm.fork.webgpu=ON</message>
+              <regexMessage>dawn-binary requires chromellm.fork.webgpu=ON</regexMessage>
             </requireProperty>
           </rules></configuration>
         </execution></executions>
@@ -363,7 +384,7 @@
           <id>require-real-model-build</id><phase>validate</phase><goals><goal>enforce</goal></goals>
           <configuration><rules><requireProperty>
             <property>chromellm.native.mode</property><regex>^(none|fork|pinned-fork)$</regex>
-            <message>real-model cannot be used with native-synthetic</message>
+            <regexMessage>real-model cannot be used with native-synthetic</regexMessage>
           </requireProperty></rules></configuration>
         </execution></executions>
       </plugin><plugin>
@@ -404,7 +425,6 @@
       <properties>
         <chromellm.dawn.owner>native-dawn</chromellm.dawn.owner>
         <chromellm.native.webgpu>ON</chromellm.native.webgpu>
-        <chromellm.fork.webgpu>ON</chromellm.fork.webgpu>
         <chromellm.native.dawn.prefix>${project.build.directory}/native-deps/dawn</chromellm.native.dawn.prefix>
       </properties>
       <build><plugins>
@@ -414,26 +434,16 @@
             <id>require-dawn-compatible-build</id><phase>validate</phase><goals><goal>enforce</goal></goals>
             <configuration><rules>
               <requireProperty>
-                <property>chromellm.native.mode</property><regex>^(none|fork|pinned-fork)$</regex>
-                <message>native-dawn cannot be used with native-synthetic</message>
                 <property>chromellm.dawn.owner</property><regex>^native-dawn$</regex>
-                <message>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</message>
+                <regexMessage>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</regexMessage>
               </requireProperty>
               <requireProperty>
                 <property>chromellm.native.mode</property><regex>^(none|fork)$</regex>
-                <message>native-dawn cannot be used with native-synthetic or fork-native; use dawn-binary with fork-native</message>
-                <regexMessage>native-dawn cannot be used with native-synthetic</regexMessage>
+                <regexMessage>native-dawn cannot be used with native-synthetic or fork-native; use dawn-binary with fork-native</regexMessage>
               </requireProperty>
               <requireProperty>
                 <property>chromellm.native.webgpu</property><regex>^ON$</regex>
-                <message>native-dawn requires WebGPU=ON</message>
                 <regexMessage>native-dawn requires WebGPU=ON</regexMessage>
-              </requireProperty>
-              <requireProperty>
-                <property>chromellm.fork.webgpu</property><regex>^ON$</regex>
-                <message>native-dawn requires the pinned fork WebGPU setting to be ON</message>
-                <regexMessage>native-dawn requires the pinned fork WebGPU setting to be ON</regexMessage>
-                <regexMessage>native-dawn requires the pinned fork WebGPU=ON</regexMessage>
               </requireProperty>
             </rules></configuration>
           </execution></executions>

@@ -27,17 +27,35 @@ final class McpStdioServer {
     private static final int MAX_OUTPUT = StdioProtocol.MAX_RESPONSE_BYTES;
     private final ModelBackend backend;
     private final List<AgentTool> agentTools;
+    private final List<AgentSession.Tool> sessionTools;
+    private final AgentSession.Limits sessionLimits;
     private boolean negotiated;
     private boolean initialized;
 
     private McpStdioServer(ModelBackend backend, List<AgentTool> agentTools) {
         this.backend = Objects.requireNonNull(backend, "backend");
         this.agentTools = agentTools == null ? null : List.copyOf(agentTools);
+        this.sessionTools = List.of();
+        this.sessionLimits = AgentSession.Limits.defaults();
+    }
+
+    private McpStdioServer(ModelBackend backend, List<AgentSession.Tool> sessionTools,
+                           AgentSession.Limits sessionLimits) {
+        this.backend = Objects.requireNonNull(backend, "backend");
+        this.agentTools = null;
+        this.sessionTools = List.copyOf(sessionTools);
+        this.sessionLimits = Objects.requireNonNull(sessionLimits, "sessionLimits");
     }
 
     /** Caller owns model, input and output streams. All processing is sequential. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output) throws IOException {
         serveTools(backend, input, output, null);
+    }
+
+    /** A configured tool set adds one bounded agent entry point; the caller owns all resources. */
+    static void serve(ModelBackend backend, InputStream input, OutputStream output,
+                      List<AgentSession.Tool> tools, AgentSession.Limits limits) throws IOException {
+        serveSession(new McpStdioServer(backend, tools, limits), input, output);
     }
 
     /** Workspace access is explicitly enabled by the process owner, never by a model argument. */
@@ -47,7 +65,11 @@ final class McpStdioServer {
 
     static void serveTools(ModelBackend backend, InputStream input, OutputStream output, List<AgentTool> tools)
             throws IOException {
-        McpStdioServer session = new McpStdioServer(backend, tools);
+        serveSession(new McpStdioServer(backend, tools), input, output);
+    }
+
+    private static void serveSession(McpStdioServer session, InputStream input, OutputStream output)
+            throws IOException {
         BufferedInputStream incoming = new BufferedInputStream(input);
         while (true) {
             String line = readLine(incoming);
@@ -148,6 +170,7 @@ final class McpStdioServer {
                 return encoded(success(id, toolResult("Agent planning interrupted", true)));
             }
         }
+        if ("run_agent".equals(tool) && !sessionTools.isEmpty()) return runSession(id, arguments);
         if ("agent_run".equals(tool) && agentTools != null) return runAgent(id, arguments);
         if (!"infer_text".equals(tool)) return encoded(error(id, -32602, "Unknown tool"));
         if (!(arguments.get("prompt") instanceof String prompt) || prompt.isBlank()
@@ -176,6 +199,41 @@ final class McpStdioServer {
         } catch (InterruptedException interruption) {
             Thread.currentThread().interrupt();
             return encoded(success(id, toolResult("Model inference interrupted", true)));
+        }
+    }
+
+    private String runSession(Object id, Map<?, ?> arguments) throws IOException {
+        if (!(arguments.get("goal") instanceof String goal) || goal.isBlank()
+                || arguments.keySet().stream().anyMatch(key -> !List.of(
+                        "goal", "maxSteps", "maxTokens", "timeoutSeconds").contains(key))) {
+            return encoded(error(id, -32602, "Invalid agent arguments"));
+        }
+        final AgentSession.Limits selected;
+        try {
+            StdioProtocol.encode(goal, sessionLimits.maxContextBytes());
+            int seconds = Math.toIntExact(sessionLimits.timeout().toSeconds());
+            selected = new AgentSession.Limits(
+                    integer(arguments, "maxSteps", sessionLimits.maxSteps(), 1, sessionLimits.maxSteps()),
+                    integer(arguments, "maxTokens", sessionLimits.maxTokens(), 1, sessionLimits.maxTokens()),
+                    sessionLimits.maxContextBytes(), sessionLimits.maxToolResultBytes(),
+                    Duration.ofSeconds(integer(arguments, "timeoutSeconds", seconds, 1, seconds)));
+        } catch (IOException | IllegalArgumentException | ArithmeticException invalid) {
+            return encoded(error(id, -32602, "Invalid agent arguments or operator budget exceeded"));
+        }
+        try {
+            AgentSession.Result result = new AgentSession(backend, sessionTools, selected).run(goal);
+            Map<String, Object> response = new LinkedHashMap<>(toolResult(result.answer(), false));
+            response.put("structuredContent", result.structured());
+            return encoded(success(id, response));
+        } catch (AgentSession.FailureException refusal) {
+            return encoded(success(id, toolResult("Agent stopped: " + refusal.code().name(), true)));
+        } catch (TimeoutException timeout) {
+            return encoded(success(id, toolResult("Agent deadline exceeded", true)));
+        } catch (IOException | RuntimeException failure) {
+            return encoded(success(id, toolResult("Agent model or tool failed", true)));
+        } catch (InterruptedException interruption) {
+            Thread.currentThread().interrupt();
+            return encoded(success(id, toolResult("Agent interrupted", true)));
         }
     }
 
@@ -241,6 +299,22 @@ final class McpStdioServer {
                                         "maxTokens", Map.of("type", "integer", "minimum", 1, "maximum", 32768),
                                         "timeoutSeconds", Map.of("type", "integer", "minimum", 1, "maximum", 3600)),
                                 "required", List.of("prompt")))));
+        if (!sessionTools.isEmpty()) {
+            tools.add(Map.of("name", "run_agent", "description",
+                    "Run a bounded Java/JNI coding-agent session against operator-configured repository tools; "
+                            + "candidate previews do not authorize source application or prove behavior.",
+                    "inputSchema", Map.of("type", "object", "additionalProperties", false,
+                            "properties", Map.of("goal", Map.of("type", "string"),
+                                    "maxSteps", Map.of("type", "integer", "minimum", 1,
+                                            "maximum", sessionLimits.maxSteps()),
+                                    "maxTokens", Map.of("type", "integer", "minimum", 1,
+                                            "maximum", sessionLimits.maxTokens()),
+                                    "timeoutSeconds", Map.of("type", "integer", "minimum", 1,
+                                            "maximum", sessionLimits.timeout().toSeconds())),
+                            "required", List.of("goal")),
+                    "annotations", Map.of("readOnlyHint", false, "destructiveHint", false,
+                            "idempotentHint", false, "openWorldHint", false)));
+        }
         if (agentTools != null) {
             tools.add(Map.of("name", "agent_run", "description",
                     "Run a bounded plan/tool/result loop over the explicitly configured workspace using the selected model provider.",

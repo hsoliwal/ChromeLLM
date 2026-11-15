@@ -59,9 +59,9 @@ public final class SmartBuildMain {
     static Path run(Path recipe, Path workspace, Path buildDirectory,
                     Map<String, String> environment, ProviderFactory providerFactory, boolean offline) throws Exception {
         Path root = workspace.toRealPath();
-        Path target = NativeBuildArtifacts.buildDirectory(root, buildDirectory);
         // Reject the destination before any artifact acquisition or provider initialization.
-        Path outputRoot = validateOutputRoot(root, target);
+        Path outputRoot = validateOutputRoot(root, buildDirectory);
+        NativeBuildArtifacts.buildDirectory(root, outputRoot.getParent());
         Path recipePath = confined(root, recipe, "recipe");
         byte[] recipeBytes;
         try (InputStream input = Files.newInputStream(recipePath)) {
@@ -150,7 +150,7 @@ public final class SmartBuildMain {
             candidate = StdioProtocol.encode(result.text(), StdioProtocol.MAX_RESPONSE_BYTES);
         }
         Files.createDirectories(outputRoot);
-        validateOutputRoot(root, target);
+        validateOutputRoot(root, buildDirectory);
         Path output = outputRoot.resolve("candidate-" + runKey + ".txt");
         publish(output, candidate);
         String receipt = "recipe.sha256=" + hex(recipeHash) + "\n"
@@ -164,10 +164,14 @@ public final class SmartBuildMain {
     }
 
     private static Path validateOutputRoot(Path root, Path buildDirectory) throws IOException {
-        Path target = buildDirectory.toAbsolutePath().normalize();
-        if (!target.equals(root.resolve("target"))
-                || !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)
-                || !target.toRealPath().equals(target)) {
+        Path suppliedTarget = buildDirectory.toAbsolutePath().normalize();
+        Path target = root.resolve("target");
+        // Resolve ancestor aliases consistently with workspace.toRealPath(), while
+        // keeping the final target directory itself subject to the no-link check.
+        if (suppliedTarget.getParent() == null
+                || !suppliedTarget.getParent().toRealPath().resolve(suppliedTarget.getFileName()).equals(target)
+                || !Files.isDirectory(suppliedTarget, LinkOption.NOFOLLOW_LINKS)
+                || !suppliedTarget.toRealPath().equals(target)) {
             throw new IOException("smart-build requires the existing in-project Maven target directory");
         }
         Path outputRoot = target.resolve("smart-build");
