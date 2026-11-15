@@ -23,6 +23,7 @@ public final class StandaloneMain {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
+        validateChromeModes(options);
         boolean sessionConfigured = options.containsKey("--agent-endpoint")
                 || options.containsKey("--agent-token-env")
                 || options.containsKey("--agent-max-context-bytes")
@@ -32,7 +33,6 @@ public final class StandaloneMain {
             validateAgentMode(options);
         }
         if (flag(options, "--agent") && sessionConfigured) {
-            validateChromeModes(options);
             Path goalFile = Path.of(required(options, "--prompt-file"));
             AgentSession.Limits limits = agentLimits(options);
             String goal = readAgentGoal(goalFile, limits);
@@ -48,7 +48,6 @@ public final class StandaloneMain {
         }
         Path workspace = sessionConfigured ? null : agentWorkspace(options);
         List<AgentTool> tools = workspace == null ? null : new WorkspaceTools(workspace).tools();
-        validateChromeModes(options);
         if (flag(options, "--chrome-status") || flag(options, "--chrome-prepare")) {
             Duration timeout = setupTimeout(options);
             try (ModelBackend selected = backend(options, System.getenv())) {
@@ -282,7 +281,7 @@ public final class StandaloneMain {
         boolean prepare = flag(options, "--chrome-prepare");
         if (status && prepare) throw new IllegalArgumentException("Chrome status and preparation are exclusive modes");
         if (status || prepare) {
-            rejectOptions(options, "--prompt-file", "--stdio", "--mcp-stdio", "--list-devices", "--max-tokens");
+            rejectOptions(options, "--prompt-file", "--stdio", "--mcp-stdio", "--list-devices", "--max-tokens", "--agent");
         }
     }
 

@@ -307,6 +307,12 @@ public final class ModelArtifactCacheContractTestMain {
         Path file = binary.resolve();
         check(file.getFileName().toString().equals(hash + ".bin"), "native cache must use its own suffix");
         check(binary.resolveWithOfflinePolicy(true).equals(file) && opens.get() == 1, "offline verified binary hit downloaded");
+        check(new ModelArtifactCache(url, hash, dir, fixture.length).resolveWithOfflinePolicy(true).equals(file),
+                "exact-length binary constructor lost its native cache identity");
+        Path offlineDirectory = Files.createDirectory(dir.resolve("offline-policy"));
+        ModelArtifactCache offlineBinary = new ModelArtifactCache(url, hash, offlineDirectory, download, 100, true);
+        rejectIo(() -> offlineBinary.resolveWithOfflinePolicy(false));
+        check(opens.get() == 1, "per-call default overrode the configured offline policy");
         check(Files.exists(dir.resolve(hash + ".gguf")), "native artifact replaced existing model cache");
         ModelArtifactCache wrongLength = new ModelArtifactCache(url, hash, dir, download, 100,
                 fixture.length + 1, ".bin");

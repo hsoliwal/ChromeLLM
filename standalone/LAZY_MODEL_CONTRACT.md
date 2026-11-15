@@ -6,39 +6,35 @@ three options `--model-url`, `--model-sha256`, and `--model-cache-dir`; these ar
 exclusive with `--model`, `--tier`, and all tier-specific paths. The cache directory
 must already exist and be writable for the direct CLI; acquisition never creates an
 implicit user-home cache. The explicitly selected Maven binary profiles and smart-build
-entrypoint prepare their documented cache directories. Hosted Gemini rejects these options.
+entrypoint prepare their documented cache directories for online acquisition.
+Maven `-o` refuses a smart-build cache miss without creating its directory. The opt-in `real-model-test`
+profile creates its explicitly configured directory, defaulting to
+`${settings.localRepository}/io/synexia/chromellm/models`. Hosted Gemini rejects these options.
 
 `--model-url` must be an explicitly supplied HTTPS URL, without user-info or fragment.
 `--model-sha256` is a 64-hex-character digest of the entire licensed GGUF artifact.
-For ordinary CLI/MCP use, the model is fetched no earlier than the first inference
-request, never at argument parse time. The explicit Maven `real-model-test` profile
-resolves its pinned test model during integration-test, then executes real JNI inference. The CLI executable or JNI bridge remains separately installed.
 The lazy provider fetches the model no earlier than the first inference request and
 never at argument parse time. An explicitly selected Maven `real-model` profile may
-provision its pinned test model before verification. The CLI executable or JNI bridge
+provision its pinned test model before verification. The explicit `real-model-test`
+profile resolves its pinned model during `integration-test`, then executes real JNI
+inference. The CLI executable or JNI bridge
 remains separately installed or built from the selected native source.
 The caller must review model redistribution, export, and use rights.
 
 The implementation stores verified model bytes as `<sha256>.gguf` in the specified
 cache. Every cache hit is SHA-256 checked, a corrupt cache entry fails closed,
 and an incomplete or mismatched download is removed without replacing existing
-unowned paths. Missing artifacts use HTTPS GET with at most five redirects. Every
-destination must remain HTTPS without credentials or a fragment; cycles and ambiguous
-locations fail. Redirects carry no cookies or authorization. Transfer size is bounded
-to 64 GiB, or the smaller caller-supplied test bound; transient failures have no automatic retry or provider
-fallback. Files are staged in the same directory and published via an exclusive
-hard link only on successful verification. Runtime acquisition requires a pre-existing
-cache directory. The opt-in Maven test creates its explicitly configured directory;
-its default is `${settings.localRepository}/io/synexia/chromellm/models`. Corrupt cached
-artifacts fail instead of being overwritten. Maven `-o` forbids downloads in the
-real-model test and smart-build profiles while still verifying existing cache bytes.
-unowned paths. Missing artifacts use HTTPS GET with at most five validated HTTPS
-redirects. Downgrades, credentials and fragments are rejected on every hop. Transfer
-size is bounded to 64 GiB; transient failures have no automatic retry or provider
-fallback. Files are staged in the same directory and published via an exclusive
-hard link only on successful verification. The cache owner itself does not create
-directories or silently repair corrupt artifacts. Maven offline mode revalidates
-existing binary inputs and refuses cache misses before opening the downloader.
+unowned paths. Missing artifacts use HTTPS GET.
+
+Missing artifacts may follow at most five validated HTTPS redirects.
+Every hop rejects downgrades, user-info and fragments; redirect cycles and blank or
+ambiguous locations fail. Redirects carry no cookies or authorization. Redirected
+responses are closed before the next request, and the full pinned SHA-256 is checked
+after transfer. Transfer size is bounded to 64 GiB, or the smaller caller-supplied
+bound; transient failures have no automatic retry or provider fallback. Files are staged in the same directory and published via an
+exclusive hard link only on successful verification. The cache owner itself does
+not create directories or silently repair corrupt artifacts. Maven offline mode
+revalidates existing binary inputs and refuses cache misses before opening the downloader.
 
 The artifact is acquired before native or subprocess model initialization. The
 request's inference timeout applies to inference after successful acquisition.

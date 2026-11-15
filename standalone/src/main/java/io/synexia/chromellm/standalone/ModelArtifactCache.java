@@ -166,7 +166,7 @@ final class ModelArtifactCache {
         Attempt attempt = new Attempt();
         latest = attempt;
         attempt.observe(State.WAITING, 0);
-        FutureTask<Path> result = new FutureTask<>(() -> acquire(attempt, offline));
+        FutureTask<Path> result = new FutureTask<>(() -> acquire(attempt, offline || this.offline));
         attempt.worker = Thread.ofVirtual().name("chromellm-model-acquisition").unstarted(result);
         attempt.worker.start();
         try {
