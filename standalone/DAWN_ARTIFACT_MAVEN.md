@@ -4,7 +4,8 @@ ChromeLLM's default Java 21 `verify` build remains offline. The independently
 supplied `hsoliwal/synexia-llmcpp` fork is still compiled through the existing
 JNI/CMake integration. The new **`native-webgpu-artifact`** Maven profile adds
 one operation before native compilation: download and unpack an **explicitly
-SHA-256-pinned public Dawn native install archive**. It never launches Chrome,
+SHA-256-pinned public Dawn native install archive** (direct `.tar.gz` or
+GitHub Release `.zip` containing a single `Dawn-*.tar.gz`). It never launches Chrome,
 extracts Chrome-managed weights, or silently selects a hosted model provider.
 
 ## Reusable public Dawn package
@@ -31,10 +32,29 @@ artifact is downloaded only when this profile is selected. The existing
 continue to acquire a separate explicitly licensed GGUF at first inference;
 no model is needed to compile the JNI bridge.
 
+## Verified public release example
+
+The `synexia-llmcpp` WebGPU workflow refers to a prebuilt Dawn release from
+`reeselevine/dawn`. The GitHub Releases API for tag `v2.0.0` reports this
+Ubuntu ZIP asset and its full SHA-256 digest:
+
+```text
+URL=https://github.com/reeselevine/dawn/releases/download/v2.0.0/Dawn-5e9a4865b1635796ccc77dd30057f2b4002a1355-ubuntu-latest-Release.zip
+SHA256=a5a87d9513e1fc109c355628baebe6b85fe7aa258f8ed2d2cf71ddc902e778bb
+```
+
+The Maven provisioner verifies the **outer ZIP**, admits one named inner
+`Dawn-*.tar.gz`, then safely extracts that tarball. This value was read from
+GitHub release metadata, **not downloaded or executed in this session**.
+It is a reproducible candidate for the manual Linux workflow; it is not a
+guarantee of compatibility with any particular `synexia-llmcpp` revision
+or GPU host. The `hsoliwal/dawn` fork can be used instead once it publishes
+a compatible, checksum-identified release.
+
 ## Verification and filesystem boundaries
 
 - Initial URL must be HTTPS `github.com/OWNER/REPO/releases/download/TAG/*.tar.gz`
-  (or `*.tgz`) without credentials, fragments or a port. A bounded number
+  (or `*.tgz`, or a Release `*.zip` wrapper) without credentials, fragments or a port. A bounded number
   of explicit HTTPS redirects is allowed only to recognized GitHub release
   asset CDN hosts; redirects to arbitrary hosts, private services or HTTP fail.
 - The caller provides a **full 64-hex SHA-256**; the download is bounded, streamed
