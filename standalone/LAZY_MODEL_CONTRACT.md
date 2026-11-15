@@ -20,6 +20,20 @@ its configured cache defaults to `${settings.localRepository}/io/synexia/chromel
 Both explicit Maven paths verify cache hits and honor offline mode.
 The CLI executable remains separately installed; JNI can use an explicit library
 path or the matching packaged native artifact.
+must already exist and be writable for the direct CLI; acquisition never creates an
+implicit user-home cache. The explicitly selected Maven binary profiles and smart-build
+entrypoint prepare their documented cache directories. The opt-in `real-model-test`
+profile creates its explicitly configured directory, defaulting to
+`${settings.localRepository}/io/synexia/chromellm/models`. Hosted Gemini rejects these options.
+
+`--model-url` must be an explicitly supplied HTTPS URL, without user-info or fragment.
+`--model-sha256` is a 64-hex-character digest of the entire licensed GGUF artifact.
+The lazy provider fetches the model no earlier than the first inference request and
+never at argument parse time. An explicitly selected Maven `real-model` profile may
+provision its pinned test model before verification. The explicit `real-model-test`
+profile resolves its pinned model during `integration-test`, then executes real JNI
+inference. The CLI executable or JNI bridge
+remains separately installed or built from the selected native source.
 The caller must review model redistribution, export, and use rights.
 
 The implementation stores verified model bytes as `<sha256>.gguf` in the specified
@@ -42,6 +56,21 @@ paths resolve against the standalone project; external cache paths must exist.
 Maven offline mode revalidates cached binary inputs and refuses misses before
 opening the downloader. Exact-size native binary artifacts use `.bin` cache entries;
 GGUF model entries retain the `.gguf` suffix.
+unowned paths. Missing artifacts use HTTPS GET.
+
+An explicit URL of the form
+`https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>` on the default
+HTTPS port may follow up to three HTTPS redirects within GitHub release-download
+endpoints and `release-assets.githubusercontent.com`, also on the default HTTPS
+port. Other explicit HTTPS origins may follow up to five validated HTTPS redirects.
+Every hop rejects downgrades, user-info and fragments; redirect cycles and blank or
+ambiguous locations fail. Redirects carry no cookies or authorization. Redirected
+responses are closed before the next request, and the full pinned SHA-256 is checked
+after transfer. Transfer size is bounded to 64 GiB, or the smaller caller-supplied
+bound; transient failures have no automatic retry or provider fallback. Files are staged in the same directory and published via an
+exclusive hard link only on successful verification. The cache owner itself does
+not create directories or silently repair corrupt artifacts. Maven offline mode
+revalidates existing binary inputs and refuses cache misses before opening the downloader.
 
 The artifact is acquired before native or subprocess model initialization. The
 request's inference timeout applies to inference after successful acquisition.

@@ -92,9 +92,10 @@ int32_t llama_tokenize(const llama_vocab*, const char* input, int32_t len, llama
     if (prompt.rfind("Unicode:", 0) == 0 && prompt != "Unicode: नमस्ते 🦙") return 0;
     if (out == nullptr || cap == 0) return -1;
     if (len == 0 || cap < 1) return -1;
-    // Scripted agent protocol fixture. This exercises JNI bytes, never model quality.
+    // Endpoint and workspace agents use distinct protocols over the same JNI fixture.
     if (prompt.find("fixture-agent-contract") != std::string::npos) {
         out[0] = prompt.find("fixture-observation-ready") == std::string::npos ? 16 : 17;
+        out[0] = prompt.find("fixture-observation-ready") == std::string::npos ? 18 : 19;
         return 1;
     }
     // Scripted protocol output tests the actual JNI boundary, not model reasoning.
@@ -155,6 +156,12 @@ llama_token llama_sampler_sample(llama_sampler*, llama_context* ctx, int32_t) {
         : ctx->mode == 17 ? R"({"type":"final","answer":"native agent fixture completed"})"
         : ctx->mode == 18 ? R"({"type":"plan","steps":[{"tool":"workspace.read","arguments":{"path":"source.txt","maxLines":2}}]})"
         : ctx->mode == 19 ? R"({"type":"final","text":"JNI agent result नमस्ते"})"
+    const std::string response = ctx->mode == 18
+        ? R"({"type":"tool","name":"fixture_status","arguments":{}})"
+        : ctx->mode == 19 ? R"({"type":"final","answer":"native agent fixture completed"})"
+        : ctx->mode == 16
+        ? R"({"type":"plan","steps":[{"tool":"workspace.read","arguments":{"path":"source.txt","maxLines":2}}]})"
+        : ctx->mode == 17 ? R"({"type":"final","text":"JNI agent result नमस्ते"})"
         : ctx->mode == 7 ? "नमस्ते 🦙" : "OK";
     if (static_cast<size_t>(ctx->sampled) >= response.size()) return -1;
     return static_cast<unsigned char>(response[static_cast<size_t>(ctx->sampled++)]);

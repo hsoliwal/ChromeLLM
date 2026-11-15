@@ -21,6 +21,7 @@ public final class AgentEntrypointContractTestMain {
         commandLineAdmission();
         goalPreflight();
         mcpDiscovery();
+        mixedAgentCapabilities();
         mcpPlanningAndExecution();
         mcpExecutionAndBudgets();
         mcpFailureAndIsolation();
@@ -58,6 +59,12 @@ public final class AgentEntrypointContractTestMain {
         StandaloneMain.validateAgentMode(valid);
         check(StandaloneMain.agentLimits(valid).maxSteps() == 3);
         StandaloneMain.validateAgentMode(Map.of("--mcp-stdio", "true"));
+        StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--workspace", ".",
+                "--agent-max-steps", "4", "--agent-max-calls", "3"));
+        reject(() -> StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--workspace", ".",
+                "--agent-endpoint", "http://127.0.0.1:32123", "--agent-token-env", "TOKEN")));
+        StandaloneMain.validateAgentMode(Map.of("--mcp-stdio", "true", "--workspace", ".",
+                "--agent-endpoint", "http://127.0.0.1:32123", "--agent-token-env", "TOKEN"));
         StandaloneMain.validateAgentMode(Map.of());
         reject(() -> StandaloneMain.validateAgentMode(Map.of("--agent", "true")));
         reject(() -> StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--stdio", "true")));
@@ -95,6 +102,33 @@ public final class AgentEntrypointContractTestMain {
         check(backend.calls == 0); // Listing/status never loads a model or executes a tool.
         List<Map<?, ?>> absent = exchange(backend, List.of(), initialize() + agent(4, Map.of("goal", "inspect")));
         check(absent.get(1).containsKey("error"));
+    }
+
+    private static void mixedAgentCapabilities() throws Exception {
+        ScriptBackend backend = new ScriptBackend(
+                "{\"type\":\"final\",\"text\":\"workspace result\"}",
+                "{\"type\":\"final\",\"answer\":\"endpoint result\"}");
+        String input = initialize() + line(2, "tools/list", Map.of())
+                + line(3, "tools/call", Map.of("name", "agent_run", "arguments", Map.of("goal", "workspace goal")))
+                + agent(4, Map.of("goal", "endpoint goal"));
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        McpStdioServer.serve(backend, new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
+                output, List.of(), List.of(statusTool(new AtomicInteger())),
+                new AgentSession.Limits(4, 512, 65536, 16384, Duration.ofSeconds(10)));
+        java.util.ArrayList<Map<?, ?>> replies = new java.util.ArrayList<>();
+        for (String line : output.toString(StandardCharsets.UTF_8).lines().toList()) {
+            replies.add((Map<?, ?>) McpJson.parse(line));
+        }
+        List<?> tools = (List<?>) ((Map<?, ?>) replies.get(1).get("result")).get("tools");
+        check(tools.size() == 5);
+        check(tools.stream().map(tool -> ((Map<?, ?>) tool).get("name")).toList()
+                .containsAll(List.of("agent_run", "run_agent")));
+        for (int i = 2; i < 4; i++) {
+            check(Boolean.FALSE.equals(((Map<?, ?>) replies.get(i).get("result")).get("isError")));
+        }
+        check(output.toString(StandardCharsets.UTF_8).contains("workspace result"));
+        check(output.toString(StandardCharsets.UTF_8).contains("endpoint result"));
+        check(backend.calls == 2 && !backend.lastPrompt.contains("workspace goal"));
     }
 
     private static void mcpPlanningAndExecution() throws Exception {

@@ -25,6 +25,7 @@ public final class SmartBuildContractTestMain {
         Path canonicalRoot = root.toRealPath();
         try {
             Path target = Files.createDirectories(root.resolve("target"));
+            offlineOutputRefusal(root);
             Files.writeString(root.resolve("prompt.txt"), "मॉडल prompt", StandardCharsets.UTF_8);
             Files.writeString(root.resolve("recipe.properties"), String.join("\n",
                     "promptFile=prompt.txt", "backend=cli", "llamaBin=/explicit/llama-cli",
@@ -115,6 +116,7 @@ public final class SmartBuildContractTestMain {
             rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider, true));
             check(requests.get() == beforeInvalidTarget, "offline cache miss opened provider");
             canonicalWorkspaceAliases(root);
+            absoluteLazyModelOptions(root, target);
             lazyModelOptions(root, target);
             lazyRecipe(root, target);
             offlineModels(canonicalRoot, target.toRealPath());
@@ -127,6 +129,25 @@ public final class SmartBuildContractTestMain {
             }
         }
         System.out.println("fork-native smart-build contract checks passed: " + checks);
+    }
+
+    private static void offlineOutputRefusal(Path root) throws Exception {
+        Path isolated = Files.createDirectory(root.resolve("blocked-output"));
+        Path target = Files.createDirectory(isolated.resolve("target"));
+        Files.writeString(isolated.resolve("prompt.txt"), "offline prompt");
+        Files.writeString(target.resolve("smart-build"), "occupied");
+        Files.writeString(isolated.resolve("recipe.properties"), String.join("\n",
+                "promptFile=prompt.txt", "backend=cli", "modelUrl=https://example.invalid/model",
+                "modelSha256=" + "0".repeat(64), "modelCacheDir=cache") + "\n");
+        AtomicInteger opened = new AtomicInteger();
+        SmartBuildMain.ProviderFactory forbidden = (options, environment) -> {
+            opened.incrementAndGet();
+            throw new AssertionError("invalid output opened a provider");
+        };
+        rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), isolated, target,
+                Map.of(), forbidden, true));
+        check(!Files.exists(isolated.resolve("cache")), "invalid output created a model cache before refusal");
+        check(opened.get() == 0, "invalid output opened a provider");
     }
 
     private static void canonicalWorkspaceAliases(Path fixture) throws Exception {
@@ -187,6 +208,37 @@ public final class SmartBuildContractTestMain {
         Files.delete(outputRoot);
         Files.move(movedOutput, outputRoot);
 
+    }
+
+    private static void absoluteLazyModelOptions(Path root, Path target) throws Exception {
+        Path cache = root.toRealPath().resolve("forwarded-cache");
+        Files.writeString(root.resolve("lazy.properties"), String.join("\n",
+                "promptFile=prompt.txt", "backend=jni", "jniLib=/explicit/chromellm-jni",
+                "modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/pinned/weights.bin",
+                "modelSha256=" + "a".repeat(64),
+                "modelCacheDir=" + cache.toString().replace("\\", "\\\\"),
+                "computeBackend=cpu", "gpuLayers=0", "maxTokens=8", "timeoutSeconds=10") + "\n");
+        AtomicInteger calls = new AtomicInteger();
+        SmartBuildMain.ProviderFactory lazy = (options, environment) -> {
+            check(options.get("--backend").equals("jni"), "JNI provider selection lost");
+            check(Path.of(options.get("--jni-lib")).equals(root.resolve("/explicit/chromellm-jni").normalize()), "JNI library lost");
+            check(options.get("--model-url").endsWith("/pinned/weights.bin"), "model URL lost");
+            check(options.get("--model-sha256").equals("a".repeat(64)), "model digest lost");
+            check(Path.of(options.get("--model-cache-dir")).equals(cache), "model cache lost");
+            check(!options.containsKey("--model"), "lazy model replaced with a local path");
+            check(options.get("--compute-backend").equals("cpu") && options.get("--gpu-layers").equals("0"),
+                    "explicit CPU policy lost");
+            return new ModelBackend() {
+                public String id() { return "llama.cpp-jni"; }
+                public ModelResponse infer(ModelRequest request) {
+                    calls.incrementAndGet();
+                    return new ModelResponse("lazy candidate", id(), hash(request.prompt()));
+                }
+            };
+        };
+        Path candidate = SmartBuildMain.run(Path.of("lazy.properties"), root, target, Map.of(), lazy);
+        check(calls.get() == 1 && Files.readString(candidate).equals("lazy candidate"),
+                "lazy model recipe was not executed");
     }
 
     private static void lazyModelOptions(Path root, Path target) throws Exception {

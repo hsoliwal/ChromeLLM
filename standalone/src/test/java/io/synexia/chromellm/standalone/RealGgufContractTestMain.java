@@ -3,6 +3,7 @@ package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.management.ManagementFactory;
 import java.io.Reader;
 import java.io.Writer;
 import java.lang.management.ManagementFactory;
@@ -17,6 +18,7 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -59,6 +61,11 @@ public final class RealGgufContractTestMain {
     }
 
     private static void runPublishedModel(String[] args) throws Exception {
+        if (args.length == 6) runPinnedModel(args);
+        else runSmartBuild(args);
+    }
+
+    private static void runSmartBuild(String[] args) throws Exception {
         if (args.length != 5) {
             throw new IllegalArgumentException(
                     "usage: RealGgufContractTestMain <jni-library> <cache-dir> <work-dir> <model-url> <sha256>");
@@ -97,6 +104,7 @@ public final class RealGgufContractTestMain {
     }
 
     private static void runConfiguredModel(String[] args) throws Exception {
+    private static void runPinnedModel(String[] args) throws Exception {
         if (args.length != 6) {
             throw new IllegalArgumentException("expected JNI library, model HTTPS URL, SHA-256, "
                     + "cache directory, exact model byte length and offline flag");
@@ -135,6 +143,7 @@ public final class RealGgufContractTestMain {
 
         ModelRequest request = new ModelRequest(TREE_PROMPT, 48, Duration.ofSeconds(120));
         String expectedPromptHash = hash(TREE_PROMPT);
+        String expectedPromptHash = digest(TREE_PROMPT);
         // CPU is explicit: no hosted backend, synthetic provider, or GPU fallback is selected here.
         LlamaCppJniBackend backend = new LlamaCppJniBackend(library, model, 512, 2, 0, "cpu");
         try {
@@ -149,6 +158,7 @@ public final class RealGgufContractTestMain {
             ModelRequest otherRequest = new ModelRequest(RIVER_PROMPT, 48, Duration.ofSeconds(120));
             ModelResponse other = backend.infer(otherRequest);
             checkResponse(other, backend.id(), hash(RIVER_PROMPT));
+            checkResponse(other, backend.id(), digest(RIVER_PROMPT));
             check(!other.promptSha256().equals(expectedPromptHash), "different prompt identity");
 
             backend.close();
@@ -172,6 +182,11 @@ public final class RealGgufContractTestMain {
         check(!response.text().isBlank(), "real GGUF inference must produce nonblank text");
         check(response.text().getBytes(StandardCharsets.UTF_8).length <= StdioProtocol.MAX_RESPONSE_BYTES,
                 "bounded native output");
+    }
+
+    private static String digest(String text) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(text.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static Path recipe(Path root, String name, Path prompt, Path library,
