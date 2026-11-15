@@ -2,9 +2,6 @@
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -24,7 +21,6 @@ public final class SmartBuildContractTestMain {
 
     public static void main(String[] args) throws Exception {
         Path root = Files.createTempDirectory("chromellm-smart-test-").toRealPath();
-        Path root = Files.createTempDirectory("chromellm-smart-test-");
         try {
             Path target = Files.createDirectories(root.resolve("target"));
             Files.writeString(root.resolve("prompt.txt"), "मॉडल prompt", StandardCharsets.UTF_8);
@@ -121,10 +117,11 @@ public final class SmartBuildContractTestMain {
     }
 
     private static void lazyModelOptions(Path root, Path target) throws Exception {
+        Path cache = Files.createDirectory(root.resolve("lazy-model-cache"));
         Files.writeString(root.resolve("lazy.properties"), String.join("\n",
                 "promptFile=prompt.txt", "backend=jni", "jniLib=/explicit/chromellm-jni",
                 "modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/pinned/weights.bin",
-                "modelSha256=" + "a".repeat(64), "modelCacheDir=/explicit/cache",
+                "modelSha256=" + "a".repeat(64), "modelCacheDir=" + cache.toString().replace("\\", "\\\\"),
                 "computeBackend=cpu", "gpuLayers=0", "maxTokens=8", "timeoutSeconds=10") + "\n");
         AtomicInteger calls = new AtomicInteger();
         SmartBuildMain.ProviderFactory lazy = (options, environment) -> {
@@ -132,7 +129,7 @@ public final class SmartBuildContractTestMain {
             check(options.get("--jni-lib").equals("/explicit/chromellm-jni"), "JNI library lost");
             check(options.get("--model-url").endsWith("/pinned/weights.bin"), "model URL lost");
             check(options.get("--model-sha256").equals("a".repeat(64)), "model digest lost");
-            check(options.get("--model-cache-dir").equals("/explicit/cache"), "model cache lost");
+            check(options.get("--model-cache-dir").equals(cache.toString()), "model cache lost");
             check(!options.containsKey("--model"), "lazy model replaced with a local path");
             check(options.get("--compute-backend").equals("cpu") && options.get("--gpu-layers").equals("0"),
                     "explicit CPU policy lost");
@@ -147,6 +144,8 @@ public final class SmartBuildContractTestMain {
         Path candidate = SmartBuildMain.run(Path.of("lazy.properties"), root, target, Map.of(), lazy);
         check(calls.get() == 1 && Files.readString(candidate).equals("lazy candidate"),
                 "lazy model recipe was not executed");
+    }
+
     private static void lazyRecipe(Path root, Path target) throws Exception {
         Path cache = Files.createDirectory(root.resolve("model-cache"));
         String digest = "a".repeat(64);

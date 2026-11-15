@@ -122,7 +122,7 @@ public final class ModelArtifactCacheContractTestMain {
             try (var files = Files.list(dir)) {
                 check(files.findAny().isEmpty(), "partial download staging file survived");
             }
-            redirectContracts(fixture);
+            responseSenderContracts(fixture);
             binaryContracts(dir, fixture, hash, url);
             redirectContracts(fixture);
             bodyDeadlineContract();
@@ -137,7 +137,7 @@ public final class ModelArtifactCacheContractTestMain {
         ModelAcquisitionLifecycleTestMain.main(new String[0]);
     }
 
-    private static void redirectContracts(byte[] fixture) throws Exception {
+    private static void responseSenderContracts(byte[] fixture) throws Exception {
         URI source = URI.create("https://releases.example.invalid/model");
         URI destination = URI.create("https://assets.example.invalid/model?signature=test");
         for (int status : new int[] {301, 302, 303, 307, 308}) {
@@ -151,7 +151,7 @@ public final class ModelArtifactCacheContractTestMain {
                         : response(200, destination, Map.of("Content-Length", List.of("" + fixture.length)), body);
             })) {
                 check(java.util.Arrays.equals(result.readAllBytes(), fixture), "redirect returned incorrect bytes");
-                check(redirect.closed && !body.closed, "redirect body lifecycle was incorrect");
+                check(redirect.closed && body.closed, "redirect or EOF response body was not released");
             }
             check(body.closed && requests.size() == 2 && requests.getLast().uri().equals(destination),
                     "HTTPS redirect not followed exactly once");
@@ -287,14 +287,18 @@ public final class ModelArtifactCacheContractTestMain {
         boolean closed;
         TrackedInputStream(byte[] bytes) { super(bytes); }
         @Override public void close() throws IOException { closed = true; super.close(); }
+    }
+
     private static void binaryContracts(Path dir, byte[] fixture, String hash, String url) throws Exception {
+        Path model = dir.resolve(hash + ".gguf");
+        Files.write(model, fixture);
         AtomicInteger opens = new AtomicInteger();
         ModelArtifactCache.Downloader download = ignored -> {
             opens.incrementAndGet();
             return new ByteArrayInputStream(fixture);
         };
-        reject(() -> new ModelArtifactCache(url, hash, dir, 0));
-        reject(() -> new ModelArtifactCache(url, hash, dir, ModelArtifactCache.MAX_BYTES + 1));
+        reject(() -> ModelArtifactCache.binaryArtifact(url, hash, dir, 0));
+        reject(() -> ModelArtifactCache.binaryArtifact(url, hash, dir, ModelArtifactCache.MAX_BYTES + 1));
         reject(() -> new ModelArtifactCache(url, hash, dir, download, 100, -1, ".bin"));
         ModelArtifactCache binary = new ModelArtifactCache(url, hash, dir, download, fixture.length,
                 fixture.length, ".bin");
@@ -303,7 +307,7 @@ public final class ModelArtifactCacheContractTestMain {
         Path file = binary.resolve();
         check(file.getFileName().toString().equals(hash + ".bin"), "native cache must use its own suffix");
         check(binary.resolveWithOfflinePolicy(true).equals(file) && opens.get() == 1, "offline verified binary hit downloaded");
-        check(Files.exists(dir.resolve(hash + ".gguf")), "native artifact replaced existing model cache");
+        check(java.util.Arrays.equals(Files.readAllBytes(model), fixture), "native artifact replaced existing model cache");
         ModelArtifactCache wrongLength = new ModelArtifactCache(url, hash, dir, download, 100,
                 fixture.length + 1, ".bin");
         rejectIo(wrongLength::resolve);

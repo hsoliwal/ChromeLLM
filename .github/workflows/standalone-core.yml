@@ -51,7 +51,7 @@ jobs:
               exit 1
             fi
             cat fork-profile-conflict.log
-            grep -E 'native-synthetic and (native-fork|fork-native) cannot be active together' fork-profile-conflict.log
+            grep -E 'native-synthetic and (native-fork|fork-native) cannot be active together|fork-native cannot be combined with another native build profile' fork-profile-conflict.log
           done
           test ! -e standalone/target/fork-native/CMakeCache.txt
           if mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn \
@@ -146,52 +146,15 @@ jobs:
           ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
           path: external/llama.cpp
           persist-credentials: false
-  chrome-ai-live:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
-    runs-on: [self-hosted, linux, chrome-ai]
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    concurrency:
-      group: ${{ github.repository }}-chrome-ai-live
-      cancel-in-progress: false
-    env:
-      CHROME_BIN: ${{ vars.CHROME_BIN }}
-      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          persist-credentials: false
-  native-binaries:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    permissions:
-      contents: read
-  real-cpu-smart-build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    defaults:
-      run:
-        shell: bash
-    env:
-      LLAMA_COMMIT: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
-      MODEL_SHA256: 8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684
-      MODEL_BYTES: '105454144'
-      MODEL_URL: https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/weights.bin
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Select model cache directory
         shell: bash
         run: echo "MODEL_CACHE=$RUNNER_TEMP/chromellm-models" >> "$GITHUB_ENV"
@@ -240,6 +203,32 @@ jobs:
           grep -F 'Model artifact: verified cache hit' "$RUNNER_TEMP/real-model-offline.log"
           grep -F 'ChromeLLM smart-build candidate SHA-256:' "$RUNNER_TEMP/real-model-offline.log"
           if grep -E 'WARNING in native method|FATAL ERROR in native method' "$RUNNER_TEMP/real-model-offline.log"; then
+            exit 1
+          fi
+  chrome-ai-live:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
+    runs-on: [self-hosted, linux, chrome-ai]
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.repository }}-chrome-ai-live
+      cancel-in-progress: false
+    env:
+      CHROME_BIN: ${{ vars.CHROME_BIN }}
+      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -271,8 +260,22 @@ jobs:
             chrome-status.log
             chrome-infer.log
           retention-days: 7
+  native-binaries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: actions/cache@v4
         with:
           path: ~/.cache/chromellm
@@ -291,7 +294,6 @@ jobs:
       - name: Maven downloads, verifies and executes the Dawn binary
         run: mvn -B -ntp -f standalone/pom.xml -Pdawn-binary verify
       - name: Checkout the public source used by the existing real-model CI
-      - name: Check out exact public llama.cpp source for the CPU test
         uses: actions/checkout@v4
         with:
           repository: ggml-org/llama.cpp
@@ -306,6 +308,37 @@ jobs:
             -Dchromellm.fork.commit=889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
       - name: Verify binary cache reuse without network access
         run: mvn -o -B -ntp -f standalone/pom.xml -Pdawn-binary,real-model process-classes
+  real-cpu-smart-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      LLAMA_COMMIT: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+      MODEL_SHA256: 8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684
+      MODEL_BYTES: '105454144'
+      MODEL_URL: https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/weights.bin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check out exact public llama.cpp source for the CPU test
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+          path: external/llama.cpp
+          persist-credentials: false
       - name: Build the current real CPU JNI bridge through Maven
         run: |
           set -euo pipefail

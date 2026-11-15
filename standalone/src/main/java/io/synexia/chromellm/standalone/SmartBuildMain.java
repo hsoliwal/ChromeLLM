@@ -42,17 +42,15 @@ public final class SmartBuildMain {
         if ((args.length != 3 && args.length != 4) || args[0].isBlank()) {
             throw new IllegalArgumentException("expected recipe, standalone root, Maven target directory, and optional offline flag");
         }
-        String offline = args.length == 4 ? args[3] : "false";
+        String offline = args.length == 4 ? args[3]
+                : ("offline=true".equals(System.getProperty("chromellm.offline"))
+                        || Boolean.getBoolean("chromellm.offline") ? "true" : "false");
         if (offline.startsWith("--offline=")) offline = offline.substring("--offline=".length());
         if (!offline.equals("true") && !offline.equals("false")) {
             throw new IllegalArgumentException("offline flag requires true or false");
         }
         return run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), environment, providerFactory,
                 offline.equals("true"));
-        run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), System.getenv(), StandaloneMain::backend,
-                "offline=true".equals(System.getProperty("chromellm.offline"))
-                        || Boolean.getBoolean("chromellm.offline"));
-        run(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]), System.getenv(), StandaloneMain::backend);
     }
 
     static Path run(Path recipe, Path workspace, Path buildDirectory,
@@ -63,8 +61,8 @@ public final class SmartBuildMain {
     static Path run(Path recipe, Path workspace, Path buildDirectory,
                     Map<String, String> environment, ProviderFactory providerFactory, boolean offline) throws Exception {
         Path root = workspace.toRealPath();
-        Path target = NativeBuildArtifacts.buildDirectory(root, buildDirectory);
-        Path root = workspace.toRealPath();
+        // Reject the destination before any artifact acquisition or provider initialization.
+        Path outputRoot = validateOutputRoot(root, buildDirectory);
         Path recipePath = confined(root, recipe, "recipe");
         byte[] recipeBytes;
         try (InputStream input = Files.newInputStream(recipePath)) {
@@ -125,9 +123,11 @@ public final class SmartBuildMain {
         if (options.containsKey("--model-url")) {
             Path cache = Path.of(required(config, "modelCacheDir"));
             cache = root.resolve(cache).normalize();
-            Files.createDirectories(cache);
+            if (!offline) Files.createDirectories(cache);
             if (!cache.toRealPath().equals(cache)) throw new IOException("model cache must not traverse symlinks");
             if (offline) {
+                // Admit the original provider options before substituting a verified local cache entry.
+                StandaloneMain.backend(Map.copyOf(options), environment).close();
                 Path model = new ModelArtifactCache(required(config, "modelUrl"),
                         required(config, "modelSha256"), cache).resolveWithOfflinePolicy(true);
                 options.remove("--model-url");
@@ -137,24 +137,6 @@ public final class SmartBuildMain {
                     throw new IllegalArgumentException("model and modelUrl are exclusive");
                 }
             }
-        }
-        Path outputRoot = target.resolve("smart-build");
-        Files.createDirectories(outputRoot);
-        if (!outputRoot.toRealPath().startsWith(root) || Files.isSymbolicLink(outputRoot)) {
-            throw new IOException("smart-build outputs must stay inside the project build directory");
-        }
-        // Reject the destination before any artifact acquisition or provider initialization.
-        Path outputRoot = validateOutputRoot(root, buildDirectory);
-        if (offline && options.containsKey("--model-url")) {
-            // Reuse the engine's lazy-provider admission before changing its model options.
-            // Construction and close do not infer, open the provider, or acquire the model.
-            StandaloneMain.backend(Map.copyOf(options), environment).close();
-            Path model = new ModelArtifactCache(options.get("--model-url"), options.get("--model-sha256"),
-                    Path.of(options.get("--model-cache-dir")), ModelArtifactCache.MAX_BYTES, true).resolve();
-            options.remove("--model-url");
-            options.remove("--model-sha256");
-            options.remove("--model-cache-dir");
-            options.put("--model", model.toString());
         }
         // The selected provider and all options are admitted by the pre-existing engine contract.
         byte[] candidate;
@@ -167,17 +149,6 @@ public final class SmartBuildMain {
             }
             provider = model.id();
             candidate = StdioProtocol.encode(result.text(), StdioProtocol.MAX_RESPONSE_BYTES);
-        }
-        Path target = buildDirectory.toAbsolutePath().normalize();
-        if (!target.equals(root.resolve("target"))
-                || !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)
-                || !target.toRealPath().equals(target)) {
-            throw new IOException("smart-build requires the existing in-project Maven target directory");
-        }
-        Path outputRoot = target.resolve("smart-build");
-        Files.createDirectories(outputRoot);
-        if (!outputRoot.toRealPath().startsWith(root) || Files.isSymbolicLink(outputRoot)) {
-            throw new IOException("smart-build outputs must stay inside the project build directory");
         }
         Files.createDirectories(outputRoot);
         validateOutputRoot(root, buildDirectory);
@@ -220,8 +191,6 @@ public final class SmartBuildMain {
 
     private static void publish(Path path, byte[] content) throws IOException {
         if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
-            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-                    || !Arrays.equals(Files.readAllBytes(path), content)) {
             if (!sameContent(path, content)) {
                 throw new IOException("smart-build artifact collision; source and prior result remain unchanged");
             }
@@ -232,8 +201,6 @@ public final class SmartBuildMain {
             Files.write(staged, content, StandardOpenOption.TRUNCATE_EXISTING);
             try { Files.createLink(path, staged); }
             catch (FileAlreadyExistsException concurrent) {
-                if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-                        || !Arrays.equals(Files.readAllBytes(path), content)) {
                 if (!sameContent(path, content)) {
                     throw new IOException("concurrent smart-build artifact conflict", concurrent);
                 }

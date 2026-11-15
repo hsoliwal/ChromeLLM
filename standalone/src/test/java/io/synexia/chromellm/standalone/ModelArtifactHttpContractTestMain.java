@@ -42,9 +42,10 @@ public final class ModelArtifactHttpContractTestMain {
                     response(status, Map.of("Location", List.of(ASSET.toString())), redirect),
                     response(200, Map.of("Content-Length", List.of("5")), bytes));
             try (InputStream body = ModelArtifactCache.fetch(RELEASE, client)) {
+                check(!bytes.closed, "successful response closed before consumption");
                 check(new String(body.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
                         .equals("model"), "redirect returned wrong bytes");
-                check(!bytes.closed, "successful response closed before consumption");
+                check(bytes.closed, "successful EOF did not release the response body");
             }
             check(redirect.closed && bytes.closed, "response body leaked");
             check(client.requests.stream().map(HttpRequest::uri).toList()
