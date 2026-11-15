@@ -111,6 +111,7 @@ public final class ModelArtifactCacheContractTestMain {
             lazy.close();
             rejectIo(() -> lazy.infer(request));
             check(opens.get() == 4, "unexpected fixture fetch count");
+            binaryContracts(dir, fixture, hash, url);
             Files.delete(file);
             AtomicInteger partialClosed = new AtomicInteger();
             ModelArtifactCache partial = new ModelArtifactCache(url, hash, dir, ignored -> new InputStream() {
@@ -122,8 +123,7 @@ public final class ModelArtifactCacheContractTestMain {
             try (var files = Files.list(dir)) {
                 check(files.findAny().isEmpty(), "partial download staging file survived");
             }
-            redirectContracts(fixture);
-            binaryContracts(dir, fixture, hash, url);
+            responseSenderRedirectContracts(fixture);
             redirectContracts(fixture);
             bodyDeadlineContract();
         } finally {
@@ -137,7 +137,7 @@ public final class ModelArtifactCacheContractTestMain {
         ModelAcquisitionLifecycleTestMain.main(new String[0]);
     }
 
-    private static void redirectContracts(byte[] fixture) throws Exception {
+    private static void responseSenderRedirectContracts(byte[] fixture) throws Exception {
         URI source = URI.create("https://releases.example.invalid/model");
         URI destination = URI.create("https://assets.example.invalid/model?signature=test");
         for (int status : new int[] {301, 302, 303, 307, 308}) {
@@ -287,6 +287,8 @@ public final class ModelArtifactCacheContractTestMain {
         boolean closed;
         TrackedInputStream(byte[] bytes) { super(bytes); }
         @Override public void close() throws IOException { closed = true; super.close(); }
+    }
+
     private static void binaryContracts(Path dir, byte[] fixture, String hash, String url) throws Exception {
         AtomicInteger opens = new AtomicInteger();
         ModelArtifactCache.Downloader download = ignored -> {
