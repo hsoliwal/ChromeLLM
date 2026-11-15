@@ -128,9 +128,9 @@ public final class SmartBuildContractTestMain {
             canonicalWorkspaceAliases(root);
             lazyModelOptions(root, target);
             lazyRecipe(root, target);
-            offlineModels(canonicalRoot, target.toRealPath());
-            downloadRecipe(canonicalRoot, target.toRealPath());
-            offlineRecipe(canonicalRoot, target.toRealPath());
+            offlineModels(root, target);
+            downloadRecipe(root.toRealPath(), target.toRealPath());
+            offlineRecipe(root.toRealPath(), target.toRealPath());
             nativePin(root);
         } finally {
             try (var files = Files.walk(root)) {

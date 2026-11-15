@@ -44,12 +44,6 @@ public final class SmartBuildMain {
         if ((args.length != 3 && args.length != 4) || args[0].isBlank()) {
             throw new IllegalArgumentException("expected recipe, standalone root, Maven target directory, and optional offline flag");
         }
-        String offline = args.length == 4 ? args[3] : Boolean.toString(
-                "offline=true".equals(System.getProperty("chromellm.offline"))
-                        || Boolean.getBoolean("chromellm.offline"));
-        String offline = args.length == 4 ? args[3]
-                : ("offline=true".equals(System.getProperty("chromellm.offline"))
-                        || Boolean.getBoolean("chromellm.offline") ? "true" : "false");
         String offline = args.length == 4 ? args[3] : System.getProperty("chromellm.offline", "false");
         if (offline.startsWith("--offline=")) offline = offline.substring("--offline=".length());
         else if (offline.startsWith("offline=")) offline = offline.substring("offline=".length());
@@ -72,8 +66,6 @@ public final class SmartBuildMain {
         Path outputRoot = validateOutputRoot(root, buildDirectory);
         Path target = outputRoot.getParent();
         NativeBuildArtifacts.buildDirectory(root, target);
-        // Reject the destination before any artifact acquisition or provider initialization.
-        Path outputRoot = validateOutputRoot(root, buildDirectory);
         Path recipePath = confined(root, recipe, "recipe");
         byte[] recipeBytes;
         try (InputStream input = Files.newInputStream(recipePath)) {
@@ -129,14 +121,10 @@ public final class SmartBuildMain {
             String value = config.getProperty(entry.getKey());
             if (value != null && !value.isBlank()) options.put(entry.getValue(), value);
         }
-        for (String key : Set.of("--llama-bin", "--jni-lib", "--model", "--model-cache-dir")) {
-            if (options.containsKey(key)) {
-                String value = options.get(key);
-                Path selected = Path.of(value);
-                if (!selected.isAbsolute() && !value.startsWith("/") && !value.startsWith("\\")) {
-                    options.put(key, root.resolve(selected).normalize().toString());
-                }
-            }
+        // Recipe paths resolve against the standalone project, independent of Maven's launch directory.
+        for (String key : java.util.List.of("--llama-bin", "--jni-lib", "--model", "--model-cache-dir")) {
+            String value = options.get(key);
+            if (value != null) options.put(key, root.resolve(value).normalize().toString());
         }
         Path managedModelCache = null;
         if (options.containsKey("--model-url") || options.containsKey("--model-sha256")) {
@@ -151,10 +139,18 @@ public final class SmartBuildMain {
                 options.put("--model-cache-dir", cache.toString());
             }
         }
-        if (offline && options.containsKey("--model-url")) {
-            // Reuse lazy-provider admission before changing its model options. Construction
-            // and close perform no inference, native loading or artifact acquisition.
+        if (options.containsKey("--model-url") || options.containsKey("--model-sha256")) {
             StandaloneMain.backend(Map.copyOf(options), environment).close();
+        }
+        if (!offline && managedModelCache == null && options.containsKey("--model-url")) {
+            // Preserve explicit external-cache preparation after option admission.
+            Path cache = Path.of(options.get("--model-cache-dir"));
+            Files.createDirectories(cache);
+            if (!Files.isDirectory(cache, LinkOption.NOFOLLOW_LINKS) || !cache.toRealPath().equals(cache)) {
+                throw new IOException("model cache must be an existing directory without symlinks");
+            }
+        }
+        if (offline && options.containsKey("--model-url")) {
             String redirects = options.getOrDefault("--model-follow-redirects", "false");
             if (!redirects.equals("true") && !redirects.equals("false")) {
                 throw new IllegalArgumentException("modelFollowRedirects requires true or false");
@@ -172,28 +168,6 @@ public final class SmartBuildMain {
                 options.remove(key);
             }
             options.put("--model", model.toString());
-        }
-        // Recipe paths resolve against the standalone project, independent of Maven's launch directory.
-        for (String key : java.util.List.of("--llama-bin", "--jni-lib", "--model", "--model-cache-dir")) {
-            String value = options.get(key);
-            if (value != null) options.put(key, root.resolve(value).normalize().toString());
-        }
-        if (options.containsKey("--model-url")) {
-            // The existing lazy provider validates the complete option combination without I/O.
-            StandaloneMain.backend(Map.copyOf(options), environment).close();
-            Path cache = Path.of(options.get("--model-cache-dir"));
-            if (!offline) Files.createDirectories(cache);
-            if (!Files.isDirectory(cache, LinkOption.NOFOLLOW_LINKS) || !cache.toRealPath().equals(cache)) {
-                throw new IOException("model cache must be an existing directory without symlinks");
-            }
-            if (offline) {
-                Path model = new ModelArtifactCache(options.get("--model-url"), options.get("--model-sha256"),
-                        cache, ModelArtifactCache.MAX_BYTES, true).resolve();
-                options.remove("--model-url");
-                options.remove("--model-sha256");
-                options.remove("--model-cache-dir");
-                options.put("--model", model.toString());
-            }
         }
         // The selected provider and all options are admitted by the pre-existing engine contract.
         byte[] candidate;

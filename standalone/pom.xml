@@ -8,9 +8,6 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <chromellm.native.mode>none</chromellm.native.mode>
-    <chromellm.native.distribution>OFF</chromellm.native.distribution>
-    <chromellm.native.configuration>Release</chromellm.native.configuration>
-    <chromellm.native.classifier></chromellm.native.classifier>
     <chromellm.native.dawn.prefix>NONE</chromellm.native.dawn.prefix>
     <chromellm.chrome.profile>${user.home}/.chromellm/chrome-ai-profile</chromellm.chrome.profile>
     <chromellm.chrome.headless>true</chromellm.chrome.headless>
@@ -18,15 +15,15 @@
     <chromellm.chrome.timeoutSeconds>120</chromellm.chrome.timeoutSeconds>
     <chromellm.chrome.maxTokens>512</chromellm.chrome.maxTokens>
     <chromellm.dawn.owner>none</chromellm.dawn.owner>
-    <chromellm.fork.source />
-    <chromellm.fork.commit />
+    <chromellm.fork.source/>
+    <chromellm.fork.commit/>
     <chromellm.fork.webgpu>OFF</chromellm.fork.webgpu>
-    <chromellm.fork.prefix />
+    <chromellm.fork.prefix/>
     <chromellm.fork.configuration>Release</chromellm.fork.configuration>
-    <chromellm.smart.recipe />
+    <chromellm.smart.recipe/>
     <chromellm.cmake.executable>cmake</chromellm.cmake.executable>
     <chromellm.ctest.executable>ctest</chromellm.ctest.executable>
-    <chromellm.fork.dawnDir />
+    <chromellm.fork.dawnDir/>
     <chromellm.artifact.cache>${user.home}/.cache/chromellm</chromellm.artifact.cache>
     <chromellm.smoke.library>${project.build.directory}/fork-native/chromellm-native-${chromellm.fork.configuration}.txt</chromellm.smoke.library>
     <chromellm.smoke.compute>cpu</chromellm.smoke.compute>
@@ -36,11 +33,11 @@
     <chromellm.native.parallel>2</chromellm.native.parallel>
     <chromellm.native.fetch>true</chromellm.native.fetch>
     <chromellm.native.backend>cpu</chromellm.native.backend>
-    <chromellm.llama.source />
-    <chromellm.dawn.source />
-    <chromellm.dawn.prefix />
-    <chromellm.dawn.licenses />
-    <chromellm.native.toolchain />
+    <chromellm.llama.source/>
+    <chromellm.dawn.source/>
+    <chromellm.dawn.prefix/>
+    <chromellm.dawn.licenses/>
+    <chromellm.native.toolchain/>
     <chromellm.llama.revision>650ac3739d993e1d425f2d5db3c4205b3606cc30</chromellm.llama.revision>
     <chromellm.dawn.revision>783c427ce925698f4ef9b5699d8c5a17da90486f</chromellm.dawn.revision>
     <chromellm.native.os>${os.name}</chromellm.native.os>
@@ -48,6 +45,7 @@
     <chromellm.native.classifier>${chromellm.native.os}-${chromellm.native.arch}</chromellm.native.classifier>
     <chromellm.native.artifactClassifier>${chromellm.native.classifier}-${chromellm.native.backend}</chromellm.native.artifactClassifier>
     <chromellm.smart.nativeArtifact>${project.build.directory}/${project.build.finalName}-${chromellm.native.artifactClassifier}.jar</chromellm.smart.nativeArtifact>
+    <chromellm.native.distribution>OFF</chromellm.native.distribution>
   </properties>
   <build>
     <plugins>
@@ -94,185 +92,6 @@
               <classpathScope>test</classpathScope>
             </configuration>
           </execution>
-      </execution><execution>
-        <id>gemini-api-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.GeminiApiBackendContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution><execution>
-        <id>provider-selection-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.ProviderSelectionContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution><execution>
-        <id>chrome-process-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.ChromeProcessContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution><execution>
-        <id>chrome-devtools-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.ChromeDevToolsContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution><execution>
-        <id>chrome-backend-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.ChromeAiBackendContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution><execution>
-        <id>chrome-script-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.ChromeAiScriptContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution>
-      <execution>
-        <id>fork-smart-build-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.SmartBuildContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution>
-      <execution><id>native-artifact-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals><configuration><mainClass>io.synexia.chromellm.standalone.NativeBuildArtifactsContractTestMain</mainClass><classpathScope>test</classpathScope></configuration></execution>
-      <execution><id>model-artifact-http-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals><configuration><mainClass>io.synexia.chromellm.standalone.ModelArtifactHttpContractTestMain</mainClass><classpathScope>test</classpathScope></configuration></execution>
-      <execution>
-        <id>agent-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.AgentContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution>
-      <execution>
-        <id>agent-session-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.AgentSessionContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution>
-      <execution>
-        <id>coding-agent-tools-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.CodingAgentToolsContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution>
-      <execution>
-        <id>agent-entrypoint-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
-        <configuration>
-          <mainClass>io.synexia.chromellm.standalone.AgentEntrypointContractTestMain</mainClass>
-          <classpathScope>test</classpathScope>
-        </configuration>
-      </execution>
-      </executions>
-    </plugin>
-  </plugins></build>
-  <profiles>
-    <profile>
-      <id>fork-native</id>
-      <properties><chromellm.native.mode>pinned-fork</chromellm.native.mode>
-        <chromellm.native.builddir>${project.build.directory}/fork-native</chromellm.native.builddir>
-        <chromellm.native.configuration>${chromellm.fork.configuration}</chromellm.native.configuration></properties>
-      <build><plugins><plugin>
-        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
-        <executions><execution>
-          <id>require-pinned-fork-build</id><phase>validate</phase><goals><goal>enforce</goal></goals>
-          <configuration><rules><requireProperty>
-            <property>chromellm.native.mode</property><regex>^pinned-fork$</regex>
-            <message>fork-native cannot be combined with native-fork or native-synthetic</message>
-              <regexMessage>fork-native cannot be combined with native-fork or native-synthetic</regexMessage>
-          </requireProperty></rules></configuration>
-        </execution></executions>
-      </plugin><plugin>
-        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>verify-fork-source-pin</id><phase>process-classes</phase><goals><goal>java</goal></goals>
-            <configuration>
-              <mainClass>io.synexia.chromellm.standalone.ForkSourcePin</mainClass>
-              <arguments>
-                <argument>${chromellm.fork.source}</argument>
-                <argument>${chromellm.fork.commit}</argument>
-              </arguments>
-            </configuration>
-          </execution>
-          <execution>
-            <id>configure-fork-jni</id><phase>prepare-package</phase><goals><goal>exec</goal></goals>
-            <configuration>
-              <executable>${chromellm.cmake.executable}</executable>
-              <arguments>
-                <argument>-S</argument><argument>${project.basedir}/native</argument>
-                <argument>-B</argument><argument>${project.build.directory}/fork-native</argument>
-                <argument>-DCHROMELLM_LLAMA_SOURCE_DIR=${chromellm.fork.source}</argument>
-                <argument>-DCHROMELLM_NATIVE_DISTRIBUTION=${chromellm.native.distribution}</argument>
-                <argument>-DCHROMELLM_NATIVE_CLASSIFIER=${chromellm.native.classifier}</argument>
-                <argument>-DCHROMELLM_NATIVE_NOTICES=${chromellm.native.notices}</argument>
-                <argument>-DCHROMELLM_WEBGPU=${chromellm.fork.webgpu}</argument>
-                <argument>-DCHROMELLM_DAWN_PREFIX=${chromellm.native.dawn.prefix}</argument>
-                <argument>-DCMAKE_PREFIX_PATH=${chromellm.fork.prefix}</argument>
-                <argument>-DDawn_DIR=${chromellm.fork.dawnDir}</argument>
-                <argument>-DCMAKE_BUILD_TYPE=${chromellm.fork.configuration}</argument>
-                <argument>-DGGML_NATIVE=OFF</argument>
-              </arguments>
-            </configuration>
-          </execution>
-          <execution>
-            <id>build-fork-jni</id><phase>prepare-package</phase><goals><goal>exec</goal></goals>
-            <configuration>
-              <executable>${chromellm.cmake.executable}</executable>
-              <arguments>
-                <argument>--build</argument><argument>${project.build.directory}/fork-native</argument>
-                <argument>--config</argument><argument>${chromellm.fork.configuration}</argument>
-                <argument>--parallel</argument><argument>2</argument>
-              </arguments>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin></plugins></build>
-    </profile>
-    <profile>
-      <id>smart-build</id>
-      <build><plugins><plugin>
-        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
-        <executions><execution>
-          <id>run-explicit-smart-build-recipe</id><phase>verify</phase><goals><goal>java</goal></goals>
-          <configuration>
-            <mainClass>io.synexia.chromellm.standalone.SmartBuildMain</mainClass>
-            <systemProperties><systemProperty>
-              <key>chromellm.offline</key><value>offline=${session.offline}</value>
-            </systemProperty></systemProperties>
-            <arguments>
-              <argument>${chromellm.smart.recipe}</argument>
-              <argument>${project.basedir}</argument>
-              <argument>${project.build.directory}</argument>
-              <argument>--offline=${session.offline}</argument>
-            </arguments>
-          </configuration>
-        </execution></executions>
-      </plugin></plugins></build>
-    </profile>
-    <!-- No native tools are required for the default Java-only Maven build. -->
-    <profile>
-      <id>native-synthetic</id>
-      <properties><chromellm.native.mode>synthetic</chromellm.native.mode></properties>
-      <build><plugins>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
-          <executions><execution>
-            <id>require-synthetic-only</id><phase>validate</phase><goals><goal>enforce</goal></goals>
-            <configuration><rules><requireProperty>
-              <property>chromellm.native.mode</property><regex>^synthetic$</regex>
-              <regexMessage>native-synthetic and native-fork cannot be active together</regexMessage>
-            </requireProperty></rules></configuration>
-          </execution></executions>
-        </plugin>
-        <plugin>
-        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
-        <executions>
           <execution>
             <id>provider-selection-contract-tests</id>
             <phase>verify</phase>
@@ -372,80 +191,6 @@
               <classpathScope>test</classpathScope>
             </configuration>
           </execution>
-        </executions>
-      </plugin></plugins></build>
-    </profile>
-    <profile>
-      <id>native-fork</id>
-      <properties>
-        <chromellm.native.webgpu>OFF</chromellm.native.webgpu>
-        <chromellm.native.mode>fork</chromellm.native.mode>
-        <chromellm.native.builddir>${project.build.directory}/native-fork</chromellm.native.builddir>
-      </properties>
-      <build><plugins>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
-          <executions><execution>
-            <id>require-explicit-native-fork</id><phase>validate</phase><goals><goal>enforce</goal></goals>
-            <configuration><rules><requireProperty>
-              <property>chromellm.native.source</property>
-              <regex>.*\S.*</regex>
-              <message>native-fork requires -Dchromellm.native.source=/absolute/path/to/llama.cpp</message>
-              <regexMessage>native-fork requires -Dchromellm.native.source=/absolute/path/to/llama.cpp</regexMessage>
-            </requireProperty><requireProperty>
-              <property>chromellm.native.mode</property><regex>^fork$</regex>
-              <regexMessage>native-synthetic and native-fork cannot be active together</regexMessage>
-            </requireProperty></rules></configuration>
-          </execution></executions>
-        </plugin>
-        <plugin>
-          <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
-          <executions>
-            <execution>
-              <id>native-fork-configure</id><phase>generate-resources</phase><goals><goal>exec</goal></goals>
-              <configuration><executable>${chromellm.cmake.executable}</executable><arguments>
-                <argument>-S</argument><argument>${project.basedir}/native</argument>
-                <argument>-B</argument><argument>${project.build.directory}/native-fork</argument>
-                <argument>-DCHROMELLM_LLAMA_SOURCE_DIR=${chromellm.native.source}</argument>
-                <argument>-DCHROMELLM_NATIVE_DISTRIBUTION=${chromellm.native.distribution}</argument>
-                <argument>-DCHROMELLM_NATIVE_CLASSIFIER=${chromellm.native.classifier}</argument>
-                <argument>-DCHROMELLM_NATIVE_NOTICES=${chromellm.native.notices}</argument>
-                <argument>-DCHROMELLM_WEBGPU=${chromellm.native.webgpu}</argument>
-                <argument>-DCHROMELLM_DAWN_PREFIX=${chromellm.native.dawn.prefix}</argument>
-                <argument>-DCMAKE_BUILD_TYPE=Release</argument>
-              </arguments></configuration>
-            </execution>
-            <execution>
-              <id>native-fork-build</id><phase>process-resources</phase><goals><goal>exec</goal></goals>
-              <configuration><executable>${chromellm.cmake.executable}</executable><arguments>
-                <argument>--build</argument><argument>${project.build.directory}/native-fork</argument>
-                <argument>--config</argument><argument>Release</argument>
-                <argument>--parallel</argument><argument>2</argument>
-              </arguments></configuration>
-            </execution>
-          </executions>
-        </plugin>
-      </plugins></build>
-    </profile>
-
-
-
-    <profile>
-      <id>fork-native</id>
-      <properties><chromellm.native.mode>pinned-fork</chromellm.native.mode></properties>
-      <build><plugins><plugin>
-        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
-        <executions><execution>
-          <id>require-pinned-fork-only</id><phase>validate</phase><goals><goal>enforce</goal></goals>
-          <configuration><rules><requireProperty>
-            <property>chromellm.native.mode</property><regex>^pinned-fork$</regex>
-            <message>fork-native cannot be combined with another native build profile</message>
-            <regexMessage>fork-native cannot be combined with another native build profile</regexMessage>
-          </requireProperty></rules></configuration>
-        </execution></executions>
-      </plugin><plugin>
-        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
-        <executions>
           <execution>
             <id>coding-agent-tools-contract-tests</id>
             <phase>verify</phase>
@@ -466,18 +211,6 @@
             <configuration>
               <mainClass>io.synexia.chromellm.standalone.AgentEntrypointContractTestMain</mainClass>
               <classpathScope>test</classpathScope>
-              <executable>${chromellm.cmake.executable}</executable>
-              <arguments>
-                <argument>-S</argument><argument>${project.basedir}/native</argument>
-                <argument>-B</argument><argument>${project.build.directory}/fork-native</argument>
-                <argument>-DCHROMELLM_LLAMA_SOURCE_DIR=${chromellm.fork.source}</argument>
-                <argument>-DCHROMELLM_WEBGPU=${chromellm.fork.webgpu}</argument>
-                <argument>-DCHROMELLM_DAWN_PREFIX=${chromellm.native.dawn.prefix}</argument>
-                <argument>-DCMAKE_PREFIX_PATH=${chromellm.fork.prefix}</argument>
-                <argument>-DDawn_DIR=${chromellm.fork.dawnDir}</argument>
-                <argument>-DCMAKE_BUILD_TYPE=${chromellm.fork.configuration}</argument>
-                <argument>-DGGML_NATIVE=OFF</argument>
-              </arguments>
             </configuration>
           </execution>
           <execution>
@@ -528,6 +261,8 @@
       <properties>
         <chromellm.native.mode>pinned-fork</chromellm.native.mode>
         <chromellm.native.activeProfile>fork-native</chromellm.native.activeProfile>
+        <chromellm.native.builddir>${project.build.directory}/fork-native</chromellm.native.builddir>
+        <chromellm.native.configuration>${chromellm.fork.configuration}</chromellm.native.configuration>
       </properties>
       <build>
         <plugins>
@@ -610,6 +345,9 @@
                     <argument>-DCMAKE_BUILD_TYPE=${chromellm.fork.configuration}</argument>
                     <argument>-DGGML_NATIVE=OFF</argument>
                     <argument>-DDawn_DIR=${chromellm.fork.dawnDir}</argument>
+                    <argument>-DCHROMELLM_NATIVE_DISTRIBUTION=${chromellm.native.distribution}</argument>
+                    <argument>-DCHROMELLM_NATIVE_CLASSIFIER=${chromellm.native.classifier}</argument>
+                    <argument>-DCHROMELLM_NATIVE_NOTICES=${chromellm.native.notices}</argument>
                   </arguments>
                 </configuration>
               </execution>
@@ -681,6 +419,7 @@
         <chromellm.native.mode>fork</chromellm.native.mode>
         <chromellm.smoke.library>${project.build.directory}/native-fork/chromellm-native-Release.txt</chromellm.smoke.library>
         <chromellm.native.activeProfile>native-fork</chromellm.native.activeProfile>
+        <chromellm.native.builddir>${project.build.directory}/native-fork</chromellm.native.builddir>
       </properties>
       <build>
         <plugins>
@@ -753,6 +492,9 @@
                     <argument>-DCHROMELLM_WEBGPU=${chromellm.native.webgpu}</argument>
                     <argument>-DCHROMELLM_DAWN_PREFIX=${chromellm.native.dawn.prefix}</argument>
                     <argument>-DCMAKE_BUILD_TYPE=Release</argument>
+                    <argument>-DCHROMELLM_NATIVE_DISTRIBUTION=${chromellm.native.distribution}</argument>
+                    <argument>-DCHROMELLM_NATIVE_CLASSIFIER=${chromellm.native.classifier}</argument>
+                    <argument>-DCHROMELLM_NATIVE_NOTICES=${chromellm.native.notices}</argument>
                   </arguments>
                 </configuration>
               </execution>
@@ -778,27 +520,7 @@
           </plugin>
         </plugins>
       </build>
-      <build><plugins><plugin>
-        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
-        <executions><execution>
-          <id>run-explicit-smart-build-recipe</id><phase>verify</phase><goals><goal>java</goal></goals>
-          <configuration>
-            <mainClass>io.synexia.chromellm.standalone.SmartBuildMain</mainClass>
-            <systemProperties><systemProperty>
-              <key>chromellm.offline</key><value>offline=${session.offline}</value>
-            </systemProperty></systemProperties>
-            <arguments>
-              <argument>${chromellm.smart.recipe}</argument>
-              <argument>${project.basedir}</argument>
-              <argument>${project.build.directory}</argument>
-              <argument>--offline=${settings.offline}</argument>
-            </arguments>
-          </configuration>
-        </execution></executions>
-      </plugin></plugins></build>
     </profile>
-
-
     <profile>
       <id>dawn-binary</id>
       <properties>
@@ -988,7 +710,7 @@
                   <arguments>
                     <argument>-Xcheck:jni</argument>
                     <argument>-cp</argument>
-                    <classpath />
+                    <classpath/>
                     <argument>io.synexia.chromellm.standalone.RealModelSmokeTestMain</argument>
                     <argument>${chromellm.smoke.library}</argument>
                     <argument>${chromellm.artifact.cache}</argument>
@@ -1000,111 +722,6 @@
           </plugin>
         </plugins>
       </build>
-      <build><plugins><plugin>
-        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
-        <executions><execution>
-          <id>require-binary-dawn-build</id><phase>validate</phase><goals><goal>enforce</goal></goals>
-          <configuration><rules>
-            <requireProperty>
-              <property>chromellm.native.mode</property><regex>^(none|pinned-fork)$</regex>
-              <message>dawn-binary requires fork-native or standalone binary verification</message>
-              <regexMessage>dawn-binary requires fork-native or standalone binary verification</regexMessage>
-            </requireProperty>
-            <requireProperty>
-              <property>chromellm.dawn.owner</property><regex>^dawn-binary$</regex>
-              <message>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</message>
-              <regexMessage>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</regexMessage>
-            </requireProperty>
-            <requireProperty>
-              <property>chromellm.fork.webgpu</property><regex>^ON$</regex>
-              <message>dawn-binary requires chromellm.fork.webgpu=ON</message>
-              <regexMessage>dawn-binary requires chromellm.fork.webgpu=ON</regexMessage>
-            </requireProperty>
-          </rules></configuration>
-        </execution></executions>
-      </plugin><plugin>
-        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
-        <executions><execution>
-          <id>prepare-dawn-binary</id><phase>process-classes</phase><goals><goal>java</goal></goals>
-          <configuration>
-            <mainClass>io.synexia.chromellm.standalone.NativeBuildArtifacts</mainClass>
-            <arguments>
-              <argument>dawn</argument>
-              <argument>${chromellm.artifact.cache}</argument>
-              <argument>${project.basedir}</argument>
-              <argument>${project.build.directory}</argument>
-              <argument>offline=${session.offline}</argument>
-              <argument>${chromellm.cmake.executable}</argument>
-            </arguments>
-          </configuration>
-        </execution><execution>
-          <id>configure-dawn-binary-smoke</id><phase>prepare-package</phase><goals><goal>exec</goal></goals>
-          <configuration><executable>${chromellm.cmake.executable}</executable><arguments>
-            <argument>-S</argument><argument>${project.basedir}/native/tests/dawn_binary</argument>
-            <argument>-B</argument><argument>${project.build.directory}/dawn-smoke</argument>
-            <argument>-DDawn_DIR=${chromellm.fork.dawnDir}</argument>
-            <argument>-DCMAKE_BUILD_TYPE=Release</argument>
-          </arguments></configuration>
-        </execution><execution>
-          <id>build-dawn-binary-smoke</id><phase>prepare-package</phase><goals><goal>exec</goal></goals>
-          <configuration><executable>${chromellm.cmake.executable}</executable><arguments>
-            <argument>--build</argument><argument>${project.build.directory}/dawn-smoke</argument>
-            <argument>--config</argument><argument>Release</argument>
-            <argument>--parallel</argument><argument>2</argument>
-          </arguments></configuration>
-        </execution><execution>
-          <id>run-dawn-binary-smoke</id><phase>verify</phase><goals><goal>exec</goal></goals>
-          <configuration><executable>${chromellm.ctest.executable}</executable><arguments>
-            <argument>--test-dir</argument><argument>${project.build.directory}/dawn-smoke</argument>
-            <argument>-C</argument><argument>Release</argument>
-            <argument>--output-on-failure</argument>
-          </arguments></configuration>
-        </execution></executions>
-      </plugin></plugins></build>
-    </profile>
-    <profile>
-      <id>real-model</id>
-      <build><plugins><plugin>
-        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
-        <executions><execution>
-          <id>require-real-model-build</id><phase>validate</phase><goals><goal>enforce</goal></goals>
-          <configuration><rules><requireProperty>
-            <property>chromellm.native.mode</property><regex>^(none|fork|pinned-fork)$</regex>
-            <message>real-model cannot be used with native-synthetic</message>
-              <regexMessage>real-model cannot be used with native-synthetic</regexMessage>
-          </requireProperty></rules></configuration>
-        </execution></executions>
-      </plugin><plugin>
-        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
-        <executions><execution>
-          <id>prepare-model-binary</id><phase>process-classes</phase><goals><goal>java</goal></goals>
-          <configuration>
-            <mainClass>io.synexia.chromellm.standalone.NativeBuildArtifacts</mainClass>
-            <arguments>
-              <argument>model</argument>
-              <argument>${chromellm.artifact.cache}</argument>
-              <argument>${project.basedir}</argument>
-              <argument>${project.build.directory}</argument>
-              <argument>offline=${session.offline}</argument>
-              <argument>${chromellm.cmake.executable}</argument>
-            </arguments>
-          </configuration>
-        </execution><execution>
-          <id>real-model-jni-smoke</id><phase>verify</phase><goals><goal>exec</goal></goals>
-          <configuration>
-            <executable>${java.home}/bin/java</executable>
-            <classpathScope>test</classpathScope>
-            <arguments>
-              <argument>-Xcheck:jni</argument>
-              <argument>-cp</argument><classpath />
-              <argument>io.synexia.chromellm.standalone.RealModelSmokeTestMain</argument>
-              <argument>${chromellm.smoke.library}</argument>
-              <argument>${chromellm.artifact.cache}</argument>
-              <argument>${chromellm.smoke.compute}</argument>
-            </arguments>
-          </configuration>
-        </execution></executions>
-      </plugin></plugins></build>
     </profile>
     <profile>
       <id>native-dawn</id>
@@ -1183,44 +800,6 @@
           </plugin>
         </plugins>
       </build>
-      <build><plugins>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
-          <executions><execution>
-            <id>require-dawn-compatible-build</id><phase>validate</phase><goals><goal>enforce</goal></goals>
-            <configuration><rules>
-              <requireProperty>
-                <property>chromellm.dawn.owner</property><regex>^native-dawn$</regex>
-                <message>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</message>
-              <regexMessage>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</regexMessage>
-              </requireProperty>
-              <requireProperty>
-                <property>chromellm.native.mode</property><regex>^(none|fork|pinned-fork)$</regex>
-                <message>native-dawn cannot be used with native-synthetic</message>
-                <regexMessage>native-dawn cannot be used with native-synthetic</regexMessage>
-              </requireProperty>
-              <requireProperty>
-                <property>chromellm.native.webgpu</property><regex>^ON$</regex>
-                <regexMessage>native-dawn requires WebGPU=ON</regexMessage>
-              </requireProperty>
-              <requireProperty>
-                <property>chromellm.fork.webgpu</property><regex>^ON$</regex>
-                <regexMessage>native-dawn requires the pinned fork WebGPU=ON</regexMessage>
-              </requireProperty>
-            </rules></configuration>
-          </execution></executions>
-        </plugin>
-        <plugin>
-          <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
-          <executions><execution>
-            <id>download-verified-dawn</id><phase>generate-sources</phase><goals><goal>exec</goal></goals>
-            <configuration><executable>java</executable><arguments>
-              <argument>${project.basedir}/native/DawnArtifactInstaller.java</argument>
-              <argument>${chromellm.native.dawn.prefix}</argument>
-            </arguments></configuration>
-          </execution></executions>
-        </plugin>
-      </plugins></build>
     </profile>
     <profile>
       <id>real-model-test</id>
@@ -1250,7 +829,7 @@
                   <arguments>
                     <argument>-Xcheck:jni</argument>
                     <argument>-cp</argument>
-                    <classpath />
+                    <classpath/>
                     <argument>io.synexia.chromellm.standalone.RealGgufContractTestMain</argument>
                     <argument>${chromellm.real.library}</argument>
                     <argument>${chromellm.real.model.url}</argument>
@@ -1288,28 +867,6 @@
           </plugin>
         </plugins>
       </build>
-      <build><plugins><plugin>
-        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
-        <executions><execution>
-          <id>real-gguf-contract-tests</id><phase>integration-test</phase><goals><goal>exec</goal></goals>
-          <configuration>
-            <executable>${java.home}/bin/java</executable>
-            <classpathScope>test</classpathScope>
-            <timeout>600000</timeout>
-            <arguments>
-              <argument>-Xcheck:jni</argument>
-              <argument>-cp</argument><classpath/>
-              <argument>io.synexia.chromellm.standalone.RealGgufContractTestMain</argument>
-              <argument>${chromellm.real.library}</argument>
-              <argument>${chromellm.real.model.url}</argument>
-              <argument>${chromellm.real.model.sha256}</argument>
-              <argument>${chromellm.real.model.cache}</argument>
-              <argument>${chromellm.real.model.bytes}</argument>
-              <argument>--offline=${session.offline}</argument>
-            </arguments>
-          </configuration>
-        </execution></executions>
-      </plugin></plugins></build>
     </profile>
     <profile>
       <id>chrome-status</id>
@@ -1900,44 +1457,94 @@
     </profile>
     <profile>
       <id>native-dist</id>
-      <properties><chromellm.native.distribution>ON</chromellm.native.distribution></properties>
-      <build><plugins>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
-          <executions><execution>
-            <id>require-real-native-distribution</id><phase>validate</phase><goals><goal>enforce</goal></goals>
-            <configuration><rules>
-              <requireProperty><property>chromellm.native.mode</property><regex>^(fork|pinned-fork)$</regex>
-                <message>native-dist requires native-fork or fork-native; synthetic artifacts cannot be distributed</message></requireProperty>
-              <requireProperty><property>chromellm.native.notices</property><regex>.*\S.*</regex>
-                <message>native-dist requires chromellm.native.notices containing operator-reviewed native license notices</message></requireProperty>
-              <requireProperty><property>chromellm.native.classifier</property><regex>^(linux|macos|windows)-(x86_64|arm64)$</regex>
-                <message>native-dist requires explicit chromellm.native.classifier=os-architecture matching the build host</message></requireProperty>
-            </rules></configuration>
-          </execution></executions>
-        </plugin>
-        <plugin>
-          <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
-          <executions><execution>
-            <id>stage-native-distribution</id><phase>prepare-package</phase><goals><goal>exec</goal></goals>
-            <configuration><executable>${chromellm.cmake.executable}</executable><arguments>
-              <argument>--build</argument><argument>${chromellm.native.builddir}</argument>
-              <argument>--target</argument><argument>native-bundle</argument>
-              <argument>--config</argument><argument>${chromellm.native.configuration}</argument>
-            </arguments></configuration>
-          </execution></executions>
-        </plugin>
-        <plugin>
-          <groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId><version>3.6.1</version>
-          <executions><execution>
-            <id>attach-native-runtime</id><phase>package</phase><goals><goal>attach-artifact</goal></goals>
-            <configuration><artifacts><artifact>
-              <file>${chromellm.native.builddir}/chromellm-native-${chromellm.native.classifier}.zip</file>
-              <type>zip</type><classifier>${chromellm.native.classifier}</classifier>
-            </artifact></artifacts></configuration>
-          </execution></executions>
-        </plugin>
-      </plugins></build>
+      <properties>
+        <chromellm.native.distribution>ON</chromellm.native.distribution>
+        <chromellm.native.classifier/>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>require-real-native-distribution</id>
+                <phase>validate</phase>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <requireProperty>
+                      <property>chromellm.native.mode</property>
+                      <regex>^(fork|pinned-fork)$</regex>
+                      <message>native-dist requires native-fork or fork-native; synthetic artifacts cannot be distributed</message>
+                    </requireProperty>
+                    <requireProperty>
+                      <property>chromellm.native.notices</property>
+                      <regex>.*\S.*</regex>
+                      <message>native-dist requires chromellm.native.notices containing operator-reviewed native license notices</message>
+                    </requireProperty>
+                    <requireProperty>
+                      <property>chromellm.native.classifier</property>
+                      <regex>^(linux|macos|windows)-(x86_64|arm64)$</regex>
+                      <message>native-dist requires explicit chromellm.native.classifier=os-architecture matching the build host</message>
+                    </requireProperty>
+                  </rules>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>stage-native-distribution</id>
+                <phase>prepare-package</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>${chromellm.cmake.executable}</executable>
+                  <arguments>
+                    <argument>--build</argument>
+                    <argument>${chromellm.native.builddir}</argument>
+                    <argument>--target</argument>
+                    <argument>native-bundle</argument>
+                    <argument>--config</argument>
+                    <argument>${chromellm.native.configuration}</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>3.6.1</version>
+            <executions>
+              <execution>
+                <id>attach-native-runtime</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>attach-artifact</goal>
+                </goals>
+                <configuration>
+                  <artifacts>
+                    <artifact>
+                      <file>${chromellm.native.builddir}/chromellm-native-${chromellm.native.classifier}.zip</file>
+                      <type>zip</type>
+                      <classifier>${chromellm.native.classifier}</classifier>
+                    </artifact>
+                  </artifacts>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
   </profiles>
 </project>

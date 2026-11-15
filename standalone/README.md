@@ -72,11 +72,11 @@ The existing standalone workflow includes a manual `run_chrome_ai` job restricte
 ## Opt-in lazy local model artifacts
 
 A local CLI or JNI backend may now select one **explicitly licensed, SHA-256-pinned HTTPS GGUF**
-without bundling it in Java/native artifacts. Ordinary Maven/CMake compilation does
-not download model weights. The explicitly selected `smart-build` profile can invoke
-inference during Maven `verify`, which acquires the model on first use. Direct CLI
-usage requires an existing writable model cache; a smart-build recipe may use the
-managed `target/model-cache`. Every model is verified before opening llama.cpp.
+without bundling it in the Java artifact. Ordinary Maven/CMake builds do not fetch weights;
+the explicit `real-model-test` Maven profile below downloads and verifies its pinned test model.
+The CLI cache is an existing,
+operator-chosen writable directory; no implicit home cache is created. The model is
+downloaded at the first inference request and verified before opening llama.cpp.
 
 ```sh
 java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
@@ -89,13 +89,10 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
 
 Provide **all three** of `--model-url`, `--model-sha256`, and `--model-cache-dir`.
 They exclude `--model`, `--tier`, and tier-model paths; hosted Gemini rejects them.
-Explicit GitHub release-download URLs may follow up to three restricted GitHub
-HTTPS redirects by default. Other redirects require `--model-follow-redirects true`,
-which permits at most five HTTPS hops while retaining the pinned digest. Set
-`--model-download-timeout-seconds` and `--model-max-bytes` to bound a transfer.
-Provider fallback is forbidden. Cache hits are rehashed; corrupt entries fail
-closed. JNI may load a packaged native artifact; CLI executables remain separately
-installed. See [LAZY_MODEL_CONTRACT.md](LAZY_MODEL_CONTRACT.md)
+Model downloads follow at most five HTTPS redirects, with no credentials or fragments.
+Provider selection remains explicit. Cache hits are rehashed;
+corrupt entries fail closed instead of being silently overwritten. Native libraries
+and executables remain separately installed. See [LAZY_MODEL_CONTRACT.md](LAZY_MODEL_CONTRACT.md)
 for byte limits, staging, cache ownership, acquisition timeouts, and the WebMCP/MCP
 boundary. This does **not** extract Chrome-managed Gemini Nano weights.
 
@@ -338,7 +335,8 @@ mvn -f standalone/pom.xml -Pnative,smart-build \
 
 Smart-build resolves relative prompt/model/cache paths against the standalone
 project. It creates a missing cache only under Maven's `target` directory;
-external cache paths must already exist. Inference writes a candidate and a
+explicit external cache paths retain the validated online preparation behavior;
+offline cache paths must already exist. Inference writes a candidate and a
 receipt under `target/smart-build`, recording recipe, prompt, and output hashes.
 Repeating a recipe checks those identities and refuses a conflicting output.
 A warm model cache is rehashed and can be reused without contacting the model
@@ -552,7 +550,7 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
   --threads 4 --max-tokens 256
 ```
 
-The source-build option uses linked GGML providers (`GGML_BACKEND_DL=OFF`) and delegates WebGPU configuration to llama.cpp. The direct CMake invocation expects its source checkout and Dawn installation to exist. The optional Maven `native` profile above manages the pinned fork source builds; model acquisition remains explicit through the existing model cache.
+The source-build option uses linked GGML providers (`GGML_BACKEND_DL=OFF`) and delegates WebGPU configuration to llama.cpp. The CMake source-build path does not download source or models. The independently installed Dawn package and its build prerequisites must already be available.
 
 Alternatively, point `Dawn_DIR` at the directory containing the installed `DawnConfig.cmake`. When building llama.cpp separately for the prebuilt-library path, enable `GGML_WEBGPU=ON` and keep `GGML_BACKEND_DL=OFF`; use the resulting matching llama/GGML libraries above. The pinned [WebGPU build](https://github.com/hsoliwal/synexia-llmcpp/blob/650ac3739d993e1d425f2d5db3c4205b3606cc30/ggml/src/ggml-webgpu/CMakeLists.txt) requires Python 3 to embed WGSL shaders. Keep the three WebGPU debug/profile flags off for binary stdio sessions because those modes can write native diagnostics to stdout. Device enumeration observes registered providers; it does not automatically load backend plugins.
 
@@ -638,11 +636,6 @@ Repeat the same Java command with `CHROMELLM_TEST_NO_WEBGPU=1` in its environmen
 The existing CI workflow runs both the Java contracts and synthetic JNI contracts on Linux, Windows and macOS. JNI checks run with `-Xcheck:jni`; a separate 32 MiB heap invocation verifies that oversized prompt encoding fails before allocating an encoded copy. The native fixture links the platform thread library and uses UTF-8 source encoding on MSVC.
 
 These tests check JNI loading, strict Unicode and byte limits, bounded token pieces, prompt receipts, timeout, interruption, native-lock deadlines, independent model close, stale-handle rejection and explicit CPU/WebGPU selection using a **fake test-only llama API**. They do not establish real GGUF inference or GPU offload. `mvn verify` also executes loopback HTTP tests for the Gemini adapter and provider-selection tests, without contacting Google or using credentials. Live API credentials, real models, drivers and device performance require separate runtime verification. Reusable source-change recipes and fixed-point evidence belong to hsoliwal/com.synexia; product code and tests live here.
-
-The preserved `dawn-binary` and `real-model` profiles download the pinned native CI
-inputs and execute their runtime tests. They honor Maven offline mode and revalidate
-cache hits. See [binary input profiles](FORK_NATIVE_SMART_BUILD.md#maven-downloads-and-tests-binary-inputs)
-for their source pins, platform limits and supported Dawn/profile combinations.
 
 ## Bounded coding-agent sessions
 

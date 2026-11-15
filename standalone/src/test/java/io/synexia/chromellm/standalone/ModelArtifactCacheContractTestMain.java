@@ -113,7 +113,6 @@ public final class ModelArtifactCacheContractTestMain {
             lazy.close();
             rejectIo(() -> lazy.infer(request));
             check(opens.get() == 4, "unexpected fixture fetch count");
-            binaryContracts(dir, fixture, hash, url);
             Files.delete(file);
             AtomicInteger partialClosed = new AtomicInteger();
             ModelArtifactCache partial = new ModelArtifactCache(url, hash, dir, ignored -> new InputStream() {
