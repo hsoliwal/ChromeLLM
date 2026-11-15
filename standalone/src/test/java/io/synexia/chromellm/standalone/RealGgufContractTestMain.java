@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.lang.management.ManagementFactory;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
@@ -60,6 +61,8 @@ public final class SmartBuildMain {
     static Path run(Path recipe, Path workspace, Path buildDirectory,
                     Map<String, String> environment, ProviderFactory providerFactory, boolean offline) throws Exception {
         Path root = workspace.toRealPath();
+        // Reject the destination before any artifact acquisition or provider initialization.
+        Path outputRoot = validateOutputRoot(root, buildDirectory);
         Path recipePath = confined(root, recipe, "recipe");
         byte[] recipeBytes;
         try (InputStream input = Files.newInputStream(recipePath)) {
@@ -117,14 +120,14 @@ public final class SmartBuildMain {
             String value = options.get(key);
             if (value != null) options.put(key, root.resolve(value).normalize().toString());
         }
-        // Reject the destination before any artifact acquisition or provider initialization.
-        Path outputRoot = validateOutputRoot(root, buildDirectory);
         if (options.containsKey("--model-url")) {
             // The existing lazy provider validates the complete option combination without I/O.
             StandaloneMain.backend(Map.copyOf(options), environment).close();
             Path cache = Path.of(options.get("--model-cache-dir"));
             if (!offline) Files.createDirectories(cache);
-            if (!cache.toRealPath().equals(cache)) throw new IOException("model cache must not traverse symlinks");
+            if (!Files.isDirectory(cache, LinkOption.NOFOLLOW_LINKS) || !cache.toRealPath().equals(cache)) {
+                throw new IOException("model cache must be an existing directory without symlinks");
+            }
             if (offline) {
                 Path model = new ModelArtifactCache(options.get("--model-url"), options.get("--model-sha256"),
                         cache, ModelArtifactCache.MAX_BYTES, true).resolve();

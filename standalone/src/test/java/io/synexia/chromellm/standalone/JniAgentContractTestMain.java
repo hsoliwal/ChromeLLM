@@ -1,5 +1,6 @@
-// SPDX-License-Identifier: MIT
-// Agent additions: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project; Apache-2.0.
+// SPDX-License-Identifier: MIT AND Apache-2.0
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
+// Workspace-agent fixture: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.ByteArrayOutputStream;
@@ -13,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Real JNI bridge with both scripted agent protocols; not trained-model inference or GPU qualification. */
+/** Uses the real JNI bridge with synthetic model output; does not claim model quality or GPU execution. */
 public final class JniAgentContractTestMain {
     private JniAgentContractTestMain() { }
 

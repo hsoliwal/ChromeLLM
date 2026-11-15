@@ -71,7 +71,7 @@ mvn -o -B -ntp -f standalone/pom.xml -Pfork-native,real-model-test \
   -Dchromellm.fork.commit=YOUR_CHECKOUT_FULL_40_HEX_COMMIT verify
 ```
 
-`${settings.offline}` reaches the model resolver. A missing cache entry fails
+`${session.offline}` reaches the model resolver. A missing cache entry fails
 before any download. A valid cache is reused even after `mvn clean`, because its
 default location is outside `target`. GitHub Actions caches the exact model
 digest and still revalidates all restored bytes.

@@ -1,0 +1,25 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>io.synexia.chromellm.tests</groupId><artifactId>native-consumer</artifactId><version>1</version>
+  <dependencies>
+    <dependency><groupId>io.synexia.chromellm</groupId><artifactId>chromellm-standalone</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
+    <dependency><groupId>io.synexia.chromellm</groupId><artifactId>chromellm-standalone</artifactId><version>0.1.0-SNAPSHOT</version><classifier>${native.classifier}</classifier><type>zip</type><scope>runtime</scope></dependency>
+  </dependencies>
+  <build><plugins><plugin>
+    <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
+    <executions>
+      <execution><id>unpack-resolved-native</id><phase>validate</phase><goals><goal>exec</goal></goals>
+        <configuration><executable>cmake</executable><workingDirectory>${project.basedir}</workingDirectory><arguments>
+          <argument>-E</argument><argument>tar</argument><argument>xf</argument>
+          <argument>${settings.localRepository}/io/synexia/chromellm/chromellm-standalone/0.1.0-SNAPSHOT/chromellm-standalone-0.1.0-SNAPSHOT-${native.classifier}.zip</argument>
+        </arguments></configuration>
+      </execution>
+      <execution><id>inventory-extracted-runtime</id><phase>validate</phase><goals><goal>java</goal></goals>
+        <configuration><mainClass>io.synexia.chromellm.standalone.StandaloneMain</mainClass><arguments>
+          <argument>--backend</argument><argument>jni</argument><argument>--list-devices</argument><argument>true</argument>
+          <argument>--jni-lib</argument><argument>${native.bridge}</argument>
+        </arguments></configuration>
+      </execution>
+    </executions>
+  </plugin></plugins></build>
+</project>

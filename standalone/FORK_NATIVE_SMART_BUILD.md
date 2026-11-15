@@ -105,26 +105,11 @@ For a combined pinned-source build and tested Dawn binary, use
 `dawn-binary` profile supplies its verified Dawn SDK to CMake and runs an actual
 Vulkan/WGSL compute and readback test.
 
-The separate `native-dawn` installer supports `native-fork`, or dependency staging
-on its own. To use that installer with a pinned `fork-native` build, first run
-`mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources`.
-Then run `fork-native` separately with `-Dchromellm.fork.webgpu=ON` and
-`-Dchromellm.fork.prefix` set to the absolute `standalone/target/native-deps/dawn`
-directory. Do not combine `native-dawn` with `fork-native`, `dawn-binary`, or
-`native-synthetic` in one invocation. See
-[`NATIVE_MAVEN_BUILD.md`](NATIVE_MAVEN_BUILD.md) for platform and archive qualification.
-
-Run the model **from the Maven build**, not from Chrome:
-
-```sh
-mvn -B -ntp -f standalone/pom.xml -Psmart-build verify \
-  -Dchromellm.smart.recipe=examples/smart-build.properties.example
-```
-
-Edit the provided recipe first to select your JNI library and licensed GGUF
-model. When explicitly requested, both profiles can be selected:
-`-Pfork-native,smart-build`. The smart-build recipe is a *candidate generator*,
-not an automatic source patcher or a guaranteed deterministic model runner.
+The separate `native-dawn` installer supports both `native-fork` and
+commit-validated `fork-native`. Select `-Pfork-native,native-dawn` to provision
+Dawn and pass its verified prefix into the pinned source build. The profile
+enables both WebGPU properties; an explicit OFF override, synthetic mode, or
+simultaneous `dawn-binary` selection is refused before native writes.
 
 ## Download and test the published model
 
