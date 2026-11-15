@@ -120,13 +120,13 @@ public final class SmartBuildMain {
             if (value != null) options.put(key, root.resolve(value).normalize().toString());
         }
         if (options.containsKey("--model-url")) {
+            // Admit the full lazy-provider configuration before creating cache directories
+            // or replacing remote options with verified offline bytes. This does not infer.
+            StandaloneMain.backend(Map.copyOf(options), environment).close();
             Path cache = Path.of(required(config, "modelCacheDir"));
             cache = root.resolve(cache).normalize();
-            if (!offline) Files.createDirectories(cache);
-            if (!cache.toRealPath().equals(cache)) throw new IOException("model cache must not traverse symlinks");
             if (offline) {
-                // Preserve lazy-provider argument admission before replacing remote model options.
-                StandaloneMain.backend(Map.copyOf(options), environment).close();
+                if (!cache.toRealPath().equals(cache)) throw new IOException("model cache must not traverse symlinks");
                 Path model = new ModelArtifactCache(required(config, "modelUrl"),
                         required(config, "modelSha256"), cache).resolveWithOfflinePolicy(true);
                 options.remove("--model-url");
@@ -135,6 +135,8 @@ public final class SmartBuildMain {
                 if (options.putIfAbsent("--model", model.toString()) != null) {
                     throw new IllegalArgumentException("model and modelUrl are exclusive");
                 }
+            } else {
+                prepareModelCache(cache);
             }
         }
         // The selected provider and all options are admitted by the pre-existing engine contract.
@@ -161,6 +163,21 @@ public final class SmartBuildMain {
                 receipt.getBytes(StandardCharsets.UTF_8));
         System.out.println("ChromeLLM smart-build candidate SHA-256: " + hex(sha256(candidate)));
         return output;
+    }
+
+    private static void prepareModelCache(Path cache) throws IOException {
+        Path ancestor = cache;
+        while (!Files.exists(ancestor, LinkOption.NOFOLLOW_LINKS)) {
+            ancestor = ancestor.getParent();
+            if (ancestor == null) throw new IOException("model cache has no existing directory ancestor");
+        }
+        if (!Files.isDirectory(ancestor, LinkOption.NOFOLLOW_LINKS) || !ancestor.toRealPath().equals(ancestor)) {
+            throw new IOException("model cache must not traverse symlinks");
+        }
+        Files.createDirectories(cache);
+        if (!Files.isDirectory(cache, LinkOption.NOFOLLOW_LINKS) || !cache.toRealPath().equals(cache)) {
+            throw new IOException("model cache must not traverse symlinks");
+        }
     }
 
     private static Path validateOutputRoot(Path root, Path buildDirectory) throws IOException {

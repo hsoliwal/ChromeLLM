@@ -1,0 +1,333 @@
+# SPDX-License-Identifier: MIT
+name: Build with optional Chrome AI advice
+
+on:
+  workflow_call:
+    inputs:
+      build-command:
+        description: Reviewed Bash commands that build the caller repository.
+        required: true
+        type: string
+      setup-command:
+        description: Reviewed Bash setup commands; exports remain available to the build command.
+        default: ''
+        type: string
+      ai-enabled:
+        description: Request advice on trusted default-branch pushes or manual runs.
+        default: false
+        type: boolean
+      ai-runner-labels:
+        description: JSON runner labels for eligible AI runs; the runner must be Linux.
+        default: '["self-hosted","linux","chrome-ai"]'
+        type: string
+      chrome-bin:
+        description: Absolute path to the installed Chrome executable on the AI runner.
+        default: ''
+        type: string
+      chrome-profile:
+        description: Absolute path to a dedicated ChromeLLM profile on the AI runner.
+        default: ''
+        type: string
+      allow-download:
+        description: Permit the Java provider to prepare Chrome's model when advice is enabled.
+        default: true
+        type: boolean
+      ai-timeout-seconds:
+        description: Deadline for each advice call, including permitted preparation; 1 through 3600.
+        default: 180
+        type: number
+      max-tokens:
+        description: Output admission budget for each advice call.
+        default: 512
+        type: number
+      max-input-bytes:
+        description: Assembled advice prompt limit; 1024 through 1048576 bytes.
+        default: 65536
+        type: number
+    outputs:
+      build-outcome:
+        description: Actual outcome of the caller's setup and build step.
+        value: ${{ jobs.build.outputs.build-outcome }}
+      ai-preparation-outcome:
+        description: success, failure, or disabled for the optional engine preparation.
+        value: ${{ jobs.build.outputs.ai-preparation-outcome }}
+      pre-build-status:
+        description: completed, failed, or skipped for pre-build advice.
+        value: ${{ jobs.build.outputs.pre-build-status }}
+      post-build-status:
+        description: completed, failed, or skipped for post-build advice.
+        value: ${{ jobs.build.outputs.post-build-status }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Untrusted refs and pull requests still build, using a hosted runner with AI disabled.
+    runs-on: ${{ inputs.ai-enabled && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && fromJSON(inputs.ai-runner-labels) || 'ubuntu-latest' }}
+    env:
+      EFFECTIVE_AI_ENABLED: ${{ inputs.ai-enabled && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    outputs:
+      build-outcome: ${{ steps.build.outcome }}
+      ai-preparation-outcome: ${{ env.EFFECTIVE_AI_ENABLED == 'true' && (steps.engine.outcome == 'success' && 'success' || 'failure') || 'disabled' }}
+      pre-build-status: ${{ steps.pre.outputs.status || (steps.pre.outcome == 'failure' && 'failed' || 'skipped') }}
+      post-build-status: ${{ steps.post.outputs.status || (steps.post.outcome == 'failure' && 'failed' || 'skipped') }}
+    steps:
+      - name: Check out the caller's exact source revision
+        id: project_checkout
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: project
+          persist-credentials: false
+
+      - name: Check the optional AI runner configuration
+        id: ai_config
+        if: ${{ env.EFFECTIVE_AI_ENABLED == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        shell: bash
+        env:
+          CHROME_BIN: ${{ inputs.chrome-bin }}
+          CHROME_PROFILE: ${{ inputs.chrome-profile }}
+          ENGINE_REPOSITORY: ${{ job.workflow_repository }}
+          ENGINE_SHA: ${{ job.workflow_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RUNNER_OS" == Linux ]] || { echo '::error::Chrome AI requires a Linux runner.'; exit 1; }
+          [[ "$CHROME_BIN" == /* && -x "$CHROME_BIN" ]] || { echo '::error::Configure an absolute executable chrome-bin.'; exit 1; }
+          [[ "$CHROME_PROFILE" == /* ]] || { echo '::error::Configure an absolute dedicated chrome-profile.'; exit 1; }
+          [[ "$ENGINE_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$ENGINE_SHA" =~ ^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$ ]] || {
+            echo '::error::Exact reusable-workflow identity requires GitHub Cloud job.workflow_* support.'
+            exit 1
+          }
+          [[ "$PATH${JAVA_HOME:-}" != *$'\n'* && "$PATH${JAVA_HOME:-}" != *$'\r'* ]]
+          engine_settings_dir=$(mktemp -d "$RUNNER_TEMP/chromellm-maven.XXXXXXXX")
+          # Engine toolchain setup must not choose the caller's build toolchain.
+          {
+            printf 'caller-path=%s\n' "$PATH"
+            printf 'caller-java-home=%s\n' "${JAVA_HOME:-}"
+            printf 'restore-caller-environment=true\n'
+            printf 'settings-path=%s\n' "$engine_settings_dir"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out this workflow's exact engine and action revision
+        id: engine_checkout
+        if: ${{ steps.ai_config.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/checkout@v4
+        with:
+          # GitHub Cloud: these identify the reusable workflow, not its caller.
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: chromellm
+          persist-credentials: false
+
+      - name: Set up the engine's Java toolchain
+        id: provider_java
+        if: ${{ steps.engine_checkout.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          overwrite-settings: false
+          # Both settings.xml and toolchains.xml writes stay outside the caller's ~/.m2.
+          settings-path: ${{ steps.ai_config.outputs.settings-path }}
+          cache: maven
+          cache-dependency-path: chromellm/standalone/pom.xml
+
+      - name: Set up the engine's script contract runtime
+        id: provider_node
+        if: ${{ steps.provider_java.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Independently qualify and copy the advice engine
+        id: engine
+        if: ${{ steps.provider_node.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 15
+        working-directory: chromellm
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          engine_dir=$(mktemp -d "$RUNNER_TEMP/chromellm-engine.XXXXXXXX")
+          printf 'log=%s\n' "$engine_dir/verify.log" >> "$GITHUB_OUTPUT"
+          [[ -x "$JAVA_HOME/bin/java" ]]
+          [[ "$JAVA_HOME$PATH" != *$'\n'* && "$JAVA_HOME$PATH" != *$'\r'* ]]
+          {
+            printf 'java-home=%s\n' "$JAVA_HOME"
+            printf 'provider-path=%s/bin:%s\n' "$JAVA_HOME" "$PATH"
+          } >> "$GITHUB_OUTPUT"
+          mvn -B -ntp -f standalone/pom.xml verify 2>&1 | tee "$engine_dir/verify.log"
+          cp -- standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar "$engine_dir/engine.jar"
+          jar_digest=$(sha256sum -- "$engine_dir/engine.jar")
+          {
+            printf 'jar=%s\n' "$engine_dir/engine.jar"
+            printf 'sha256=%s\n' "${jar_digest%% *}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare a bounded pre-build review packet
+        id: prompt
+        if: ${{ steps.engine.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        shell: bash
+        env:
+          CALLER_REPOSITORY: ${{ github.repository }}
+          CALLER_SHA: ${{ github.sha }}
+          SETUP_COMMAND: ${{ inputs.setup-command }}
+          BUILD_COMMAND: ${{ inputs.build-command }}
+          MAX_INPUT_BYTES: ${{ inputs.max-input-bytes }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export LC_ALL=C
+          [[ "$MAX_INPUT_BYTES" =~ ^[0-9]{1,7}$ ]] || { echo '::error::max-input-bytes must be an integer.'; exit 1; }
+          limit=$((10#$MAX_INPUT_BYTES))
+          (( limit >= 1024 && limit <= 1048576 )) || { echo '::error::max-input-bytes is outside the supported range.'; exit 1; }
+          instruction='Review this explicit build plan before it runs. Identify prerequisites and likely failures. Advice must not change the build.'
+          base_bytes=$(printf '%s\n' "$instruction" 'Caller repository: ' 'Caller revision: ' '' 'Setup command:' '' '' 'Build command:' '' | wc -c)
+          packet_bytes=$((base_bytes + ${#CALLER_REPOSITORY} + ${#CALLER_SHA} + ${#SETUP_COMMAND} + ${#BUILD_COMMAND}))
+          # Reserve space for the composite action's own review instructions.
+          (( packet_bytes <= limit - 512 )) || { echo '::error::The explicit build plan exceeds its review packet budget.'; exit 1; }
+          packet_dir=$(mktemp -d "$RUNNER_TEMP/chromellm-plan.XXXXXXXX")
+          packet="$packet_dir/prompt.txt"
+          printf '%s\n' "$instruction" "Caller repository: $CALLER_REPOSITORY" "Caller revision: $CALLER_SHA" \
+            '' 'Setup command:' "$SETUP_COMMAND" '' 'Build command:' "$BUILD_COMMAND" > "$packet"
+          printf 'file=%s\n' "$packet" >> "$GITHUB_OUTPUT"
+
+      - name: Request optional pre-build advice
+        id: pre
+        if: ${{ steps.prompt.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 65
+        uses: ./chromellm/.github/actions/build-ai
+        env:
+          JAVA_HOME: ${{ steps.engine.outputs.java-home }}
+          PATH: ${{ steps.engine.outputs.provider-path }}
+        with:
+          phase: pre-build
+          jar: ${{ steps.engine.outputs.jar }}
+          jar-sha256: ${{ steps.engine.outputs.sha256 }}
+          prompt-file: ${{ steps.prompt.outputs.file }}
+          chrome-bin: ${{ inputs.chrome-bin }}
+          chrome-profile: ${{ inputs.chrome-profile }}
+          allow-download: ${{ inputs.allow-download }}
+          timeout-seconds: ${{ inputs.ai-timeout-seconds }}
+          max-tokens: ${{ inputs.max-tokens }}
+          max-input-bytes: ${{ inputs.max-input-bytes }}
+
+      - name: Remove the temporary review packet
+        if: ${{ !cancelled() && steps.prompt.outputs.file != '' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        shell: bash
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.file }}
+        run: rm -f -- "$PROMPT_FILE"
+
+      - name: Run the caller's reviewed setup and build commands
+        id: build
+        if: ${{ !cancelled() && steps.project_checkout.outcome == 'success' }}
+        working-directory: project
+        shell: bash
+        env:
+          SETUP_COMMAND: ${{ inputs.setup-command }}
+          BUILD_COMMAND: ${{ inputs.build-command }}
+          RESTORE_CALLER_ENVIRONMENT: ${{ steps.ai_config.outputs.restore-caller-environment }}
+          CALLER_PATH: ${{ steps.ai_config.outputs.caller-path }}
+          CALLER_JAVA_HOME: ${{ steps.ai_config.outputs.caller-java-home }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ "$RESTORE_CALLER_ENVIRONMENT" == true ]]; then
+            export PATH="$CALLER_PATH"
+            if [[ -n "$CALLER_JAVA_HOME" ]]; then export JAVA_HOME="$CALLER_JAVA_HOME"; else unset JAVA_HOME; fi
+          fi
+          build_dir=$(mktemp -d "$RUNNER_TEMP/chromellm-caller-build.XXXXXXXX")
+          command_file="$build_dir/commands.bash"
+          log="$build_dir/build.log"
+          {
+            printf 'log=%s\n' "$log"
+            printf 'artifact-name=build-with-ai-%s\n' "${build_dir##*/}"
+          } >> "$GITHUB_OUTPUT"
+          trap 'rm -f -- "$command_file"' EXIT
+          if [[ ! "$BUILD_COMMAND" =~ [^[:space:]] ]]; then
+            printf '%s\n' 'build-command must contain explicit reviewed Bash commands.' | tee "$log" >&2
+            exit 2
+          fi
+          # Inputs are deliberately executed as reviewed Bash, never as expression interpolation or model output.
+          printf '%s\n' 'set -e -o pipefail' "$SETUP_COMMAND" '' 'set -e -o pipefail' "$BUILD_COMMAND" > "$command_file"
+          bash --noprofile --norc -e -o pipefail "$command_file" 2>&1 | tee "$log"
+
+      - name: Request optional post-build diagnosis
+        id: post
+        if: ${{ !cancelled() && steps.engine.outcome == 'success' && (steps.build.outcome == 'success' || steps.build.outcome == 'failure') }}
+        continue-on-error: true
+        timeout-minutes: 65
+        uses: ./chromellm/.github/actions/build-ai
+        env:
+          # Caller setup may replace job Java or PATH; advice keeps its qualified Java toolchain.
+          JAVA_HOME: ${{ steps.engine.outputs.java-home }}
+          PATH: ${{ steps.engine.outputs.provider-path }}
+        with:
+          phase: post-build
+          jar: ${{ steps.engine.outputs.jar }}
+          jar-sha256: ${{ steps.engine.outputs.sha256 }}
+          build-log: ${{ steps.build.outputs.log }}
+          build-outcome: ${{ steps.build.outcome }}
+          chrome-bin: ${{ inputs.chrome-bin }}
+          chrome-profile: ${{ inputs.chrome-profile }}
+          allow-download: ${{ inputs.allow-download }}
+          timeout-seconds: ${{ inputs.ai-timeout-seconds }}
+          max-tokens: ${{ inputs.max-tokens }}
+          max-input-bytes: ${{ inputs.max-input-bytes }}
+
+      - name: Report build and advice outcomes
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 1
+        shell: bash
+        env:
+          AI_REQUESTED: ${{ inputs.ai-enabled }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          CONFIG_OUTCOME: ${{ steps.ai_config.outcome }}
+          CHECKOUT_OUTCOME: ${{ steps.engine_checkout.outcome }}
+          JAVA_OUTCOME: ${{ steps.provider_java.outcome }}
+          NODE_OUTCOME: ${{ steps.provider_node.outcome }}
+          ENGINE_OUTCOME: ${{ steps.engine.outcome }}
+          PROMPT_OUTCOME: ${{ steps.prompt.outcome }}
+          PRE_STATUS: ${{ steps.pre.outputs.status || (steps.pre.outcome == 'failure' && 'failed' || 'skipped') }}
+          POST_STATUS: ${{ steps.post.outputs.status || (steps.post.outcome == 'failure' && 'failed' || 'skipped') }}
+        run: |
+          {
+            printf '### Build with optional Chrome AI\n\n'
+            printf 'Build outcome: **%s**. AI requested: **%s**; effective for this event/ref: **%s**.\n\n' "$BUILD_OUTCOME" "$AI_REQUESTED" "$EFFECTIVE_AI_ENABLED"
+            printf '| Optional advice stage | Outcome |\n| --- | --- |\n'
+            printf '| Runner configuration | %s |\n| Engine checkout | %s |\n| Java setup | %s |\n| Script runtime setup | %s |\n' "$CONFIG_OUTCOME" "$CHECKOUT_OUTCOME" "$JAVA_OUTCOME" "$NODE_OUTCOME"
+            printf '| Engine qualification | %s |\n| Review packet | %s |\n| Pre-build advice | %s |\n| Post-build advice | %s |\n' "$ENGINE_OUTCOME" "$PROMPT_OUTCOME" "$PRE_STATUS" "$POST_STATUS"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build and advice reports
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.artifact-name || format('build-with-ai-{0}-{1}', github.run_id, github.run_attempt) }}
+          path: |
+            ${{ steps.build.outputs.log }}
+            ${{ steps.engine.outputs.log }}
+            ${{ steps.pre.outputs.report-dir }}
+            ${{ steps.post.outputs.report-dir }}
+          if-no-files-found: ignore
+          retention-days: 7

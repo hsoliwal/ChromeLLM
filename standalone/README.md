@@ -2,6 +2,10 @@
 
 The module has no third-party Java runtime dependency. It uses the JDK modules `java.base`, `java.net.http` and `jdk.httpserver`. Select the local llama.cpp CLI/JNI, hosted Gemini API, or optional installed-Chrome built-in AI provider explicitly. The CLI/JNI providers run independently of Chrome; Dawn is an optional native compute dependency for local WebGPU inference.
 
+For optional analysis around a project build, use the reusable
+[pre-build and post-build GitHub Action](BUILD_AI_ACTION.md). It invokes this
+same Java CLI, records advice separately, and preserves the actual build result.
+
 ## Installed Chrome built-in AI
 
 Select `--backend chrome` to let Java launch an installed Chrome executable with a dedicated profile and a small localhost page. Java owns the process, deadlines and request orchestration; the page invokes Chrome's `LanguageModel` API. The selected Chrome installation and its eligibility determine API availability. No browser, model weights or Chrome runtime library is bundled or downloaded by the Java launcher.

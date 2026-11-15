@@ -39,7 +39,7 @@ public final class StandaloneContractTestMain {
                     System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java").toString();
             String testClasses = Path.of(FakeLlamaCppMain.class.getProtectionDomain()
                     .getCodeSource().getLocation().toURI()).toString();
-            List<String> launcher = List.of(java, "-cp", testClasses, FakeLlamaCppMain.class.getName());
+            List<String> launcher = List.of(java, "-XX:-UsePerfData", "-cp", testClasses, FakeLlamaCppMain.class.getName());
             try (ModelBackend backend = new LlamaCppCliBackend(
                     launcher, model, temp)) {
                 ModelResponse result = backend.infer(new ModelRequest("private input", 8, Duration.ofSeconds(10)));
@@ -106,8 +106,10 @@ public final class StandaloneContractTestMain {
         check(full.text().length() == 4 * 1024 * 1024 && full.text().chars().allMatch(c -> c == 'x'),
                 "exact stdout bound was truncated or corrupted");
         onlyModelRemains(temp);
-        check(backend.infer(new ModelRequest("stderr-flood", 8, Duration.ofSeconds(10)))
-                .text().equals("synthetic reply"), "stderr blocked or contaminated the answer");
+        String stderrText = backend.infer(new ModelRequest("stderr-flood", 8, Duration.ofSeconds(10))).text();
+        boolean stderrClean = stderrText.equals("synthetic reply");
+        check(stderrClean, "stderr blocked or contaminated the answer"
+                + (stderrClean ? "" : responseDiagnostic(stderrText)));
         onlyModelRemains(temp);
         check(backend.infer(new ModelRequest("stdin-eof", 8, Duration.ofSeconds(10)))
                 .text().equals("synthetic reply"), "stdin was left open");
@@ -151,6 +153,25 @@ public final class StandaloneContractTestMain {
             check(expected.getMessage().contains("bounded limit"));
         }
         onlyModelRemains(temp);
+    }
+
+    /** A bounded, inert byte preview for the synthetic child's unexpected stdout. */
+    private static String responseDiagnostic(String text) {
+        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+        StringBuilder preview = new StringBuilder();
+        int limit = Math.min(bytes.length, 128);
+        for (int i = 0; i < limit; i++) {
+            int value = bytes[i] & 0xff;
+            // Escape control bytes, non-ASCII, quotes, backslashes and workflow-command delimiters.
+            if (value >= 0x20 && value <= 0x7e && value != '"' && value != '\\' && value != ':') {
+                preview.append((char) value);
+            } else {
+                preview.append("\\x").append(Character.forDigit(value >>> 4, 16))
+                        .append(Character.forDigit(value & 0xf, 16));
+            }
+        }
+        if (bytes.length > limit) preview.append("...");
+        return " (actual UTF-8 bytes=" + bytes.length + ", preview=\"" + preview + "\")";
     }
 
     /** Final bytes arrive after the empty-pipe sample and immediately before exit is observed. */
