@@ -34,6 +34,24 @@ mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic verify
 
 This builds the existing **test-only** JNI stub into `standalone/target/native-synthetic`, runs its CTest library-discovery regressions, and runs the Java contract suite. On Unix, the JNI bridge is `libchromellm_llama_jni.so` (Linux) or `libchromellm_llama_jni.dylib` (macOS); on Windows it is normally under `Release/chromellm_llama_jni.dll`. GitHub Actions separately invokes `JniSyntheticContractTestMain` with that exact library, including cancellation and allocation-limit checks. Neither the synthetic profile nor its CI checks assert real model correctness.
 
+## Windows dependent DLL resolution
+
+The synthetic JNI fixture builds two separate native artifacts on Windows:
+`chromellm_llama_jni.dll` and its linked `chromellm_llama_stub.dll`.
+Passing the absolute JNI bridge path to `System.load` does not by itself
+guarantee that the Windows loader will find the bridge's dependent DLLs.
+Before launching Java, add the **build's** `Release` directory (containing
+both DLLs) to the Windows process `PATH`. The GitHub Actions Windows matrix
+publishes that directory to `GITHUB_PATH` after Maven's native build, so
+the subsequent JVM steps inherit it; no DLLs are copied or committed.
+Do not rely solely on `-Djava.library.path` for transitive DLL dependencies.
+
+For a real source-built fork, inspect its actual linked native dependency
+locations rather than assuming that all GGML/Dawn libraries share the JNI
+directory. This CI loader repair is a synthetic fixture contract, **not**
+proof of a distributable native runtime. See the Windows job logs for
+acceptance of the end-to-end `JniSyntheticContractTestMain` stage.
+
 ## Admission and boundaries
 
 - The default `mvn -f standalone/pom.xml verify` is unchanged: Java-only, no CMake, network, model or native build prerequisite.
