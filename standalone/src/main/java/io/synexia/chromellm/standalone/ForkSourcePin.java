@@ -46,8 +46,11 @@ public final class ForkSourcePin {
         args.addAll(List.of(commands));
         Process process = new ProcessBuilder(args).redirectErrorStream(true).start();
         try {
+            if (!process.waitFor(30, TimeUnit.SECONDS)) {
+                throw new IOException("native fork Git verification timed out");
+            }
             byte[] output = process.getInputStream().readNBytes(65537);
-            if (output.length > 65536 || !process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0) {
+            if (output.length > 65536 || process.exitValue() != 0) {
                 throw new IOException("cannot verify local native fork with Git");
             }
             return new String(output, StandardCharsets.UTF_8).strip();
