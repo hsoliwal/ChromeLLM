@@ -10,6 +10,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.LinkOption;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Stream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -119,13 +123,45 @@ public final class DawnArtifactInstaller {
         }
     }
 
+    /** Content seal covers regular files and symlink targets, independent of enumeration order. */
+    static String treeDigest(Path root) throws IOException {
+        MessageDigest hash = digest();
+        try (Stream<Path> walk = Files.walk(root)) {
+            List<Path> entries = walk.filter(p -> !p.equals(root) &&
+                    !p.getFileName().toString().equals(".chromellm-dawn-sha256") &&
+                    !Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS))
+                    .sorted(Comparator.comparing(p -> root.relativize(p).toString())).toList();
+            for (Path entry : entries) {
+                String relative = root.relativize(entry).toString().replace('\\', '/');
+                hash.update(relative.getBytes(StandardCharsets.UTF_8));
+                hash.update((byte) 0);
+                if (Files.isSymbolicLink(entry)) {
+                    hash.update((byte) 'L');
+                    hash.update(Files.readSymbolicLink(entry).toString().getBytes(StandardCharsets.UTF_8));
+                } else if (Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) {
+                    hash.update((byte) 'F');
+                    try (InputStream input = Files.newInputStream(entry)) {
+                        byte[] bytes = new byte[65536];
+                        int n;
+                        while ((n = input.read(bytes)) != -1) hash.update(bytes, 0, n);
+                    }
+                } else {
+                    throw new IOException("unsupported Dawn archive node: " + relative);
+                }
+                hash.update((byte) 0);
+            }
+        }
+        return HexFormat.of().formatHex(hash.digest());
+    }
+
     static void installPinned(Path prefix, Artifact artifact, Path archive) throws Exception {
         requireHash(archive, artifact.sha256());
         Path marker = prefix.resolve(".chromellm-dawn-sha256");
         if (Files.exists(prefix)) {
-            if (!Files.isDirectory(prefix) || !Files.isRegularFile(marker) ||
-                    !Files.readString(marker).trim().equalsIgnoreCase(artifact.sha256()) ||
-                    !hasDawnConfig(prefix)) {
+            List<String> seals = Files.isRegularFile(marker) ? Files.readAllLines(marker) : List.of();
+            if (!Files.isDirectory(prefix) || seals.size() != 2 ||
+                    !seals.get(0).equalsIgnoreCase(artifact.sha256()) ||
+                    !hasDawnConfig(prefix) || !seals.get(1).equalsIgnoreCase(treeDigest(prefix))) {
                 throw new IOException("Dawn cache is incomplete or mismatched; inspect or clean target/");
             }
             return;
@@ -153,7 +189,8 @@ public final class DawnArtifactInstaller {
         }
         Files.delete(nested);
         if (!hasDawnConfig(staging)) throw new IOException("pinned Dawn archive lacks DawnConfig.cmake");
-        Files.writeString(staging.resolve(".chromellm-dawn-sha256"), artifact.sha256() + "\n",
+        Files.writeString(staging.resolve(".chromellm-dawn-sha256"),
+                artifact.sha256() + "\n" + treeDigest(staging) + "\n",
                 StandardCharsets.US_ASCII);
         Files.move(staging, prefix);
     }
