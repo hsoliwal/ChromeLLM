@@ -7,6 +7,8 @@
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <chromellm.native.mode>none</chromellm.native.mode>
+    <chromellm.native.dawn.prefix>NONE</chromellm.native.dawn.prefix>
   </properties>
   <!-- No third-party Java dependencies, including at runtime. -->
   <build><plugins>
@@ -119,6 +121,7 @@
                 <argument>-B</argument><argument>${project.build.directory}/native-fork</argument>
                 <argument>-DCHROMELLM_LLAMA_SOURCE_DIR=${chromellm.native.source}</argument>
                 <argument>-DCHROMELLM_WEBGPU=${chromellm.native.webgpu}</argument>
+                <argument>-DCHROMELLM_DAWN_PREFIX=${chromellm.native.dawn.prefix}</argument>
                 <argument>-DCMAKE_BUILD_TYPE=Release</argument>
               </arguments></configuration>
             </execution>
@@ -131,6 +134,42 @@
               </arguments></configuration>
             </execution>
           </executions>
+        </plugin>
+      </plugins></build>
+    </profile>
+    <profile>
+      <!-- Source-file Java 21 installer, active only when the caller opts in. -->
+      <id>native-dawn</id>
+      <properties>
+        <chromellm.native.webgpu>ON</chromellm.native.webgpu>
+        <chromellm.native.dawn.prefix>${project.build.directory}/native-deps/dawn</chromellm.native.dawn.prefix>
+      </properties>
+      <build><plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>require-dawn-compatible-build</id><phase>validate</phase><goals><goal>enforce</goal></goals>
+            <configuration><rules>
+              <requireProperty>
+                <property>chromellm.native.mode</property><regex>^(none|fork)$</regex>
+                <message>native-dawn cannot be used with native-synthetic</message>
+              </requireProperty>
+              <requireProperty>
+                <property>chromellm.native.webgpu</property><regex>^ON$</regex>
+                <message>native-dawn requires WebGPU=ON</message>
+              </requireProperty>
+            </rules></configuration>
+          </execution></executions>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>download-verified-dawn</id><phase>generate-sources</phase><goals><goal>exec</goal></goals>
+            <configuration><executable>java</executable><arguments>
+              <argument>${project.basedir}/native/DawnArtifactInstaller.java</argument>
+              <argument>${chromellm.native.dawn.prefix}</argument>
+            </arguments></configuration>
+          </execution></executions>
         </plugin>
       </plugins></build>
     </profile>
