@@ -7,6 +7,13 @@
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Opt-in source fork and inference recipes; no native/model work in the default build. -->
+    <chromellm.fork.source></chromellm.fork.source>
+    <chromellm.fork.commit></chromellm.fork.commit>
+    <chromellm.fork.webgpu>OFF</chromellm.fork.webgpu>
+    <chromellm.fork.prefix></chromellm.fork.prefix>
+    <chromellm.fork.configuration>Release</chromellm.fork.configuration>
+    <chromellm.smart.recipe></chromellm.smart.recipe>
   </properties>
   <!-- No third-party Java dependencies, including at runtime. -->
   <build><plugins>
@@ -38,7 +45,75 @@
           <mainClass>io.synexia.chromellm.standalone.ProviderSelectionContractTestMain</mainClass>
           <classpathScope>test</classpathScope>
         </configuration>
+      </execution><execution>
+        <id>fork-smart-build-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.SmartBuildContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
       </execution></executions>
     </plugin>
   </plugins></build>
+  <profiles>
+    <profile>
+      <id>fork-native</id>
+      <build><plugins><plugin>
+        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>verify-fork-source-pin</id><phase>process-classes</phase><goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.ForkSourcePin</mainClass>
+              <arguments>
+                <argument>${chromellm.fork.source}</argument>
+                <argument>${chromellm.fork.commit}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>configure-fork-jni</id><phase>prepare-package</phase><goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>cmake</executable>
+              <arguments>
+                <argument>-S</argument><argument>${project.basedir}/native</argument>
+                <argument>-B</argument><argument>${project.build.directory}/fork-native</argument>
+                <argument>-DCHROMELLM_LLAMA_SOURCE_DIR=${chromellm.fork.source}</argument>
+                <argument>-DCHROMELLM_WEBGPU=${chromellm.fork.webgpu}</argument>
+                <argument>-DCMAKE_PREFIX_PATH=${chromellm.fork.prefix}</argument>
+                <argument>-DCMAKE_BUILD_TYPE=${chromellm.fork.configuration}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>build-fork-jni</id><phase>prepare-package</phase><goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>cmake</executable>
+              <arguments>
+                <argument>--build</argument><argument>${project.build.directory}/fork-native</argument>
+                <argument>--config</argument><argument>${chromellm.fork.configuration}</argument>
+                <argument>--parallel</argument><argument>2</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin></plugins></build>
+    </profile>
+    <profile>
+      <id>smart-build</id>
+      <build><plugins><plugin>
+        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
+        <executions><execution>
+          <id>run-explicit-smart-build-recipe</id><phase>verify</phase><goals><goal>java</goal></goals>
+          <configuration>
+            <mainClass>io.synexia.chromellm.standalone.SmartBuildMain</mainClass>
+            <arguments>
+              <argument>${chromellm.smart.recipe}</argument>
+              <argument>${project.basedir}</argument>
+              <argument>${project.build.directory}</argument>
+            </arguments>
+          </configuration>
+        </execution></executions>
+      </plugin></plugins></build>
+    </profile>
+  </profiles>
 </project>
