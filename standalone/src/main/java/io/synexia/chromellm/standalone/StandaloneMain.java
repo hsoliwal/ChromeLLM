@@ -3,6 +3,7 @@
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.CodingErrorAction;
 import java.io.FileDescriptor;
@@ -22,6 +23,21 @@ public final class StandaloneMain {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
+        validateAgentMode(options);
+        if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
+            Path goalFile = Path.of(required(options, "--prompt-file"));
+            AgentSession.Limits limits = agentLimits(options);
+            String goal = readAgentGoal(goalFile, limits);
+            // Validate the tool authority before opening or downloading a model.
+            try (CodingAgentTools tools = agentTools(options, System.getenv())) {
+                AgentSession.validateInput(goal, tools.tools(), limits);
+                try (ModelBackend selected = backend(options, System.getenv())) {
+                    AgentSession.Result result = new AgentSession(selected, tools.tools(), limits).run(goal);
+                    System.out.println(McpJson.encode(result.structured(), StdioProtocol.MAX_RESPONSE_BYTES));
+                }
+            }
+            return;
+        }
         Path workspace = agentWorkspace(options);
         List<AgentTool> tools = workspace == null ? null : new WorkspaceTools(workspace).tools();
         validateChromeModes(options);
@@ -40,9 +56,14 @@ public final class StandaloneMain {
                     || options.containsKey("--prompt-file")) {
                 throw new IllegalArgumentException("MCP stdio requires its own exclusive session mode");
             }
-            try (ModelBackend backend = backend(options, System.getenv());
+            AgentSession.Limits endpointLimits = options.containsKey("--agent-endpoint")
+                    ? agentLimits(options) : AgentSession.Limits.defaults();
+            try (CodingAgentTools endpointTools = options.containsKey("--agent-endpoint")
+                         ? agentTools(options, System.getenv()) : null;
+                 ModelBackend backend = backend(options, System.getenv());
                  FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
-                McpStdioServer.serveTools(backend, System.in, output, tools);
+                McpStdioServer.serve(backend, System.in, output, tools,
+                        endpointTools == null ? List.of() : endpointTools.tools(), endpointLimits);
             }
             return;
         }
@@ -89,21 +110,45 @@ public final class StandaloneMain {
         }
     }
 
-    /** Reject mode mistakes before loading a provider or touching the model cache. */
+    /** Authority validation runs before provider or cache initialization. */
     private static Path agentWorkspace(Map<String, String> options) {
+        return options.containsKey("--workspace") ? Path.of(required(options, "--workspace")) : null;
+    }
+
+    /** CLI execution selects one agent engine; MCP can expose both independently configured tools. */
+    static void validateAgentMode(Map<String, String> options) {
         boolean agent = flag(options, "--agent");
         boolean mcp = flag(options, "--mcp-stdio");
+        boolean workspace = options.containsKey("--workspace");
+        boolean endpoint = options.containsKey("--agent-endpoint");
+        boolean endpointControls = endpoint || options.containsKey("--agent-token-env")
+                || options.containsKey("--agent-max-context-bytes")
+                || options.containsKey("--agent-max-tool-result-bytes");
+        boolean configured = options.keySet().stream().anyMatch(key -> key.startsWith("--agent-"));
         if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
-            throw new IllegalArgumentException("agent mode requires its own exclusive session mode");
+            throw new IllegalArgumentException("agent execution requires its own exclusive session mode");
         }
-        if (!agent && (options.containsKey("--agent-max-steps") || options.containsKey("--agent-max-calls"))) {
-            throw new IllegalArgumentException("agent limits require --agent true");
+        if (agent && workspace && endpoint) {
+            throw new IllegalArgumentException("agent execution requires either --workspace or --agent-endpoint, not both");
         }
-        if (options.containsKey("--workspace") && !agent && !mcp) {
+        if (configured && !agent && !mcp) {
+            throw new IllegalArgumentException("agent controls require --agent true or --mcp-stdio true");
+        }
+        if (workspace && !agent && !mcp) {
             throw new IllegalArgumentException("workspace requires --agent true or --mcp-stdio true");
         }
-        if (agent || options.containsKey("--workspace")) return Path.of(required(options, "--workspace"));
-        return null;
+        if (endpointControls) {
+            required(options, "--agent-endpoint");
+            required(options, "--agent-token-env");
+            agentLimits(options);
+        }
+        if (agent && !endpoint) required(options, "--workspace");
+        if (options.containsKey("--agent-max-calls") && (!agent || endpoint)) {
+            throw new IllegalArgumentException("agent model-call limit requires workspace agent execution");
+        }
+        if (!agent && !endpoint && options.containsKey("--agent-max-steps")) {
+            throw new IllegalArgumentException("agent limits require an enabled agent engine");
+        }
     }
 
     private static AgentEngine.Limits agentLimits(Map<String, String> options, Duration timeout) {
@@ -111,14 +156,45 @@ public final class StandaloneMain {
                 Integer.parseInt(options.getOrDefault("--agent-max-calls", "8")), 65536, 32768, timeout);
     }
 
+    static AgentSession.Limits agentLimits(Map<String, String> options) {
+        return new AgentSession.Limits(
+                Integer.parseInt(options.getOrDefault("--agent-max-steps", "8")),
+                Integer.parseInt(options.getOrDefault("--max-tokens", "1024")),
+                Integer.parseInt(options.getOrDefault("--agent-max-context-bytes", "65536")),
+                Integer.parseInt(options.getOrDefault("--agent-max-tool-result-bytes", "16384")),
+                Duration.ofSeconds(Long.parseLong(options.getOrDefault("--timeout-seconds", "120"))));
+    }
+
+    static CodingAgentTools agentTools(Map<String, String> options, Map<String, String> environment) {
+        String variable = required(options, "--agent-token-env");
+        if (!variable.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new IllegalArgumentException("--agent-token-env must name an environment variable");
+        }
+        String credential = environment.get(variable);
+        if (credential == null || !credential.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("coding-agent token environment variable is not valid");
+        }
+        return new CodingAgentTools(URI.create(required(options, "--agent-endpoint")), credential);
+    }
+
     static String readPrompt(Path promptFile, boolean hosted) throws IOException {
         int limit = hosted ? GeminiApiBackend.MAX_REQUEST_BYTES : StdioProtocol.MAX_PROMPT_BYTES;
+        return readTextPrompt(promptFile, limit, hosted ? "Gemini" : "local");
+    }
+
+    static String readAgentGoal(Path promptFile, AgentSession.Limits limits) throws IOException {
+        if (!Files.isRegularFile(promptFile)) throw new IOException("agent goal must be a regular file");
+        String goal = readTextPrompt(promptFile, limits.maxContextBytes(), "agent");
+        if (goal.isBlank()) throw new IllegalArgumentException("agent goal must not be blank");
+        return goal;
+    }
+
+    private static String readTextPrompt(Path promptFile, int limit, String kind) throws IOException {
         // Bound the read itself: a size-only check could race a growing prompt file.
         try (var input = Files.newInputStream(promptFile)) {
             byte[] bytes = input.readNBytes(limit + 1);
             if (bytes.length > limit) {
-                throw new IOException((hosted ? "Gemini" : "local")
-                        + " prompt file exceeds the bounded input limit");
+                throw new IOException(kind + " prompt file exceeds the bounded input limit");
             }
             return StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT)
@@ -346,7 +422,8 @@ public final class StandaloneMain {
                 "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
                 "--model-cache-dir", "--mcp-stdio", "--agent", "--workspace",
-                "--agent-max-steps", "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
+                "--agent-max-steps", "--agent-max-calls", "--agent-endpoint", "--agent-token-env",
+                "--agent-max-context-bytes", "--agent-max-tool-result-bytes", "--chrome-bin", "--chrome-profile", "--chrome-headless",
                 "--chrome-download", "--chrome-status", "--chrome-prepare");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {

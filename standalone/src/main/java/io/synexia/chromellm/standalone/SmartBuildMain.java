@@ -165,10 +165,12 @@ public final class SmartBuildMain {
     }
 
     private static Path validateOutputRoot(Path root, Path buildDirectory) throws IOException {
-        Path target = buildDirectory.toAbsolutePath().normalize();
-        if (!target.equals(root.resolve("target"))
-                || !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)
-                || !target.toRealPath().equals(target)) {
+        Path suppliedTarget = buildDirectory.toAbsolutePath().normalize();
+        Path target = root.resolve("target");
+        if (suppliedTarget.getParent() == null
+                || !suppliedTarget.getParent().toRealPath().resolve(suppliedTarget.getFileName()).equals(target)
+                || !Files.isDirectory(suppliedTarget, LinkOption.NOFOLLOW_LINKS)
+                || !suppliedTarget.toRealPath().equals(target)) {
             throw new IOException("smart-build requires the existing in-project Maven target directory");
         }
         Path outputRoot = target.resolve("smart-build");

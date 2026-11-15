@@ -104,6 +104,27 @@
         </configuration>
       </execution>
       <execution>
+        <id>agent-session-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.AgentSessionContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution>
+      <execution>
+        <id>coding-agent-tools-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.CodingAgentToolsContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution>
+      <execution>
+        <id>agent-entrypoint-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.AgentEntrypointContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution>
+      <execution>
         <id>agent-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
         <configuration>
           <mainClass>io.synexia.chromellm.standalone.AgentContractTestMain</mainClass>
@@ -309,14 +330,17 @@
             <requireProperty>
               <property>chromellm.native.mode</property><regex>^(none|pinned-fork)$</regex>
               <message>dawn-binary requires fork-native or standalone binary verification</message>
+              <regexMessage>dawn-binary requires fork-native or standalone binary verification</regexMessage>
             </requireProperty>
             <requireProperty>
               <property>chromellm.dawn.owner</property><regex>^dawn-binary$</regex>
               <message>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</message>
+              <regexMessage>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</regexMessage>
             </requireProperty>
             <requireProperty>
               <property>chromellm.fork.webgpu</property><regex>^ON$</regex>
               <message>dawn-binary requires chromellm.fork.webgpu=ON</message>
+              <regexMessage>dawn-binary requires chromellm.fork.webgpu=ON</regexMessage>
             </requireProperty>
           </rules></configuration>
         </execution></executions>
@@ -369,6 +393,7 @@
           <configuration><rules><requireProperty>
             <property>chromellm.native.mode</property><regex>^(none|fork|pinned-fork)$</regex>
             <message>real-model cannot be used with native-synthetic</message>
+              <regexMessage>real-model cannot be used with native-synthetic</regexMessage>
           </requireProperty></rules></configuration>
         </execution></executions>
       </plugin><plugin>
@@ -421,6 +446,7 @@
               <requireProperty>
                 <property>chromellm.dawn.owner</property><regex>^native-dawn$</regex>
                 <message>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</message>
+              <regexMessage>native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile</regexMessage>
               </requireProperty>
               <requireProperty>
                 <property>chromellm.native.mode</property><regex>^(none|fork|pinned-fork)$</regex>

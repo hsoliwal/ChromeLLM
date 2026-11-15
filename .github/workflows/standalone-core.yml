@@ -40,20 +40,24 @@ jobs:
               exit 1
             fi
             cat profile-conflict.log
-            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with another native build profile' profile-conflict.log
+            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with (another native build profile|native-fork or native-synthetic)' profile-conflict.log
           done
-          test ! -e standalone/target/native-synthetic/CMakeCache.txt
-          test ! -e standalone/target/native-fork/CMakeCache.txt
-          for mode in fork synthetic; do
+          for mode in pinned-fork synthetic; do
             if mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic,fork-native \
                 -Dchromellm.native.mode="$mode" validate > fork-profile-conflict.log 2>&1; then
               echo 'Synthetic and pinned fork profiles unexpectedly passed validate' >&2
               exit 1
             fi
             cat fork-profile-conflict.log
-            grep -E 'native-synthetic and (native-fork|fork-native) cannot be active together|fork-native cannot be combined with another native build profile' fork-profile-conflict.log
+            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with (another native build profile|native-fork or native-synthetic)' fork-profile-conflict.log
           done
-          test ! -e standalone/target/fork-native/CMakeCache.txt
+          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,dawn-binary \
+              -Dchromellm.fork.webgpu=OFF validate > dawn-binary-conflict.log 2>&1; then
+            echo 'Dawn binary and a disabled pinned fork WebGPU backend unexpectedly passed validate' >&2
+            exit 1
+          fi
+          cat dawn-binary-conflict.log
+          grep -F 'dawn-binary requires chromellm.fork.webgpu=ON' dawn-binary-conflict.log
           if mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn \
               -Dchromellm.fork.webgpu=OFF validate > dawn-profile-conflict.log 2>&1; then
             echo 'Dawn and a disabled pinned fork WebGPU backend unexpectedly passed validate' >&2
@@ -61,6 +65,18 @@ jobs:
           fi
           cat dawn-profile-conflict.log
           grep -F 'native-dawn requires the pinned fork WebGPU=ON' dawn-profile-conflict.log
+          # This supported pair validates without provisioning Dawn or reading source.
+          mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn \
+            -Dchromellm.fork.source=/unavailable-for-validation \
+            -Dchromellm.fork.commit=889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b validate
+          if mvn -B -ntp -f standalone/pom.xml -Pnative-dawn,dawn-binary validate > dawn-provisioning-conflict.log 2>&1; then
+            echo 'Both Dawn provisioning profiles unexpectedly passed validate' >&2
+            exit 1
+          fi
+          cat dawn-provisioning-conflict.log
+          grep -F 'native-dawn and dawn-binary cannot be combined; select one Dawn provisioning profile' dawn-provisioning-conflict.log
+          test ! -e standalone/target/native-synthetic/CMakeCache.txt
+          test ! -e standalone/target/native-fork/CMakeCache.txt
           test ! -e standalone/target/fork-native/CMakeCache.txt
       - name: Verify JDK-only runtime modules
         shell: bash
@@ -229,6 +245,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

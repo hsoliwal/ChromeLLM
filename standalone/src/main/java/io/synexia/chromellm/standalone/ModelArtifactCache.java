@@ -392,7 +392,7 @@ final class ModelArtifactCache {
     }
 
     static InputStream fetch(URI url, HttpClient client) throws IOException, InterruptedException {
-        return fetch(url, transport(client), ACQUISITION_TIMEOUT, true, MAX_BYTES);
+        return fetch(url, transport(client), ACQUISITION_TIMEOUT, githubRelease(url), MAX_BYTES);
     }
 
     static InputStream fetch(URI url, long maxBytes, ResponseSender sender)
@@ -406,6 +406,7 @@ final class ModelArtifactCache {
     }
 
     private static Transport transport(HttpClient client) {
+        Objects.requireNonNull(client, "HTTP client");
         return new Transport() {
             @Override public HttpResponse<InputStream> send(HttpRequest request)
                     throws IOException, InterruptedException {
