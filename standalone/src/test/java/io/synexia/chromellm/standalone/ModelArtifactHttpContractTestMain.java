@@ -76,12 +76,13 @@ public final class ModelArtifactHttpContractTestMain {
         refusal(RELEASE, 200, Map.of("Content-Length", List.of("68719476737")));
         refusal(RELEASE, 200, Map.of("Content-Length", List.of("not-a-number")));
 
+        // Distinct destinations exercise the hop cap independently of early cycle refusal.
         List<TrackedStream> cycleBodies = new ArrayList<>();
         List<HttpResponse<InputStream>> cycle = new ArrayList<>();
         for (int i = 0; i < ModelArtifactCache.MAX_REDIRECTS + 2; i++) {
             TrackedStream body = new TrackedStream("redirect");
             cycleBodies.add(body);
-            cycle.add(response(302, Map.of("Location", List.of(ASSET.toString())), body));
+            cycle.add(response(302, Map.of("Location", List.of(ASSET.resolve("/hop-" + i).toString())), body));
         }
         ScriptedClient cycleClient = new ScriptedClient(cycle);
         expectIo(() -> ModelArtifactCache.fetch(RELEASE, cycleClient));

@@ -122,7 +122,10 @@ public final class ModelArtifactCacheContractTestMain {
             try (var files = Files.list(dir)) {
                 check(files.findAny().isEmpty(), "partial download staging file survived");
             }
-            redirectContracts(fixture);
+            responseSenderRedirectContracts(fixture);
+            // The partial-download refusal intentionally removed the prior model fixture.
+            // Recreate a verified model before checking that binary publication preserves it.
+            cache.resolve();
             binaryContracts(dir, fixture, hash, url);
             redirectContracts(fixture);
             bodyDeadlineContract();
@@ -137,7 +140,7 @@ public final class ModelArtifactCacheContractTestMain {
         ModelAcquisitionLifecycleTestMain.main(new String[0]);
     }
 
-    private static void redirectContracts(byte[] fixture) throws Exception {
+    private static void responseSenderRedirectContracts(byte[] fixture) throws Exception {
         URI source = URI.create("https://releases.example.invalid/model");
         URI destination = URI.create("https://assets.example.invalid/model?signature=test");
         for (int status : new int[] {301, 302, 303, 307, 308}) {
@@ -287,6 +290,8 @@ public final class ModelArtifactCacheContractTestMain {
         boolean closed;
         TrackedInputStream(byte[] bytes) { super(bytes); }
         @Override public void close() throws IOException { closed = true; super.close(); }
+    }
+
     private static void binaryContracts(Path dir, byte[] fixture, String hash, String url) throws Exception {
         AtomicInteger opens = new AtomicInteger();
         ModelArtifactCache.Downloader download = ignored -> {

@@ -57,7 +57,7 @@ index, lexical masking, source hashes and preview compiler remain authoritative.
 | `source_read` | `GET /api/file` | Read a Java file with its source hash |
 | `source_search` | `GET /api/search` | Exact search over a sealed snapshot |
 | `source_search_batch` | `POST /api/search-batch` | Search multiple patterns together |
-| `problem_categories` | `GET /api/problem-categories` | Read the existing algorithm catalogue |
+| `problem_categories` | `GET /api/problem-categories` | Read algorithm evidence or search reviewed challenge categories |
 | `github_build_plan` | `GET /api/github-build-plan` | Read an operator-configured build plan |
 | `candidate_preview` | `POST /api/preview` | Stage an isolated diff and run structural/API/compiler checks |
 
@@ -73,6 +73,42 @@ validates the current source seal before staging. Its response distinguishes
 compilation from recipe, test and behavior qualification. This tool has no source
 application authority. A GitHub build plan is a plan, not a build execution or a
 successful build result.
+
+## Find and evaluate challenge categories
+
+`problem_categories` with no arguments returns the existing algorithm evidence.
+For category navigation, select `LEETCODE`, `HACKERRANK` or `GEEKSFORGEEKS` and
+an exact category alias or prefix. These named tool decisions use the same
+canonical category owner as the repository service:
+
+```json
+{"type":"tool","name":"problem_categories","arguments":{"platform":"LEETCODE","category":"binary search","limit":10}}
+```
+
+```json
+{"type":"tool","name":"problem_categories","arguments":{"platform":"HACKERRANK","prefix":"dynamic","limit":10}}
+```
+
+```json
+{"type":"tool","name":"problem_categories","arguments":{"platform":"GEEKSFORGEEKS","shape":"BINARY_SEARCH","limit":10}}
+```
+
+A platform alone browses its reviewed routes. A shape alone searches across all
+three platforms; its name must exist in the service's canonical `AlgorithmShape`.
+Choose at most one of `category`, `prefix` and `shape`. Category and prefix require
+a platform and accept up to 256 UTF-8 bytes. Limits range from 1 to 64, defaulting
+to 25. A limit without a selector or platform is invalid. Empty results are valid
+when no reviewed route matches. `limitReached` means the returned count equals
+the limit; it does not prove that more results exist.
+
+Responses include the canonical catalogue root, reviewed URLs, algorithm shapes
+and taxonomy metadata. Use those references to evaluate an algorithm's fit, then
+inspect current repository sources and qualify an original candidate through
+`candidate_preview`. This endpoint searches the reviewed catalogue; it does not
+fetch live problem statements or solutions. Its `TAXONOMY_ONLY` authority does
+not permit source copying or promotion. The service retains its existing exact
+lookup, sorted prefix index and shape search; the Java/JNI adapter sends bounded
+queries to that owner.
 
 ## Session protocol and limits
 

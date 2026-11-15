@@ -31,40 +31,42 @@ final class McpStdioServer {
     private boolean negotiated;
     private boolean initialized;
 
+    private final List<AgentTool> workspaceTools;
+
     private McpStdioServer(ModelBackend backend, List<AgentSession.Tool> agentTools,
-                           AgentSession.Limits agentLimits) {
+                           AgentSession.Limits agentLimits, List<AgentTool> workspaceTools) {
         this.backend = Objects.requireNonNull(backend, "backend");
         this.agentTools = List.copyOf(agentTools);
         this.agentLimits = Objects.requireNonNull(agentLimits, "agentLimits");
-    private final List<AgentTool> agentTools;
-    private boolean negotiated;
-    private boolean initialized;
-
-    private McpStdioServer(ModelBackend backend, List<AgentTool> agentTools) {
-        this.backend = Objects.requireNonNull(backend, "backend");
-        this.agentTools = agentTools == null ? null : List.copyOf(agentTools);
+        this.workspaceTools = workspaceTools == null ? null : List.copyOf(workspaceTools);
     }
 
     /** Caller owns model, input and output streams. All processing is sequential. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output) throws IOException {
-        serve(backend, input, output, List.of(), AgentSession.Limits.defaults());
+        serve(backend, input, output, List.of(), AgentSession.Limits.defaults(), null);
     }
 
-    /** A configured tool set adds one bounded agent entry point; the caller owns all resources. */
+    /** A configured HTTP tool set adds one bounded agent entry point. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output,
                       List<AgentSession.Tool> agentTools, AgentSession.Limits limits) throws IOException {
-        McpStdioServer session = new McpStdioServer(backend, agentTools, limits);
-        serveTools(backend, input, output, null);
+        serve(backend, input, output, agentTools, limits, null);
     }
 
-    /** Workspace access is explicitly enabled by the process owner, never by a model argument. */
+    /** Workspace access is enabled by the process owner, never by a model argument. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output, Path workspace) throws IOException {
         serveTools(backend, input, output, workspace == null ? null : new WorkspaceTools(workspace).tools());
     }
 
     static void serveTools(ModelBackend backend, InputStream input, OutputStream output, List<AgentTool> tools)
             throws IOException {
-        McpStdioServer session = new McpStdioServer(backend, tools);
+        serve(backend, input, output, List.of(), AgentSession.Limits.defaults(), tools);
+    }
+
+    /** One wire session can expose both explicitly configured tool authorities. */
+    static void serve(ModelBackend backend, InputStream input, OutputStream output,
+                      List<AgentSession.Tool> agentTools, AgentSession.Limits limits,
+                      List<AgentTool> workspaceTools) throws IOException {
+        McpStdioServer session = new McpStdioServer(backend, agentTools, limits, workspaceTools);
         BufferedInputStream incoming = new BufferedInputStream(input);
         while (true) {
             String line = readLine(incoming);
@@ -156,7 +158,7 @@ final class McpStdioServer {
         if ("run_agent".equals(tool) && !agentTools.isEmpty()) {
             return runAgent(id, arguments);
         }
-        if ("agent_run".equals(tool) && agentTools != null) return runAgent(id, arguments);
+        if ("agent_run".equals(tool) && workspaceTools != null) return runWorkspaceAgent(id, arguments);
         if (!"infer_text".equals(tool)) return encoded(error(id, -32602, "Unknown tool"));
         if (!(arguments.get("prompt") instanceof String prompt) || prompt.isBlank()
                 || arguments.keySet().stream().anyMatch(k -> !List.of("prompt", "maxTokens", "timeoutSeconds").contains(k))) {
@@ -219,6 +221,12 @@ final class McpStdioServer {
         } catch (InterruptedException interruption) {
             Thread.currentThread().interrupt();
             return encoded(success(id, toolResult("Agent interrupted", true)));
+        }
+    }
+
+    private String runWorkspaceAgent(Object id, Map<?, ?> arguments) throws IOException {
+        if (!(arguments.get("goal") instanceof String goal) || goal.isBlank()
+                || arguments.keySet().stream().anyMatch(key -> !List.of(
                         "goal", "maxTokens", "timeoutSeconds", "maxSteps", "maxModelCalls").contains(key))) {
             return encoded(error(id, -32602, "Invalid agent arguments"));
         }
@@ -234,7 +242,7 @@ final class McpStdioServer {
             return encoded(error(id, -32602, "Invalid agent arguments"));
         }
         try {
-            AgentEngine.Result run = new AgentEngine(backend, agentTools, event -> { }).run(goal, maxTokens, limits);
+            AgentEngine.Result run = new AgentEngine(backend, workspaceTools, event -> { }).run(goal, maxTokens, limits);
             Map<String, Object> result = new LinkedHashMap<>(toolResult(run.answer(), false));
             result.put("structuredContent", run.asMap());
             return encoded(success(id, result));
@@ -291,7 +299,8 @@ final class McpStdioServer {
                             "required", List.of("goal")),
                     "annotations", Map.of("readOnlyHint", false, "destructiveHint", false,
                             "idempotentHint", false, "openWorldHint", false)));
-        if (agentTools != null) {
+        }
+        if (workspaceTools != null) {
             tools.add(Map.of("name", "agent_run", "description",
                     "Run a bounded plan/tool/result loop over the explicitly configured workspace using the selected model provider.",
                     "inputSchema", Map.of("type", "object", "additionalProperties", false,
