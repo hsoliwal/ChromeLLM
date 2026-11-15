@@ -173,8 +173,11 @@ final class McpJson {
                     if (input.length() - index < 4) throw invalid();
                     int code = 0;
                     for (int i = 0; i < 4; i++) {
-                        int d = Character.digit(input.charAt(index++), 16);
-                        if (d < 0 || d > 15) throw invalid();
+                        char digit = input.charAt(index++);
+                        int d = digit >= '0' && digit <= '9' ? digit - '0'
+                                : digit >= 'a' && digit <= 'f' ? digit - 'a' + 10
+                                : digit >= 'A' && digit <= 'F' ? digit - 'A' + 10 : -1;
+                        if (d < 0) throw invalid();
                         code = (code << 4) | d;
                     }
                     text.append((char) code);
