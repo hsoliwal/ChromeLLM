@@ -38,6 +38,12 @@
           <mainClass>io.synexia.chromellm.standalone.ProviderSelectionContractTestMain</mainClass>
           <classpathScope>test</classpathScope>
         </configuration>
+      </execution><execution>
+        <id>dawn-artifact-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.DawnArtifactProvisionerContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
       </execution></executions>
     </plugin>
   </plugins></build>
@@ -126,6 +132,68 @@
               <id>native-fork-build</id><phase>process-resources</phase><goals><goal>exec</goal></goals>
               <configuration><executable>cmake</executable><arguments>
                 <argument>--build</argument><argument>${project.build.directory}/native-fork</argument>
+                <argument>--config</argument><argument>Release</argument>
+                <argument>--parallel</argument><argument>2</argument>
+              </arguments></configuration>
+            </execution>
+          </executions>
+        </plugin>
+      </plugins></build>
+    </profile>
+    <profile>
+      <id>native-webgpu-artifact</id>
+      <build><plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>require-pinned-dawn-and-native-source</id><phase>validate</phase><goals><goal>enforce</goal></goals>
+            <configuration><rules>
+              <requireProperty>
+                <property>chromellm.native.source</property><regex>.*\S.*</regex>
+                <message>native-webgpu-artifact needs a separately supplied llama.cpp source checkout</message>
+              </requireProperty>
+              <requireProperty>
+                <property>chromellm.dawn.url</property><regex>https://github[.]com/.+</regex>
+                <message>Dawn release must be an explicitly selected HTTPS GitHub Release URL</message>
+              </requireProperty>
+              <requireProperty>
+                <property>chromellm.dawn.sha256</property><regex>[0-9a-fA-F]{64}</regex>
+                <message>Dawn release requires a complete 64-hex SHA-256 digest</message>
+              </requireProperty>
+            </rules></configuration>
+          </execution></executions>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
+          <executions>
+            <execution>
+              <id>verify-download-and-extract-dawn</id><phase>process-classes</phase><goals><goal>java</goal></goals>
+              <configuration>
+                <mainClass>io.synexia.chromellm.standalone.DawnArtifactProvisioner</mainClass>
+                <arguments>
+                  <argument>${chromellm.dawn.url}</argument>
+                  <argument>${chromellm.dawn.sha256}</argument>
+                  <argument>${project.basedir}</argument>
+                  <argument>${project.build.directory}</argument>
+                </arguments>
+              </configuration>
+            </execution>
+            <execution>
+              <id>configure-webgpu-fork-with-verified-dawn</id>
+              <phase>prepare-package</phase><goals><goal>exec</goal></goals>
+              <configuration><executable>cmake</executable><arguments>
+                <argument>-S</argument><argument>${project.basedir}/native</argument>
+                <argument>-B</argument><argument>${project.build.directory}/native-webgpu-jni</argument>
+                <argument>-DCHROMELLM_LLAMA_SOURCE_DIR=${chromellm.native.source}</argument>
+                <argument>-DCHROMELLM_WEBGPU=ON</argument>
+                <argument>-DCMAKE_PREFIX_PATH=${project.build.directory}/native-webgpu-assets/dawn</argument>
+                <argument>-DCMAKE_BUILD_TYPE=Release</argument>
+              </arguments></configuration>
+            </execution>
+            <execution>
+              <id>build-webgpu-fork-jni</id><phase>package</phase><goals><goal>exec</goal></goals>
+              <configuration><executable>cmake</executable><arguments>
+                <argument>--build</argument><argument>${project.build.directory}/native-webgpu-jni</argument>
                 <argument>--config</argument><argument>Release</argument>
                 <argument>--parallel</argument><argument>2</argument>
               </arguments></configuration>
