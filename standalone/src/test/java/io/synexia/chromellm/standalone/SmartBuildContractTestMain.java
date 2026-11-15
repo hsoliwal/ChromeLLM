@@ -5,6 +5,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.Comparator;
 import java.util.HexFormat;
@@ -18,6 +24,7 @@ public final class SmartBuildContractTestMain {
 
     public static void main(String[] args) throws Exception {
         Path root = Files.createTempDirectory("chromellm-smart-test-").toRealPath();
+        Path root = Files.createTempDirectory("chromellm-smart-test-");
         try {
             Path target = Files.createDirectories(root.resolve("target"));
             Files.writeString(root.resolve("prompt.txt"), "मॉडल prompt", StandardCharsets.UTF_8);
@@ -54,6 +61,22 @@ public final class SmartBuildContractTestMain {
             };
             rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), divergent));
             check(Files.readString(output).equals("candidate"), "conflict overwritten candidate");
+            AtomicInteger invalidTargetOpens = new AtomicInteger();
+            SmartBuildMain.ProviderFactory forbidden = (options, env) -> {
+                invalidTargetOpens.incrementAndGet();
+                throw new AssertionError("invalid output location admitted model preparation");
+            };
+            rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root,
+                    root.resolve("not-target"), Map.of(), forbidden));
+            check(invalidTargetOpens.get() == 0, "invalid target performed provider work");
+            // A sparse prior artifact must be rejected without allocating its claimed size.
+            long oversized = 256L * 1024 * 1024;
+            try (FileChannel file = FileChannel.open(output, StandardOpenOption.WRITE)) {
+                file.position(oversized);
+                file.write(ByteBuffer.wrap(new byte[] {0}));
+            }
+            rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
+            check(Files.size(output) == oversized + 1, "oversized collision was overwritten");
             Files.writeString(root.resolve("recipe.properties"), "promptFile=../outside.txt\nbackend=cli\n");
             rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
             Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=gemini\n");
@@ -65,6 +88,7 @@ public final class SmartBuildContractTestMain {
             Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\nmaxTokens=32769\n");
             rejectIllegal(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
             lazyModelOptions(root, target);
+            lazyRecipe(root, target);
             nativePin(root);
         } finally {
             try (var files = Files.walk(root)) {
@@ -101,6 +125,38 @@ public final class SmartBuildContractTestMain {
         Path candidate = SmartBuildMain.run(Path.of("lazy.properties"), root, target, Map.of(), lazy);
         check(calls.get() == 1 && Files.readString(candidate).equals("lazy candidate"),
                 "lazy model recipe was not executed");
+    private static void lazyRecipe(Path root, Path target) throws Exception {
+        Path cache = Files.createDirectory(root.resolve("model-cache"));
+        String digest = "a".repeat(64);
+        Files.writeString(root.resolve("lazy.properties"), String.join("\n",
+                "promptFile=prompt.txt", "backend=jni", "jniLib=/explicit/missing-library",
+                "modelUrl=https://example.invalid/licensed.gguf", "modelSha256=" + digest,
+                "modelCacheDir=" + cache.toString().replace("\\", "\\\\"),
+                "computeBackend=cpu", "gpuLayers=0") + "\n");
+        SmartBuildMain.ProviderFactory selection = (options, environment) -> {
+            check(options.get("--model-url").equals("https://example.invalid/licensed.gguf"),
+                    "lazy model URL selection lost");
+            check(options.get("--model-sha256").equals(digest), "lazy digest selection lost");
+            check(Path.of(options.get("--model-cache-dir")).equals(cache), "lazy cache selection lost");
+            check(!options.containsKey("--model"), "lazy model gained an implicit local path");
+            try (ModelBackend deferred = StandaloneMain.backend(options, environment)) {
+                check(deferred instanceof LazyModelBackend, "existing lazy provider was not selected");
+                check(((LazyModelBackend) deferred).progress().state() == ModelArtifactCache.State.UNPREPARED,
+                        "provider selection initialized a model eagerly");
+            }
+            try (var files = Files.list(cache)) {
+                check(files.findAny().isEmpty(), "provider selection wrote model artifacts");
+            }
+            // This Java-only selection fixture does not pretend to execute a native model.
+            return new ModelBackend() {
+                public String id() { return "llama.cpp-jni"; }
+                public ModelResponse infer(ModelRequest request) {
+                    return new ModelResponse("lazy selection fixture", id(), hash(request.prompt()));
+                }
+            };
+        };
+        Path output = SmartBuildMain.run(Path.of("lazy.properties"), root, target, Map.of(), selection);
+        check(Files.readString(output).equals("lazy selection fixture"), "lazy recipe result changed");
     }
 
     private static void nativePin(Path root) throws Exception {

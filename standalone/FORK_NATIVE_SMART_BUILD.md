@@ -17,6 +17,7 @@ a model runtime with a hosted provider.
 - `hsoliwal/dawn`: optional, separately built WebGPU dependency found by CMake
   using `CMAKE_PREFIX_PATH`. The existing `native-dawn` profile can instead
   acquire a platform-specific, checksum-pinned Dawn release package.
+  using `CMAKE_PREFIX_PATH`; it is not a browser dependency.
 - Chromium's `optimization_guide/core/model_execution` provides an architectural
   reference for manifest-driven assets, usage-triggered acquisition, and
   brokering. It is **not** copied verbatim into this change and Chromium
@@ -30,6 +31,15 @@ first-party authorship of donor code.
 The existing `mvn -f standalone/pom.xml verify` runs Java contract tests without
 model or native downloads. Maven plugin dependencies must already be cached to
 run it with `-o`.
+The existing `mvn -f standalone/pom.xml verify` remains unchanged and offline.
+Its Java contract suite also verifies the fork-source pin and inference recipe;
+no native library or model is required by those offline test fixtures.
+
+The existing `native-fork` and `native-synthetic` profiles remain available.
+Choose `fork-native` when the build must validate a complete Git commit pin before
+CMake runs. Maven rejects any pair of native build profiles during `validate`,
+before native configuration. Select one native build profile; `smart-build` can accompany
+the selected native profile when its recipe explicitly names that profile's output.
 
 `-Pfork-native` verifies a pinned *local source fork* before invoking CMake.
 Required properties:
@@ -63,6 +73,11 @@ Alternatively use `backend=cli` and `llamaBin`; or use `modelUrl`,
 backend parser validates each combination and does not silently fall back.
 The operator selects the JNI/CLI binary and either a local model or a pinned
 model URL. The existing lazy resolver downloads a missing URL-selected model.
+Model acquisition starts on the first inference through the existing lazy provider,
+with the bounded acquisition and shutdown behavior in
+[`LAZY_MODEL_CONTRACT.md`](LAZY_MODEL_CONTRACT.md). Reading the recipe and selecting
+the provider do not fetch weights or initialize a native model.
+The selected model and JNI/CLI binaries must be provided by the operator.
 `modelUrl` is an explicit, checksum-pinned HTTPS artifact, not a Chrome-managed
 proprietary model component.
 
@@ -90,12 +105,22 @@ WebGPU for the pinned source build and supplies the verified Dawn CMake prefix.
 Its platform support, archive hashes and cache-integrity contract are described
 in [NATIVE_MAVEN_BUILD.md](NATIVE_MAVEN_BUILD.md). The existing
 `-Pnative-fork,native-dawn` entry point remains available as well.
+To use the receiving baseline's `native-dawn` installer with a pinned fork build,
+first stage the verified dependency with
+`mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources`.
+Then run `fork-native` in a separate Maven invocation with
+`-Dchromellm.fork.webgpu=ON` and `-Dchromellm.fork.prefix` set to the absolute
+`standalone/target/native-deps/dawn` directory. The existing `native-dawn` profile
+also supports the existing `native-fork` profile as documented in
+[`NATIVE_MAVEN_BUILD.md`](NATIVE_MAVEN_BUILD.md). Its admission rules remain unchanged;
+do not combine `native-dawn` and `fork-native` in one invocation.
 
 Run the model **from the Maven build**, not from Chrome:
 
 ```sh
 mvn -B -ntp -f standalone/pom.xml -Psmart-build verify \
   -Dchromellm.smart.recipe=examples/smart-build.properties.example
+  -Dchromellm.smart.recipe=examples/smart-build.example.properties
 ```
 
 Edit the provided recipe first to select your JNI library and licensed GGUF
@@ -160,6 +185,9 @@ using an exclusive, atomically published artifact name keyed by recipe and
 prompt SHA-256. A separate receipt records recipe SHA-256, prompt SHA-256,
 candidate SHA-256, and backend identity; no prompt content or credentials are
 logged to the Maven console.
+The output location is validated before artifact acquisition or provider opening.
+Existing artifact comparisons read at most the expected bounded content size plus
+one byte; an oversized prior artifact is rejected without loading it into memory.
 
 On replay, identical artifacts are retained; a divergent model response for
 the same recipe and prompt hard-fails instead of silently replacing a prior

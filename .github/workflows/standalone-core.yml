@@ -24,12 +24,14 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          if mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic,native-fork -Dchromellm.native.source=/unavailable-for-validation validate > profile-conflict.log 2>&1; then
-            echo 'Both native build profiles unexpectedly passed validate' >&2
-            exit 1
-          fi
-          cat profile-conflict.log
-          grep -F 'native-synthetic and native-fork cannot be active together' profile-conflict.log
+          for profiles in native-synthetic,native-fork fork-native,native-synthetic fork-native,native-fork; do
+            if mvn -B -ntp -f standalone/pom.xml -P"$profiles" -Dchromellm.native.source=/unavailable-for-validation validate > profile-conflict.log 2>&1; then
+              echo "Conflicting native profiles unexpectedly passed validate: $profiles" >&2
+              exit 1
+            fi
+            cat profile-conflict.log
+            grep -E 'native-synthetic and native-fork cannot be active together|fork-native cannot be combined with another native build profile' profile-conflict.log
+          done
           test ! -e standalone/target/native-synthetic/CMakeCache.txt
           test ! -e standalone/target/native-fork/CMakeCache.txt
           for mode in fork synthetic; do
@@ -49,6 +51,7 @@ jobs:
           fi
           cat dawn-profile-conflict.log
           grep -F 'native-dawn requires the pinned fork WebGPU=ON' dawn-profile-conflict.log
+          test ! -e standalone/target/fork-native/CMakeCache.txt
       - name: Verify JDK-only runtime modules
         shell: bash
         run: test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar | tr -d '\r')" = java.base,java.net.http
