@@ -54,13 +54,14 @@ public final class LlamaCppCliBackend implements ModelBackend {
     @Override
     public ModelResponse infer(ModelRequest request) throws IOException, InterruptedException, TimeoutException {
         Objects.requireNonNull(request, "request");
-        Path promptFile = Files.createTempFile(scratch, "chromellm-prompt-", ".txt");
-        Path stdoutFile = null;
-        Path stderrFile = null;
-        try {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedException("model inference interrupted before start");
+        }
+        try (InferenceFiles files = new InferenceFiles()) {
+            Path promptFile = files.create(scratch, "chromellm-prompt-");
             Files.writeString(promptFile, request.prompt(), StandardCharsets.UTF_8);
-            stdoutFile = Files.createTempFile(scratch, "chromellm-stdout-", ".txt");
-            stderrFile = Files.createTempFile(scratch, "chromellm-stderr-", ".txt");
+            Path stdoutFile = files.create(scratch, "chromellm-stdout-");
+            Path stderrFile = files.create(scratch, "chromellm-stderr-");
             Process process = startProcess(request, promptFile, stdoutFile, stderrFile);
             awaitProcess(process, request);
             if (process.exitValue() != 0) {
@@ -74,10 +75,36 @@ public final class LlamaCppCliBackend implements ModelBackend {
                 throw new IOException("llama.cpp CLI produced no candidate text");
             }
             return new ModelResponse(text, id(), sha256(request.prompt()));
-        } finally {
-            Files.deleteIfExists(promptFile);
-            if (stdoutFile != null) Files.deleteIfExists(stdoutFile);
-            if (stderrFile != null) Files.deleteIfExists(stderrFile);
+        }
+    }
+
+    /** Owns only the three files created for one invocation; never follows replacements. */
+    private static final class InferenceFiles implements AutoCloseable {
+        private final Path[] paths = new Path[3];
+        private int count;
+
+        private Path create(Path directory, String prefix) throws IOException {
+            if (count == paths.length) throw new IllegalStateException("inference file limit exceeded");
+            Path file = Files.createTempFile(directory, prefix, ".txt");
+            paths[count++] = file;
+            return file;
+        }
+
+        @Override
+        public void close() throws IOException {
+            Exception failure = null;
+            for (int i = 0; i < count; i++) {
+                try {
+                    Files.deleteIfExists(paths[i]);
+                } catch (IOException | RuntimeException cleanup) {
+                    if (failure == null) failure = cleanup;
+                    else failure.addSuppressed(cleanup);
+                }
+            }
+            // try-with-resources retains an inference failure and suppresses this cleanup
+            // failure; without a primary failure, callers still learn that cleanup failed.
+            if (failure instanceof IOException io) throw io;
+            if (failure instanceof RuntimeException runtime) throw runtime;
         }
     }
 
