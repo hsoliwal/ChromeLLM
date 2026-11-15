@@ -50,7 +50,13 @@ mvn -B -ntp -f standalone/pom.xml -Pnative-webgpu-artifact verify \
 
 The URL and digest above are **placeholders**, not a verified published binary.
 The currently inspected `hsoliwal/dawn` fork uploads GitHub Actions archives,
-but has no published GitHub Release to download by this URL. A release must be
+but has no published GitHub Release to download by this URL. An observed
+public candidate is `reeselevine/dawn` tag `v2.0.0`, packaged as ZIP wrapping
+a `Dawn-*.tar.gz`; GitHub reports the Ubuntu ZIP's SHA-256 as
+`a5a87d9513e1fc109c355628baebe6b85fe7aa258f8ed2d2cf71ddc902e778bb`.
+Its actual compatibility with the selected native source still requires CI
+execution. The opt-in workflow dispatch supplies that observed identity by
+default and can be overridden with a qualified `hsoliwal/dawn` release. A release must be
 published and audited before a real network qualification can run.
 
 The archive is verified before extraction, stored only under `target/`, and
