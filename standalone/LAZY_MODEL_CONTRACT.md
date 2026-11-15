@@ -23,9 +23,10 @@ hard link only on successful verification. Directory creation, implicit writes
 to home/root, and silent repair of corrupted cached artifacts are forbidden.
 
 The artifact is acquired before native or subprocess model initialization. The
-request's inference timeout applies to inference after successful acquisition;
-network acquisition has its own fixed maximum duration. Close does not delete
-verified cache contents. This opt-in feature does not download proprietary
+request's inference timeout applies to inference after successful acquisition.
+The HTTPS connection/request has fixed JDK timeouts, but reading its streamed body
+is not guaranteed to obey an end-to-end wall-clock deadline; interruption is
+supported by the JDK transport. Close does not delete verified cache contents. This opt-in feature does not download proprietary
 Chrome-managed Gemini Nano artifacts, which are not portable GGUF weights.
 
 WebMCP and MCP are separate capabilities: WebMCP tools are declared by a browser
