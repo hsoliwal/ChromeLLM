@@ -346,6 +346,20 @@ public final class ModelArtifactCacheContractTestMain {
                 && request.headers().firstValue("Accept-Encoding").orElseThrow().equals("identity")),
                 "request deadline or identity encoding missing");
 
+        TrackedStream oversized = new TrackedStream(fixture);
+        FakeTransport bounded = new FakeTransport(response(200,
+                Map.of("Content-Length", List.of(Integer.toString(fixture.length))), oversized));
+        rejectIo(() -> ModelArtifactCache.fetch(start, fixture.length - 1, bounded, Duration.ofSeconds(5)));
+        check(bounded.closes.get() == 1 && oversized.closes.get() == 1,
+                "bounded transport accepted oversized headers or leaked its response/client");
+
+        TrackedStream cycleBody = new TrackedStream(new byte[0]);
+        FakeTransport cycle = new FakeTransport(response(302,
+                Map.of("Location", List.of(start.toString())), cycleBody));
+        rejectIo(() -> ModelArtifactCache.fetch(start, cycle, Duration.ofSeconds(5)));
+        check(cycle.requests.size() == 1 && cycle.closes.get() == 1 && cycleBody.closes.get() == 1,
+                "redirect cycle was followed or leaked its response/client");
+
         for (String unsafe : List.of("http://cdn.example.invalid/file", "https://u:p@cdn.example.invalid/file",
                 "https://cdn.example.invalid/file#fragment", "https://cdn.example.invalid:70000/file")) {
             TrackedStream redirect = new TrackedStream(new byte[0]);

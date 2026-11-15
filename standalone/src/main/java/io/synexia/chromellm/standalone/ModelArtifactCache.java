@@ -424,6 +424,11 @@ final class ModelArtifactCache {
         return fetch(initialUrl, transport, timeout, false, MAX_BYTES);
     }
 
+    static InputStream fetch(URI initialUrl, long maxBytes, Transport transport, Duration timeout)
+            throws IOException, InterruptedException {
+        return fetch(initialUrl, transport, timeout, githubRelease(initialUrl), maxBytes);
+    }
+
     private static InputStream fetch(URI initialUrl, Transport transport, Duration timeout,
                                      boolean releaseOnly, long maxBytes) throws IOException, InterruptedException {
         Objects.requireNonNull(transport, "transport");
@@ -457,7 +462,8 @@ final class ModelArtifactCache {
                     }
                     try { current = validateUrl(current.resolve(locations.getFirst())); }
                     catch (IllegalArgumentException invalid) {
-                        throw new IOException("artifact redirect must preserve HTTPS without credentials or fragment", invalid);
+                        // Do not expose a malformed signed Location value through an exception cause.
+                        throw new IOException("artifact redirect must preserve HTTPS without credentials or fragment");
                     }
                     if (releaseOnly && (!httpsDefaultPort(current) || (!githubRelease(current)
                             && !"release-assets.githubusercontent.com".equalsIgnoreCase(current.getHost())))) {

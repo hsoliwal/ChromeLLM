@@ -25,6 +25,7 @@ public final class StandaloneMain {
         Map<String, String> options = parse(args);
         validateAgentMode(options);
         if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
+            validateChromeModes(options);
             Path goalFile = Path.of(required(options, "--prompt-file"));
             AgentSession.Limits limits = agentLimits(options);
             String goal = readAgentGoal(goalFile, limits);
