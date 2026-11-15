@@ -44,6 +44,23 @@ jobs:
           done
           test ! -e standalone/target/native-synthetic/CMakeCache.txt
           test ! -e standalone/target/native-fork/CMakeCache.txt
+          for mode in fork synthetic; do
+            if mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic,fork-native \
+                -Dchromellm.native.mode="$mode" validate > fork-profile-conflict.log 2>&1; then
+              echo 'Synthetic and pinned fork profiles unexpectedly passed validate' >&2
+              exit 1
+            fi
+            cat fork-profile-conflict.log
+            grep -E 'native-synthetic and (native-fork|fork-native) cannot be active together' fork-profile-conflict.log
+          done
+          test ! -e standalone/target/fork-native/CMakeCache.txt
+          if mvn -B -ntp -f standalone/pom.xml -Pfork-native,native-dawn \
+              -Dchromellm.fork.webgpu=OFF validate > dawn-profile-conflict.log 2>&1; then
+            echo 'Dawn and a disabled pinned fork WebGPU backend unexpectedly passed validate' >&2
+            exit 1
+          fi
+          cat dawn-profile-conflict.log
+          grep -F 'native-dawn requires the pinned fork WebGPU=ON' dawn-profile-conflict.log
           test ! -e standalone/target/fork-native/CMakeCache.txt
       - name: Verify JDK-only runtime modules
         shell: bash
@@ -132,6 +149,26 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+  native-binaries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+  real-cpu-smart-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      LLAMA_COMMIT: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+      MODEL_SHA256: 8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684
+      MODEL_BYTES: '105454144'
+      MODEL_URL: https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/weights.bin
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -167,3 +204,110 @@ jobs:
             chrome-status.log
             chrome-infer.log
           retention-days: 7
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/chromellm
+          key: linux-x64-chromellm-binaries-${{ hashFiles('standalone/src/main/java/io/synexia/chromellm/standalone/NativeBuildArtifacts.java') }}
+          restore-keys: linux-x64-chromellm-binaries-
+      - name: Install the software Vulkan test driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+          driver=$(find /usr/share/vulkan/icd.d -maxdepth 1 -name '*lvp*.json' -print -quit)
+          test -n "$driver"
+          echo "VK_ICD_FILENAMES=$driver" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Maven downloads, verifies and executes the Dawn binary
+        run: mvn -B -ntp -f standalone/pom.xml -Pdawn-binary verify
+      - name: Checkout the public source used by the existing real-model CI
+      - name: Check out exact public llama.cpp source for the CPU test
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+          path: external/llama.cpp
+          persist-credentials: false
+      - name: Maven builds JNI and downloads the pinned real model for inference
+        shell: bash
+        run: |
+          mvn -B -ntp -f standalone/pom.xml -Pfork-native,real-model verify \
+            -Dchromellm.fork.source="$GITHUB_WORKSPACE/external/llama.cpp" \
+            -Dchromellm.fork.commit=889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b
+      - name: Verify binary cache reuse without network access
+        run: mvn -o -B -ntp -f standalone/pom.xml -Pdawn-binary,real-model process-classes
+      - name: Build the current real CPU JNI bridge through Maven
+        run: |
+          set -euo pipefail
+          test "$(git -C external/llama.cpp rev-parse HEAD)" = "$LLAMA_COMMIT"
+          mvn -B -ntp -f standalone/pom.xml -Pnative-fork \
+            -Dchromellm.native.source="$GITHUB_WORKSPACE/external/llama.cpp" \
+            -Dchromellm.native.webgpu=OFF verify
+          test -s standalone/target/native-fork/libchromellm_llama_jni.so
+      - name: Prepare the explicit real-model Smart Build recipe
+        # Apache-2.0 SmolLM2-135M-Instruct Q4_K_M, unchanged GGUF v3 named weights.bin.
+        # https://github.com/hsoliwal/ChromeLLM/releases/tag/model-smollm2-135m-q4km-8030f045
+        # https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/LICENSE
+        # https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/NOTICE.txt
+        run: |
+          set -euo pipefail
+          python3 - <<'PYTHON'
+          import os
+          from pathlib import Path
+          root = Path.cwd() / 'standalone'
+          work = root / 'target' / 'real-cpu-smoke'
+          cache = root / 'target' / 'model-cache'
+          work.mkdir(parents=True, exist_ok=True)
+          cache.mkdir(parents=True, exist_ok=True)
+          prompt = '<|im_start|>user\nWrite one short sentence about an oak tree.<|im_end|>\n<|im_start|>assistant\n'
+          (work / 'prompt.txt').write_text(prompt, encoding='utf-8')
+          values = {
+              'promptFile': 'target/real-cpu-smoke/prompt.txt',
+              'backend': 'jni',
+              'jniLib': str(root / 'target/native-fork/libchromellm_llama_jni.so'),
+              'modelUrl': os.environ['MODEL_URL'],
+              'modelSha256': os.environ['MODEL_SHA256'],
+              'modelCacheDir': str(cache),
+              'computeBackend': 'cpu', 'gpuLayers': '0',
+              'contextTokens': '512', 'threads': '2',
+              'maxTokens': '48', 'timeoutSeconds': '90',
+          }
+          (work / 'smart-build.properties').write_text(
+              ''.join(key + '=' + value + '\n' for key, value in values.items()), encoding='utf-8')
+          PYTHON
+      - name: Download the pinned release and execute Maven Smart Build
+        env:
+          MAVEN_OPTS: '-Xcheck:jni'
+        run: |
+          set -euo pipefail
+          # Start cold so every run proves the Java GitHub-release download path.
+          # The following contract step proves reuse of this same verified cache.
+          test ! -e "standalone/target/model-cache/$MODEL_SHA256.gguf"
+          mvn -B -ntp -f standalone/pom.xml -Psmart-build verify \
+            -Dchromellm.smart.recipe=target/real-cpu-smoke/smart-build.properties \
+            2>&1 | tee standalone/target/real-cpu-smoke/maven-smart-build.log
+          test "$(stat -c %s "standalone/target/model-cache/$MODEL_SHA256.gguf")" = "$MODEL_BYTES"
+          echo "$MODEL_SHA256  standalone/target/model-cache/$MODEL_SHA256.gguf" | sha256sum --check
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' standalone/target/real-cpu-smoke/maven-smart-build.log; then
+            echo 'Real-model Maven JNI warning gate failed' >&2
+            exit 1
+          fi
+      - name: Verify real inference, warm cache, corruption rejection and native close
+        run: |
+          set -euo pipefail
+          java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
+            io.synexia.chromellm.standalone.RealGgufContractTestMain \
+            "$GITHUB_WORKSPACE/standalone/target/native-fork/libchromellm_llama_jni.so" \
+            "$GITHUB_WORKSPACE/standalone/target/model-cache" \
+            "$GITHUB_WORKSPACE/standalone/target/real-cpu-smoke" \
+            "$MODEL_URL" "$MODEL_SHA256" \
+            2>&1 | tee standalone/target/real-cpu-smoke/real-gguf.log
+          grep -F 'PASS: real GGUF CPU smart build, cache reuse, corruption refusal, receipts and close' \
+            standalone/target/real-cpu-smoke/real-gguf.log
+          if grep -E 'WARNING in native method|FATAL ERROR in native method' standalone/target/real-cpu-smoke/real-gguf.log; then
+            echo 'Real-model native contract JNI warning gate failed' >&2
+            exit 1
+          fi

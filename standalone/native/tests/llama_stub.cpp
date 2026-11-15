@@ -60,7 +60,7 @@ static bool correctSelection(const char* path, const llama_model_params& p) {
     }
     if (name.find("require-cpu") != std::string::npos) {
         return p.devices != nullptr && p.devices[0] == nullptr && p.n_gpu_layers == 0
-            && p.split_mode == LLAMA_SPLIT_MODE_NONE && p.main_gpu == 0;
+            && p.split_mode == LLAMA_SPLIT_MODE_NONE && p.main_gpu == -1;
     }
     if (name.find("require-default") != std::string::npos) {
         return p.devices == nullptr && p.n_gpu_layers == 0

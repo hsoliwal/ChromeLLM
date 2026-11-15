@@ -2,6 +2,9 @@
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +23,7 @@ public final class SmartBuildContractTestMain {
     private SmartBuildContractTestMain() { }
 
     public static void main(String[] args) throws Exception {
+        Path root = Files.createTempDirectory("chromellm-smart-test-").toRealPath();
         Path root = Files.createTempDirectory("chromellm-smart-test-");
         try {
             Path target = Files.createDirectories(root.resolve("target"));
@@ -83,6 +87,28 @@ public final class SmartBuildContractTestMain {
             rejectIllegal(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
             Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\nmaxTokens=32769\n");
             rejectIllegal(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
+            Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\n"
+                    + "llamaBin=bin/llama-cli\nmodel=models/model.gguf\n");
+            int beforeInvalidTarget = requests.get();
+            rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, root, Map.of(), provider));
+            check(requests.get() == beforeInvalidTarget, "invalid target opened provider");
+            SmartBuildMain.ProviderFactory relative = (options, env) -> {
+                check(options.get("--llama-bin").equals(root.resolve("bin/llama-cli").toString()), "relative launcher root");
+                check(options.get("--model").equals(root.resolve("models/model.gguf").toString()), "relative model root");
+                return new ModelBackend() {
+                    public String id() { return "llama.cpp-cli"; }
+                    public ModelResponse infer(ModelRequest request) {
+                        return new ModelResponse("relative-candidate", id(), hash(request.prompt()));
+                    }
+                };
+            };
+            SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), relative);
+            Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\n"
+                    + "llamaBin=bin/llama-cli\nmodelUrl=https://example.invalid/model\n"
+                    + "modelSha256=" + "0".repeat(64) + "\nmodelCacheDir=offline-cache\n");
+            rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider, true));
+            check(requests.get() == beforeInvalidTarget, "offline cache miss opened provider");
+            lazyModelOptions(root, target);
             lazyRecipe(root, target);
             nativePin(root);
         } finally {
@@ -93,6 +119,33 @@ public final class SmartBuildContractTestMain {
         System.out.println("fork-native smart-build contract checks passed: " + checks);
     }
 
+    private static void lazyModelOptions(Path root, Path target) throws Exception {
+        Files.writeString(root.resolve("lazy.properties"), String.join("\n",
+                "promptFile=prompt.txt", "backend=jni", "jniLib=/explicit/chromellm-jni",
+                "modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/pinned/weights.bin",
+                "modelSha256=" + "a".repeat(64), "modelCacheDir=/explicit/cache",
+                "computeBackend=cpu", "gpuLayers=0", "maxTokens=8", "timeoutSeconds=10") + "\n");
+        AtomicInteger calls = new AtomicInteger();
+        SmartBuildMain.ProviderFactory lazy = (options, environment) -> {
+            check(options.get("--backend").equals("jni"), "JNI provider selection lost");
+            check(options.get("--jni-lib").equals("/explicit/chromellm-jni"), "JNI library lost");
+            check(options.get("--model-url").endsWith("/pinned/weights.bin"), "model URL lost");
+            check(options.get("--model-sha256").equals("a".repeat(64)), "model digest lost");
+            check(options.get("--model-cache-dir").equals("/explicit/cache"), "model cache lost");
+            check(!options.containsKey("--model"), "lazy model replaced with a local path");
+            check(options.get("--compute-backend").equals("cpu") && options.get("--gpu-layers").equals("0"),
+                    "explicit CPU policy lost");
+            return new ModelBackend() {
+                public String id() { return "llama.cpp-jni"; }
+                public ModelResponse infer(ModelRequest request) {
+                    calls.incrementAndGet();
+                    return new ModelResponse("lazy candidate", id(), hash(request.prompt()));
+                }
+            };
+        };
+        Path candidate = SmartBuildMain.run(Path.of("lazy.properties"), root, target, Map.of(), lazy);
+        check(calls.get() == 1 && Files.readString(candidate).equals("lazy candidate"),
+                "lazy model recipe was not executed");
     private static void lazyRecipe(Path root, Path target) throws Exception {
         Path cache = Files.createDirectory(root.resolve("model-cache"));
         String digest = "a".repeat(64);
@@ -146,6 +199,8 @@ public final class SmartBuildContractTestMain {
         Files.writeString(source.resolve("include/llama.h"), "// changed\n");
         rejectIo(() -> ForkSourcePin.verify(source, sha));
         rejectIllegal(() -> ForkSourcePin.verify(source, "not-a-sha"));
+        git(source, "restore", "include/llama.h");
+        ForkSourcePin.verify(source, sha);
         Files.writeString(source.resolve("untracked.c"), "// untracked\n");
         rejectIo(() -> ForkSourcePin.verify(source, sha));
     }

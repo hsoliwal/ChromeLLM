@@ -9,6 +9,12 @@ ChromeLLM provides an independent Java 21 model runtime with explicit local CLI/
 
 Run `mvn -f standalone/pom.xml verify` with JDK 21, Maven and Node.js 22 to compile the module and run its local-process, loopback HTTP, protocol, browser-script and provider-selection contract tests. Node executes the fixed script test harness only; the Java product has no Node runtime dependency. These tests require no API key, installed browser or downloaded model.
 
+**Download and test native binaries with Maven:** `mvn -f standalone/pom.xml
+-Pdawn-binary verify` downloads the pinned Linux x86_64 Dawn package and tests real
+Vulkan/WGSL compute. Add `-Preal-model` to a native source build to fetch the pinned
+GGUF and run Java/JNI inference. Downloads use a reverified SHA-256 cache and honor
+Maven offline mode. See the [binary build guide](standalone/FORK_NATIVE_SMART_BUILD.md#maven-downloads-and-tests-binary-inputs).
+
 **Fork-native Maven smart build:** `-Pfork-native` verifies an explicitly pinned
 local `synexia-llmcpp` source checkout and compiles the JNI bridge through CMake,
 with optional separately installed Dawn/WebGPU. `-Psmart-build` runs an explicit

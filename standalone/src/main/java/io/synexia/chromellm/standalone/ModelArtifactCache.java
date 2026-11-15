@@ -27,11 +27,13 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 /** Lazy, checksum-pinned model acquisition owned by the native host, independent of a browser. */
 final class ModelArtifactCache {
     static final long MAX_BYTES = 64L * 1024 * 1024 * 1024;
+    static final int MAX_REDIRECTS = 5;
     private static final Duration ACQUISITION_TIMEOUT = Duration.ofHours(1);
     // Only active acquisitions retain a gate; unrelated model identities never share a lock.
     private static final ArrayList<Gate> GATES = new ArrayList<>();
@@ -49,17 +51,35 @@ final class ModelArtifactCache {
         InputStream open(URI uri) throws IOException, InterruptedException;
     }
 
+    /** Narrow HTTP test seam; callers of the cache still use the original Downloader contract. */
+    interface Transport extends AutoCloseable {
+        HttpResponse<InputStream> send(HttpRequest request) throws IOException, InterruptedException;
+        @Override void close();
+    }
+
     private final URI url;
     private final String sha256;
     private final Path directory;
     private final Downloader downloader;
     private final long maxBytes;
+    private final long expectedBytes;
+    private final String suffix;
     private final Duration acquisitionTimeout;
     private volatile Attempt latest;
     private static final Progress UNPREPARED = new Progress(State.UNPREPARED, 0);
 
     ModelArtifactCache(String url, String sha256, Path directory) {
         this(url, sha256, directory, ModelArtifactCache::fetch, MAX_BYTES);
+    }
+
+    /** Native archives/binaries require both an exact byte count and a SHA-256 pin. */
+    ModelArtifactCache(String url, String sha256, Path directory, long expectedBytes) {
+        this(url, sha256, directory, ModelArtifactCache::fetch, expectedBytes, expectedBytes, ".bin");
+    }
+
+    ModelArtifactCache(String rawUrl, String rawSha256, Path cache, Downloader downloader,
+                       long maxBytes, long expectedBytes, String suffix) {
+        this(rawUrl, rawSha256, cache, downloader, maxBytes, ACQUISITION_TIMEOUT, expectedBytes, suffix);
     }
 
     /** Package-private transport seam; synthetic tests do not acquire licensed model data. */
@@ -69,13 +89,12 @@ final class ModelArtifactCache {
 
     ModelArtifactCache(String rawUrl, String rawSha256, Path cache, Downloader downloader,
                        long maxBytes, Duration acquisitionTimeout) {
-        Objects.requireNonNull(rawUrl, "url");
-        this.url = URI.create(rawUrl);
-        if (!"https".equalsIgnoreCase(url.getScheme()) || url.getHost() == null
-                || url.getHost().isBlank() || url.getRawUserInfo() != null
-                || url.getRawFragment() != null || url.getPort() == 0) {
-            throw new IllegalArgumentException("model URL must be an HTTPS URL without credentials or fragment");
-        }
+        this(rawUrl, rawSha256, cache, downloader, maxBytes, acquisitionTimeout, -1, ".gguf");
+    }
+
+    private ModelArtifactCache(String rawUrl, String rawSha256, Path cache, Downloader downloader,
+                               long maxBytes, Duration acquisitionTimeout, long expectedBytes, String suffix) {
+        this.url = validateUrl(URI.create(Objects.requireNonNull(rawUrl, "url")));
         if (rawSha256 == null || !rawSha256.matches("[0-9a-fA-F]{64}")) {
             throw new IllegalArgumentException("model SHA-256 must contain 64 hex digits");
         }
@@ -86,6 +105,15 @@ final class ModelArtifactCache {
             throw new IllegalArgumentException("invalid artifact byte bound");
         }
         this.maxBytes = maxBytes;
+        if (expectedBytes != -1 && (expectedBytes < 1 || expectedBytes > maxBytes)) {
+            throw new IllegalArgumentException("invalid expected artifact byte count");
+        }
+        if ((!".gguf".equals(suffix) && !".bin".equals(suffix))
+                || (".bin".equals(suffix) && expectedBytes < 1)) {
+            throw new IllegalArgumentException("binary artifacts require a size pin and supported suffix");
+        }
+        this.expectedBytes = expectedBytes;
+        this.suffix = suffix;
         this.acquisitionTimeout = Objects.requireNonNull(acquisitionTimeout, "acquisition timeout");
         if (acquisitionTimeout.isZero() || acquisitionTimeout.isNegative()
                 || acquisitionTimeout.compareTo(ACQUISITION_TIMEOUT) > 0) {
@@ -99,12 +127,16 @@ final class ModelArtifactCache {
     }
 
     Path resolve() throws IOException, InterruptedException {
+        return resolveWithOfflinePolicy(false);
+    }
+
+    Path resolveWithOfflinePolicy(boolean offline) throws IOException, InterruptedException {
         if (Thread.currentThread().isInterrupted()) throw new InterruptedException("model acquisition interrupted");
         long deadline = System.nanoTime() + acquisitionTimeout.toNanos();
         Attempt attempt = new Attempt();
         latest = attempt;
         attempt.observe(State.WAITING, 0);
-        FutureTask<Path> result = new FutureTask<>(() -> acquire(attempt));
+        FutureTask<Path> result = new FutureTask<>(() -> acquire(attempt, offline));
         attempt.worker = Thread.ofVirtual().name("chromellm-model-acquisition").unstarted(result);
         attempt.worker.start();
         try {
@@ -129,14 +161,14 @@ final class ModelArtifactCache {
         }
     }
 
-    private Path acquire(Attempt attempt) throws IOException, InterruptedException {
+    private Path acquire(Attempt attempt, boolean offline) throws IOException, InterruptedException {
         try {
             attempt.check();
             if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
                     || !Files.isWritable(directory)) {
                 throw new IOException("model cache directory must exist and be writable");
             }
-            Path target = directory.toRealPath().resolve(sha256 + ".gguf");
+            Path target = directory.toRealPath().resolve(sha256 + suffix);
             Gate gate = retain(target);
             boolean locked = false;
             try {
@@ -149,6 +181,7 @@ final class ModelArtifactCache {
                     attempt.observe(State.AVAILABLE, Files.size(target));
                     return target;
                 }
+                if (offline) throw new IOException("artifact is missing from the verified offline cache");
                 return download(target, attempt);
             } finally {
                 if (locked) gate.lock.unlock();
@@ -182,7 +215,8 @@ final class ModelArtifactCache {
                 }
             }
             attempt.check();
-            if (count == 0 || !MessageDigest.isEqual(digest.digest(), HexFormat.of().parseHex(sha256))) {
+            if (count == 0 || (expectedBytes >= 0 && count != expectedBytes)
+                    || !MessageDigest.isEqual(digest.digest(), HexFormat.of().parseHex(sha256))) {
                 throw new IOException("model artifact SHA-256 mismatch or empty download");
             }
             // This check admits one verified publication; no filesystem call holds a cancellation lock.
@@ -214,6 +248,9 @@ final class ModelArtifactCache {
         if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("cached model is not a regular file");
         }
+        if (expectedBytes >= 0 && Files.size(target) != expectedBytes) {
+            throw new IOException("cached artifact byte count mismatch");
+        }
         MessageDigest digest = digest();
         long size = 0;
         attempt.observe(State.VERIFYING, 0);
@@ -229,7 +266,8 @@ final class ModelArtifactCache {
             }
         }
         attempt.check();
-        if (size == 0 || !MessageDigest.isEqual(digest.digest(), HexFormat.of().parseHex(sha256))) {
+        if (size == 0 || (expectedBytes >= 0 && size != expectedBytes)
+                || !MessageDigest.isEqual(digest.digest(), HexFormat.of().parseHex(sha256))) {
             throw new IOException("cached model SHA-256 mismatch");
         }
     }
@@ -322,34 +360,228 @@ final class ModelArtifactCache {
     private static InputStream fetch(URI url) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(Duration.ofSeconds(20)).build();
+        return fetch(url, new Transport() {
+            @Override public HttpResponse<InputStream> send(HttpRequest request)
+                    throws IOException, InterruptedException {
+                return client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            }
+            @Override public void close() {
+                // close() waits indefinitely for outstanding operations; abort them on cancellation.
+                client.shutdownNow();
+            }
+        }, ACQUISITION_TIMEOUT);
+    }
+
+    static InputStream fetch(URI initialUrl, Transport transport, Duration timeout)
+            throws IOException, InterruptedException {
+        Objects.requireNonNull(transport, "transport");
+        DownloadLifetime lifetime = new DownloadLifetime(transport, timeout);
         try {
-            HttpRequest request = HttpRequest.newBuilder(url).timeout(ACQUISITION_TIMEOUT)
-                    .header("Accept-Encoding", "identity").GET().build();
-            HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            InputStream body = new FilterInputStream(response.body()) {
+            URI current = validateUrl(initialUrl);
+            for (int redirects = 0; ; redirects++) {
+                lifetime.check();
+                HttpRequest request = HttpRequest.newBuilder(current).timeout(lifetime.remaining())
+                        .header("Accept-Encoding", "identity").GET().build();
+                HttpResponse<InputStream> response = transport.send(request);
+                InputStream input = Objects.requireNonNull(response.body(), "response body");
+                lifetime.attach(input);
+                int status = response.statusCode();
+                if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
+                    lifetime.releaseBody();
+                    if (redirects >= MAX_REDIRECTS) throw new IOException("artifact redirect limit exceeded");
+                    var locations = response.headers().allValues("Location");
+                    if (locations.size() != 1) throw new IOException("artifact redirect needs one Location header");
+                    try { current = validateUrl(current.resolve(locations.getFirst())); }
+                    catch (IllegalArgumentException invalid) {
+                        throw new IOException("artifact redirect must preserve HTTPS without credentials or fragment", invalid);
+                    }
+                    continue;
+                }
+                if (status != 200) throw new IOException("artifact download returned HTTP " + status);
+                var encodings = response.headers().allValues("Content-Encoding");
+                long contentLength;
+                try { contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1); }
+                catch (NumberFormatException malformed) { throw new IOException("invalid artifact Content-Length", malformed); }
+                if ((!encodings.isEmpty() && (encodings.size() != 1
+                        || !"identity".equalsIgnoreCase(encodings.getFirst())))
+                        || contentLength < -1 || contentLength > MAX_BYTES) {
+                    throw new IOException("artifact has unsupported encoding or size");
+                }
+                return new FilterInputStream(input) {
+                    private boolean closed;
+                    @Override public int read() throws IOException {
+                        byte[] one = new byte[1];
+                        return read(one, 0, 1) == -1 ? -1 : Byte.toUnsignedInt(one[0]);
+                    }
+                    @Override public int read(byte[] bytes, int offset, int length) throws IOException {
+                        Objects.checkFromIndexSize(offset, length, bytes.length);
+                        lifetime.check();
+                        if (closed) throw new IOException("artifact download stream is closed");
+                        if (length == 0) return 0;
+                        try {
+                            int result = in.read(bytes, offset, length);
+                            lifetime.check();
+                            if (result == -1) close();
+                            return result;
+                        } catch (IOException failure) {
+                            try { close(); } catch (IOException cleanup) { failure.addSuppressed(cleanup); }
+                            lifetime.check();
+                            throw failure;
+                        }
+                    }
+                    @Override public void close() throws IOException {
+                        if (!closed) { closed = true; lifetime.close(); }
+                    }
+                };
+            }
+        } catch (IOException | InterruptedException | RuntimeException | Error failure) {
+            try { lifetime.close(); } catch (IOException cleanup) { failure.addSuppressed(cleanup); }
+            throw failure;
+        }
+    }
+
+    private static URI validateUrl(URI url) {
+        if (!"https".equalsIgnoreCase(url.getScheme()) || url.getHost() == null
+                || url.getHost().isBlank() || url.getRawUserInfo() != null
+                || url.getRawFragment() != null || url.getPort() == 0 || url.getPort() > 65535) {
+            throw new IllegalArgumentException("artifact URL must be HTTPS without credentials or fragment");
+        }
+        return url;
+    }
+
+    /** A single deadline covers every redirect, response header and streamed response byte. */
+    private static final class DownloadLifetime implements AutoCloseable {
+        private final Transport transport;
+        private final long deadline;
+        private final AtomicReference<InputStream> body = new AtomicReference<>();
+        private final AtomicBoolean closed = new AtomicBoolean();
+        private final Thread watchdog;
+        private volatile boolean timedOut;
+
+        DownloadLifetime(Transport transport, Duration timeout) {
+            this.transport = transport;
+            if (timeout == null || timeout.isNegative() || timeout.isZero()
+                    || timeout.compareTo(ACQUISITION_TIMEOUT) > 0) {
+                transport.close();
+                throw new IllegalArgumentException("invalid artifact download timeout");
+            }
+            deadline = System.nanoTime() + timeout.toNanos();
+            watchdog = Thread.ofVirtual().name("chromellm-artifact-deadline").unstarted(() -> {
+                try {
+                    long remaining;
+                    while ((remaining = deadline - System.nanoTime()) > 0) {
+                        Thread.sleep(Duration.ofNanos(remaining));
+                    }
+                    if (!closed.get()) {
+                        timedOut = true;
+                        try { close(); } catch (IOException ignored) { /* The reader reports timeout. */ }
+                    }
+                } catch (InterruptedException completed) { /* Closed before its deadline. */ }
+            });
+            watchdog.start();
+        }
+
+        void check() throws HttpTimeoutException {
+            if (timedOut || deadline - System.nanoTime() <= 0) {
+                timedOut = true;
+                throw new HttpTimeoutException("artifact download exceeded its total deadline");
+            }
+        }
+
+        Duration remaining() throws HttpTimeoutException {
+            check();
+            return Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
+        }
+
+        void attach(InputStream input) throws IOException {
+            body.set(input);
+            if (closed.get()) { releaseBody(); throw new HttpTimeoutException("artifact download closed"); }
+            check();
+        }
+
+        void releaseBody() throws IOException {
+            InputStream input = body.getAndSet(null);
+            if (input != null) input.close();
+        }
+
+        @Override public void close() throws IOException {
+            if (closed.compareAndSet(false, true)) {
+                if (Thread.currentThread() != watchdog) watchdog.interrupt();
+                // Abort a pending send/read before closing its body, so shutdown never waits for EOF.
+                try { transport.close(); }
+                finally { releaseBody(); }
+            }
+        }
+            InputStream source = fetch(url, client);
+            return new FilterInputStream(source) {
                 @Override
                 public void close() throws IOException {
                     try { super.close(); } finally { client.shutdownNow(); }
                 }
             };
-            try {
-                if (response.statusCode() != 200) {
-                    throw new IOException("model download returned HTTP " + response.statusCode());
-                }
-                String encoding = response.headers().firstValue("Content-Encoding").orElse("identity");
-                if (!"identity".equalsIgnoreCase(encoding)
-                        || response.headers().firstValueAsLong("Content-Length").orElse(-1) > MAX_BYTES) {
-                    throw new IOException("model artifact has unsupported encoding or size");
-                }
-                return body;
-            } catch (IOException | RuntimeException | Error failure) {
-                try { body.close(); } catch (IOException closeFailure) { failure.addSuppressed(closeFailure); }
-                throw failure;
-            }
         } catch (IOException | InterruptedException | RuntimeException | Error failure) {
             client.shutdownNow();
             throw failure;
         }
+    }
+
+    static InputStream fetch(URI url, HttpClient client) throws IOException, InterruptedException {
+        boolean releaseDownload = githubRelease(url);
+        URI current = url;
+        for (int redirects = 0; ; redirects++) {
+            HttpRequest request = HttpRequest.newBuilder(current).timeout(Duration.ofHours(1))
+                    .header("Accept-Encoding", "identity").GET().build();
+            HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            InputStream input = response.body();
+            int status = response.statusCode();
+            URI next;
+            try {
+                if (status == 200) {
+                    String encoding = response.headers().firstValue("Content-Encoding").orElse("identity");
+                    long length;
+                    try { length = response.headers().firstValueAsLong("Content-Length").orElse(-1); }
+                    catch (NumberFormatException invalid) {
+                        throw new IOException("invalid model artifact Content-Length", invalid);
+                    }
+                    if (!"identity".equalsIgnoreCase(encoding) || length < -1 || length > MAX_BYTES) {
+                        throw new IOException("model artifact has unsupported encoding or size");
+                    }
+                    return input;
+                }
+                if (!releaseDownload || redirects >= 3
+                        || (status != 301 && status != 302 && status != 303 && status != 307 && status != 308)) {
+                    throw new IOException("model download returned HTTP " + status + " or exceeded its redirect limit");
+                }
+                var locations = response.headers().allValues("Location");
+                if (locations.size() != 1) throw new IOException("model redirect requires one Location header");
+                try { next = current.resolve(locations.getFirst()); }
+                catch (IllegalArgumentException malformed) { throw new IOException("invalid model redirect", malformed); }
+                if (!httpsDefaultPort(next) || (!githubRelease(next)
+                        && !"release-assets.githubusercontent.com".equalsIgnoreCase(next.getHost()))) {
+                    throw new IOException("model redirect is outside GitHub release storage");
+                }
+            } catch (IOException | RuntimeException | Error failure) {
+                try { input.close(); }
+                catch (IOException closeFailure) { failure.addSuppressed(closeFailure); }
+                throw failure;
+            }
+            // Close only the intermediate response. The owning fetch closes the client
+            // after the final stream, or on failure; the same client handles the next hop.
+            input.close();
+            current = next;
+        }
+    }
+
+    private static boolean githubRelease(URI url) {
+        return httpsDefaultPort(url) && "github.com".equalsIgnoreCase(url.getHost())
+                && url.getRawPath() != null
+                && url.getRawPath().matches("/[^/]+/[^/]+/releases/download/[^/]+/[^/]+");
+    }
+
+    private static boolean httpsDefaultPort(URI url) {
+        return "https".equalsIgnoreCase(url.getScheme()) && url.getHost() != null
+                && url.getRawUserInfo() == null && url.getRawFragment() == null
+                && (url.getPort() == -1 || url.getPort() == 443);
     }
 
     private static MessageDigest digest() {
