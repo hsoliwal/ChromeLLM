@@ -45,6 +45,8 @@ jobs:
           test ! -e '关键数据.md'
       - run: cmake -S standalone/native -B standalone/native/build -DCHROMELLM_SYNTHETIC_TEST=ON
       - run: cmake --build standalone/native/build --parallel 2
+      - name: Test native library discovery
+        run: ctest --test-dir standalone/native/build --output-on-failure
       - name: Verify no browser runtime linkage
         run: |
           if readelf -d standalone/native/build/libchromellm_llama_jni.so | grep -Ei 'optimization_guide_internal|libnode'; then
