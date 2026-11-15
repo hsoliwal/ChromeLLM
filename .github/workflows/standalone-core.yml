@@ -29,13 +29,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            library: standalone/native/build/libchromellm_llama_jni.so
+            library: standalone/target/native-synthetic/libchromellm_llama_jni.so
             separator: ':'
           - os: windows-latest
-            library: standalone/native/build/Release/chromellm_llama_jni.dll
+            library: standalone/target/native-synthetic/Release/chromellm_llama_jni.dll
             separator: ';'
           - os: macos-latest
-            library: standalone/native/build/libchromellm_llama_jni.dylib
+            library: standalone/target/native-synthetic/libchromellm_llama_jni.dylib
             separator: ':'
     runs-on: ${{ matrix.os }}
     defaults:
@@ -56,14 +56,12 @@ jobs:
           test ! -e docs/OPENAI_COMPAT_API.md
           test ! -e docs/M3_REBUILD_AND_DISTILLATION.md
           test ! -e '关键数据.md'
-      - run: cmake -S standalone/native -B standalone/native/build -DCHROMELLM_SYNTHETIC_TEST=ON -DCMAKE_BUILD_TYPE=Release
-      - run: cmake --build standalone/native/build --config Release --parallel 2
-      - name: Test native library discovery
-        run: ctest --test-dir standalone/native/build -C Release --output-on-failure
+      - name: Maven native-synthetic build and CTest regressions
+        run: mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic verify
       - name: Verify no browser runtime linkage
         if: runner.os == 'Linux'
         run: |
-          if readelf -d standalone/native/build/libchromellm_llama_jni.so | grep -Ei 'optimization_guide_internal|libnode'; then
+          if readelf -d standalone/target/native-synthetic/libchromellm_llama_jni.so | grep -Ei 'optimization_guide_internal|libnode'; then
             echo 'Forbidden browser runtime linkage detected' >&2
             exit 1
           fi
