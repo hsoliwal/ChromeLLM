@@ -43,7 +43,7 @@ For installed Chrome, `mvn -f standalone/pom.xml -Pchrome-status verify` checks 
 
 Provider selection is explicit. Local inference never switches to a remote API, and a missing WebGPU provider is an error when WebGPU was requested. The Hydrogen adapter uses Google's hosted model; Dawn accelerates independently supplied local models. The Chrome adapter uses the selected browser's own model API and does not extract its weights. See the [standalone README](standalone/README.md) for builds, options, limits and verification commands.
 
-A passing synthetic JNI test proves binding/lifecycle behavior only, not trained model correctness, GPU acceleration, or OS qualification. Older ChromeML documentation is historical. Transform recipes and fixed-point source qualification are owned by hsoliwal/com.synexia; downstream M3jdk21 imports only separately qualified implementation outputs.
+A passing synthetic JNI test proves binding/lifecycle behavior only, not trained model correctness, GPU acceleration, or OS qualification. A portable Chrome fixture pass does not prove live model eligibility or inference. Older ChromeML documentation is historical. Transform recipes and fixed-point source qualification are owned by hsoliwal/com.synexia; downstream M3jdk21 imports only separately qualified implementation outputs. The optional Chrome adapter's Apache-2.0 attribution is in [standalone/NOTICE.md](standalone/NOTICE.md).
 
 ## Maven smart build and real model verification
 
@@ -52,4 +52,7 @@ a pinned source build, digest-verified lazy model download, real JNI inference a
 a bounded candidate-producing build recipe. The existing Java and synthetic JNI
 profiles remain available. See [Maven model verification](standalone/MAVEN_MODEL_TEST.md)
 and [fork-backed smart recipes](standalone/FORK_NATIVE_SMART_BUILD.md).
-A passing synthetic JNI test proves binding/lifecycle behavior only, not trained model correctness, GPU acceleration, or OS qualification. A portable Chrome fixture pass does not prove live model eligibility or inference. Older ChromeML documentation is historical. Transform recipes and fixed-point source qualification are owned by hsoliwal/com.synexia; downstream M3jdk21 imports only separately qualified implementation outputs. The optional Chrome adapter's Apache-2.0 attribution is in [standalone/NOTICE.md](standalone/NOTICE.md).
+
+## Packaged fork runtime and Maven smart builds
+
+`mvn -f standalone/pom.xml -Pnative verify` builds the pinned native fork and attaches a CPU platform JAR. Add `-Dchromellm.native.backend=webgpu` for the Dawn-backed artifact. The existing `native-fork`, `fork-native`, `native-synthetic` and `smart-build` entry points remain available. `-Psmart-native-download,smart-build` lets Maven resolve an already-published native classifier and execute the selected recipe. Native resource artifacts load lazily through the Java/JNI API; the smart-build recipe can acquire a SHA-256-pinned model before actual inference. See [native Maven builds](standalone/README.md#build-and-consume-native-maven-artifacts) and [smart-build recipes](standalone/FORK_NATIVE_SMART_BUILD.md).

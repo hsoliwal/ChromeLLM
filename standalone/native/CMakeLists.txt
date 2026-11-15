@@ -7,6 +7,75 @@ find_package(Threads REQUIRED)
 option(CHROMELLM_SYNTHETIC_TEST "Build test-only fake llama API (never for distribution)" OFF)
 set(CHROMELLM_LLAMA_SOURCE_DIR "" CACHE PATH "Operator-supplied llama.cpp checkout to build with the JNI bridge")
 option(CHROMELLM_WEBGPU "Build the supplied llama.cpp checkout with its native Dawn/WebGPU provider" OFF)
+option(CHROMELLM_NATIVE_DISTRIBUTION "Stage and attach a real source-built runtime" OFF)
+set(CHROMELLM_NATIVE_CLASSIFIER "" CACHE STRING "Explicit host os-architecture classifier")
+if(CHROMELLM_NATIVE_DISTRIBUTION)
+  if(CMAKE_CROSSCOMPILING OR NOT CMAKE_SYSTEM_NAME STREQUAL CMAKE_HOST_SYSTEM_NAME
+      OR CMAKE_CXX_COMPILER_TARGET)
+    message(FATAL_ERROR "native distribution requires an unmodified host build; cross targets are unsupported")
+  endif()
+  if(CHROMELLM_SYNTHETIC_TEST OR NOT CHROMELLM_LLAMA_SOURCE_DIR)
+    message(FATAL_ERROR "native distribution requires real source; synthetic/prebuilt mode is not distributable")
+  endif()
+  string(TOLOWER "${CMAKE_HOST_SYSTEM_NAME}" native_os)
+  if(native_os STREQUAL "darwin")
+    set(native_os macos)
+  endif()
+  string(TOLOWER "${CMAKE_HOST_SYSTEM_PROCESSOR}" native_arch)
+  if(native_arch MATCHES "^(amd64|x86_64)$")
+    set(native_arch x86_64)
+  elseif(native_arch MATCHES "^(aarch64|arm64)$")
+    set(native_arch arm64)
+  else()
+    message(FATAL_ERROR "Unsupported native classifier architecture: ${native_arch}")
+  endif()
+  if(NOT native_os MATCHES "^(linux|macos|windows)$" OR
+      NOT CHROMELLM_NATIVE_CLASSIFIER STREQUAL "${native_os}-${native_arch}")
+    message(FATAL_ERROR "native classifier must explicitly match host ${native_os}-${native_arch}")
+  endif()
+  if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "native distribution requires a 64-bit host build")
+  endif()
+  if(CMAKE_GENERATOR_PLATFORM)
+    string(TOLOWER "${CMAKE_GENERATOR_PLATFORM}" generator_arch)
+    string(REGEX REPLACE ",.*" "" generator_arch "${generator_arch}")
+    if(generator_arch STREQUAL "x64")
+      set(generator_arch x86_64)
+    endif()
+    if(NOT generator_arch STREQUAL native_arch)
+      message(FATAL_ERROR "native distribution requires a matching generator host build architecture")
+    endif()
+  endif()
+  if(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID)
+    string(TOLOWER "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}" compiler_arch)
+    if(compiler_arch STREQUAL "x64")
+      set(compiler_arch x86_64)
+    endif()
+    if(NOT compiler_arch STREQUAL native_arch)
+      message(FATAL_ERROR "native distribution requires matching compiler host build architecture")
+    endif()
+  endif()
+  if(CMAKE_OSX_ARCHITECTURES AND NOT CMAKE_OSX_ARCHITECTURES STREQUAL native_arch)
+    message(FATAL_ERROR "native distribution requires one matching macOS host build architecture")
+  endif()
+  set(CHROMELLM_NATIVE_NOTICES "" CACHE PATH "Operator-reviewed complete native dependency notices directory")
+  if(NOT IS_DIRECTORY "${CHROMELLM_NATIVE_NOTICES}")
+    message(FATAL_ERROR "native distribution requires operator-reviewed notices directory CHROMELLM_NATIVE_NOTICES")
+  endif()
+  file(GLOB_RECURSE notice_files LIST_DIRECTORIES false "${CHROMELLM_NATIVE_NOTICES}/*")
+  if(NOT notice_files)
+    message(FATAL_ERROR "native distribution requires nonempty operator-reviewed notices")
+  endif()
+  # Distribution cannot silently require an unbundled or unlicensed compiler OpenMP runtime.
+  # Ordinary native builds retain the donor's normal OpenMP selection.
+  set(GGML_OPENMP OFF CACHE BOOL "Distribution uses the source CPU implementation without external OpenMP" FORCE)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/NativeDistribution.cmake)
+  chromellm_relocatable_libraries()
+endif()
+
+include(cmake/NativePackaging.cmake)
+chromellm_configure_native_packaging()
+
 if(CHROMELLM_SYNTHETIC_TEST)
   if(CHROMELLM_LLAMA_SOURCE_DIR OR CHROMELLM_WEBGPU)
     message(FATAL_ERROR "The synthetic fixture cannot build a real llama.cpp or WebGPU provider")
@@ -146,6 +215,7 @@ file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/chromellm-native-$<CONFIG>.txt
 if(MSVC)
   target_compile_options(chromellm_llama_jni PRIVATE /utf-8)
 endif()
+chromellm_install_native_runtime(chromellm_llama_jni)
 
 if(CHROMELLM_SYNTHETIC_TEST)
   include(CTest)
@@ -165,5 +235,21 @@ if(CHROMELLM_SYNTHETIC_TEST)
         "-DCHROMELLM_TEST_JAVA_AWT_LIBRARY=${JAVA_AWT_LIBRARY}"
         "-DCHROMELLM_TEST_JAVA_JVM_LIBRARY=${JAVA_JVM_LIBRARY}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/library_discovery/CMakeLists.txt")
+    add_test(NAME native-resource-package
+      COMMAND ${CMAKE_COMMAND}
+        "-DCHROMELLM_NATIVE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DCHROMELLM_TEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/native-package-test"
+        "-DCHROMELLM_TEST_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCHROMELLM_TEST_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCHROMELLM_TEST_GENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCHROMELLM_TEST_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCHROMELLM_TEST_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/native_package/CMakeLists.txt")
   endif()
+endif()
+
+
+if(CHROMELLM_NATIVE_DISTRIBUTION)
+  chromellm_runtime_archive(chromellm_llama_jni "${CHROMELLM_NATIVE_CLASSIFIER}"
+    "${CMAKE_BINARY_DIR}/chromellm-native-${CHROMELLM_NATIVE_CLASSIFIER}.zip")
 endif()

@@ -38,6 +38,26 @@ public final class LlamaCppJniBackend implements ModelBackend {
     }
 
     /**
+     * Observe devices using the installed platform-specific Maven native artifact. Native files
+     * are verified and materialized on this call; no model or network download is involved.
+     */
+    public static List<Device> availableDevices() throws IOException {
+        return availableDevices(NativeLibraryLoader.libraryPath());
+    }
+
+    /**
+     * Open a local model using the installed platform-specific Maven native artifact. This is
+     * an additive factory for packaged consumers; existing explicit-library constructors retain
+     * their behavior and the default linked-provider policy. Model weights remain caller-owned.
+     */
+    public static LlamaCppJniBackend fromPackagedRuntime(Path model, int contextTokens,
+                                                       int threads, int gpuLayers) throws IOException {
+        Objects.requireNonNull(model, "model");
+        return new LlamaCppJniBackend(NativeLibraryLoader.libraryPath(), model,
+                contextTokens, threads, gpuLayers);
+    }
+
+    /**
      * Observe devices registered by the explicitly supplied JNI library. This does not load a model,
      * download plugins, or prove that a model or operation has executed on any device.
      */

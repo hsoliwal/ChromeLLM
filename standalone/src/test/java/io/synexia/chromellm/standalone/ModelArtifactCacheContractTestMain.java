@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 package io.synexia.chromellm.standalone;
 
 import java.io.ByteArrayInputStream;
@@ -56,6 +57,7 @@ public final class ModelArtifactCacheContractTestMain {
             check(offline.progress().state() == ModelArtifactCache.State.UNPREPARED,
                     "offline construction started acquisition");
             rejectIo(offline::resolve);
+            rejectIo(() -> offline.resolveWithOfflinePolicy(false));
             check(opens.get() == 0, "offline miss opened a network download");
             check(offline.progress().state() == ModelArtifactCache.State.FAILED
                             && offline.progress().bytes() == 0,
@@ -122,9 +124,9 @@ public final class ModelArtifactCacheContractTestMain {
             try (var files = Files.list(dir)) {
                 check(files.findAny().isEmpty(), "partial download staging file survived");
             }
-            redirectContracts(fixture);
+            responseSenderContracts(fixture);
             binaryContracts(dir, fixture, hash, url);
-            transportRedirectContracts(fixture);
+            redirectContracts(fixture);
             bodyDeadlineContract();
         } finally {
             try (var all = Files.walk(dir)) {
@@ -137,7 +139,7 @@ public final class ModelArtifactCacheContractTestMain {
         ModelAcquisitionLifecycleTestMain.main(new String[0]);
     }
 
-    private static void redirectContracts(byte[] fixture) throws Exception {
+    private static void responseSenderContracts(byte[] fixture) throws Exception {
         URI source = URI.create("https://releases.example.invalid/model");
         URI destination = URI.create("https://assets.example.invalid/model?signature=test");
         for (int status : new int[] {301, 302, 303, 307, 308}) {
@@ -151,7 +153,7 @@ public final class ModelArtifactCacheContractTestMain {
                         : response(200, destination, Map.of("Content-Length", List.of("" + fixture.length)), body);
             })) {
                 check(java.util.Arrays.equals(result.readAllBytes(), fixture), "redirect returned incorrect bytes");
-                check(redirect.closed && !body.closed, "redirect body lifecycle was incorrect");
+                check(redirect.closed && body.closed, "redirect or EOF response body was not released");
             }
             check(body.closed && requests.size() == 2 && requests.getLast().uri().equals(destination),
                     "HTTPS redirect not followed exactly once");
@@ -290,15 +292,15 @@ public final class ModelArtifactCacheContractTestMain {
     }
 
     private static void binaryContracts(Path dir, byte[] fixture, String hash, String url) throws Exception {
-        // The preceding partial-download contract removed the shared model fixture.
-        Files.write(dir.resolve(hash + ".gguf"), fixture);
+        Path model = dir.resolve(hash + ".gguf");
+        Files.write(model, fixture);
         AtomicInteger opens = new AtomicInteger();
         ModelArtifactCache.Downloader download = ignored -> {
             opens.incrementAndGet();
             return new ByteArrayInputStream(fixture);
         };
-        reject(() -> new ModelArtifactCache(url, hash, dir, 0));
-        reject(() -> new ModelArtifactCache(url, hash, dir, ModelArtifactCache.MAX_BYTES + 1));
+        reject(() -> ModelArtifactCache.binaryArtifact(url, hash, dir, 0));
+        reject(() -> ModelArtifactCache.binaryArtifact(url, hash, dir, ModelArtifactCache.MAX_BYTES + 1));
         reject(() -> new ModelArtifactCache(url, hash, dir, download, 100, -1, ".bin"));
         ModelArtifactCache binary = new ModelArtifactCache(url, hash, dir, download, fixture.length,
                 fixture.length, ".bin");
@@ -307,7 +309,9 @@ public final class ModelArtifactCacheContractTestMain {
         Path file = binary.resolve();
         check(file.getFileName().toString().equals(hash + ".bin"), "native cache must use its own suffix");
         check(binary.resolveWithOfflinePolicy(true).equals(file) && opens.get() == 1, "offline verified binary hit downloaded");
-        check(Files.exists(dir.resolve(hash + ".gguf")), "native artifact replaced existing model cache");
+        check(new ModelArtifactCache(url, hash, dir, fixture.length).resolveWithOfflinePolicy(true).equals(file),
+                "legacy native constructor lost exact-size binary cache selection");
+        check(java.util.Arrays.equals(Files.readAllBytes(model), fixture), "native artifact replaced existing model cache");
         ModelArtifactCache wrongLength = new ModelArtifactCache(url, hash, dir, download, 100,
                 fixture.length + 1, ".bin");
         rejectIo(wrongLength::resolve);
@@ -325,7 +329,7 @@ public final class ModelArtifactCacheContractTestMain {
         }
     }
 
-    private static void transportRedirectContracts(byte[] fixture) throws Exception {
+    private static void redirectContracts(byte[] fixture) throws Exception {
         URI start = URI.create("https://release.example.invalid/download");
         TrackedStream first = new TrackedStream(new byte[0]);
         TrackedStream second = new TrackedStream(new byte[0]);
@@ -399,6 +403,13 @@ public final class ModelArtifactCacheContractTestMain {
             check(transport.closes.get() == 1 && ((TrackedStream) failure.body()).closes.get() == 1,
                     "failed HTTP response/client leaked");
         }
+        TrackedStream overBudget = new TrackedStream(fixture);
+        FakeTransport limited = new FakeTransport(response(200,
+                Map.of("Content-Length", List.of(Integer.toString(fixture.length))), overBudget));
+        rejectIo(() -> ModelArtifactCache.fetch(start, limited, Duration.ofSeconds(5), fixture.length - 1));
+        check(limited.closes.get() == 1 && overBudget.closes.get() == 1,
+                "owned HTTP transport ignored its configured artifact budget");
+
         TrackedStream unused = new TrackedStream(fixture);
         FakeTransport early = new FakeTransport(response(200, Map.of(), unused));
         ModelArtifactCache.fetch(start, early, Duration.ofSeconds(5)).close();
