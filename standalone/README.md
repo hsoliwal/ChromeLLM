@@ -2,6 +2,32 @@
 
 The module has no Chrome browser, ChromeML, Node, PowerShell or third-party Java runtime dependency. It uses the JDK modules `java.base` and `java.net.http`. Select the existing local llama.cpp CLI/JNI provider or the hosted Gemini API explicitly. Dawn is an optional native compute dependency for local WebGPU inference.
 
+## Opt-in lazy local model artifacts
+
+A local CLI or JNI backend may now select one **explicitly licensed, SHA-256-pinned HTTPS GGUF**
+without bundling or downloading it during Maven/CMake builds. The cache is an existing,
+operator-chosen writable directory; no implicit home cache is created. The model is
+downloaded at the first inference request and verified before opening llama.cpp.
+
+```sh
+java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+  --module io.synexia.chromellm.standalone/io.synexia.chromellm.standalone.StandaloneMain \
+  --backend cli --llama-bin /path/to/llama-cli \
+  --model-url https://models.example.org/licensed.gguf \
+  --model-sha256 YOUR_64_HEX_SHA256 --model-cache-dir /approved/model-cache \
+  --prompt-file /path/to/request.txt
+```
+
+Provide **all three** of `--model-url`, `--model-sha256`, and `--model-cache-dir`.
+They exclude `--model`, `--tier`, and tier-model paths; hosted Gemini rejects them.
+Download redirects and provider fallback are forbidden. Cache hits are rehashed;
+corrupt entries fail closed instead of being silently overwritten. Native libraries
+and executables remain separately installed. See [LAZY_MODEL_CONTRACT.md](LAZY_MODEL_CONTRACT.md)
+for byte limits, staging, cache ownership, acquisition timeouts, and the WebMCP/MCP
+boundary. This does **not** extract Chrome-managed Gemini Nano weights.
+
+
+
 ## Gemini 4 Hydrogen
 
 Set `GEMINI_API_KEY` in the process environment, then run:
