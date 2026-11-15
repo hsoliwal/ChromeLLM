@@ -1,0 +1,72 @@
+name: Pinned Dawn WebGPU native qualification
+on:
+  workflow_dispatch:
+    inputs:
+      llama_sha:
+        description: 'Exact 40-hex hsoliwal/synexia-llmcpp source revision'
+        required: true
+        type: string
+      dawn_release_url:
+        description: 'Published GitHub Release Dawn-*.tar.gz URL, built for Linux'
+        required: true
+        type: string
+      dawn_sha256:
+        description: 'SHA-256 digest of the exact published Dawn release archive'
+        required: true
+        type: string
+jobs:
+  pinned-webgpu-native:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      LLAMA_SHA: ${{ inputs.llama_sha }}
+      DAWN_URL: ${{ inputs.dawn_release_url }}
+      DAWN_SHA: ${{ inputs.dawn_sha256 }}
+    steps:
+      - name: Validate explicit source and artifact identities
+        shell: bash
+        run: |
+          [[ "$LLAMA_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || exit 1
+          [[ "$DAWN_SHA" =~ ^[0-9a-fA-F]{64}$ ]] || exit 1
+          [[ "$DAWN_URL" == https://github.com/* ]] || exit 1
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: standalone/pom.xml
+      - name: Require an authorized private fork read token
+        shell: bash
+        env:
+          FORK_TOKEN: ${{ secrets.CHROMELLM_FORK_READ_TOKEN }}
+        run: test -n "$FORK_TOKEN"
+      - name: Checkout exact private native source fork
+        uses: actions/checkout@v4
+        with:
+          repository: hsoliwal/synexia-llmcpp
+          ref: ${{ inputs.llama_sha }}
+          path: vendor/synexia-llmcpp
+          token: ${{ secrets.CHROMELLM_FORK_READ_TOKEN }}
+          persist-credentials: false
+      - name: Validate checked out native source identity
+        shell: bash
+        run: |
+          test "$(git -C vendor/synexia-llmcpp rev-parse HEAD | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$LLAMA_SHA" | tr '[:upper:]' '[:lower:]')"
+      - name: Maven downloads SHA-pinned Dawn and builds JNI WebGPU fork
+        shell: bash
+        run: |
+          mvn -B -ntp -f standalone/pom.xml -Pnative-webgpu-artifact verify \
+            -Dchromellm.native.source="$GITHUB_WORKSPACE/vendor/synexia-llmcpp" \
+            -Dchromellm.dawn.url="$DAWN_URL" \
+            -Dchromellm.dawn.sha256="$DAWN_SHA"
+      - name: Inspect built JNI artifact and dynamic linkage
+        shell: bash
+        run: |
+          test -f standalone/target/native-webgpu-jni/libchromellm_llama_jni.so
+          readelf -d standalone/target/native-webgpu-jni/libchromellm_llama_jni.so
+          test -f standalone/target/native-webgpu-assets/dawn/lib/cmake/Dawn/DawnConfig.cmake \
+            || find standalone/target/native-webgpu-assets/dawn -name DawnConfig.cmake -type f | grep -q .
