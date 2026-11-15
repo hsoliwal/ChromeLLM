@@ -57,12 +57,13 @@ public final class StandaloneMain {
     }
 
     static String readPrompt(Path promptFile, boolean hosted) throws IOException {
-        if (!hosted) return Files.readString(promptFile, StandardCharsets.UTF_8);
+        int limit = hosted ? GeminiApiBackend.MAX_REQUEST_BYTES : StdioProtocol.MAX_PROMPT_BYTES;
         // Bound the read itself: a size-only check could race a growing prompt file.
         try (var input = Files.newInputStream(promptFile)) {
-            byte[] bytes = input.readNBytes(GeminiApiBackend.MAX_REQUEST_BYTES + 1);
-            if (bytes.length > GeminiApiBackend.MAX_REQUEST_BYTES) {
-                throw new IOException("Gemini prompt file exceeds the bounded input limit");
+            byte[] bytes = input.readNBytes(limit + 1);
+            if (bytes.length > limit) {
+                throw new IOException((hosted ? "Gemini" : "local")
+                        + " prompt file exceeds the bounded input limit");
             }
             return StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT)
@@ -94,7 +95,8 @@ public final class StandaloneMain {
         return switch (provider) {
             case "cli" -> {
                 // --device alone names the llama.cpp CLI device; the backend/device pair is JNI-only.
-                rejectOptions(options, "--compute-backend", "--device-backend");
+                rejectOptions(options, "--compute-backend", "--device-backend", "--jni-lib",
+                        "--context-tokens", "--threads");
                 yield options.containsKey("--device") || options.containsKey("--gpu-layers")
                         ? new LlamaCppCliBackend(Path.of(required(options, "--llama-bin")), model,
                                 options.get("--device"),
@@ -102,6 +104,7 @@ public final class StandaloneMain {
                         : new LlamaCppCliBackend(Path.of(required(options, "--llama-bin")), model);
             }
             case "jni" -> {
+                rejectOptions(options, "--llama-bin");
                 Path library = Path.of(required(options, "--jni-lib"));
                 int context = Integer.parseInt(options.getOrDefault("--context-tokens", "4096"));
                 int threads = Integer.parseInt(options.getOrDefault("--threads", "4"));

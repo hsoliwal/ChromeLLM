@@ -37,7 +37,7 @@ routes, provider failures, and incorrect prompt-hash/backend-ID receipts fail
 closed; there is no automatic model fallback or second generation attempt.
 Model output remains untrusted candidate text.
 
-The existing one-shot CLI remains unchanged without the following new options.
+The one-shot CLI continues to use an explicitly selected provider.
 To select a tier, provide `--tier fast|reasoning|frontier` and the matching
 `--fast-model`, `--reasoning-model`, or `--frontier-model` path. Do not mix
 `--tier` with `--model`. The selected model is the only model opened.
@@ -65,6 +65,48 @@ sessions" below). These flags do not install Dawn, validate a driver, prove actu
 offload, or establish numerical parity. The offline tests prove bounded argv,
 receipt checks and routing only; real WebGPU inference, driver compatibility,
 and performance remain unverified.
+
+## Bounded local requests and cancellation
+
+Local CLI and JNI prompts, including one-shot prompt files, are limited to
+16 MiB of strict UTF-8. Malformed UTF-16 Java strings and malformed UTF-8 files
+fail instead of being replaced with different characters. The byte budget is
+checked before allocating the encoded prompt, and the prompt receipt hashes
+those same bytes. This admission limit also applies to direct Java calls;
+previously unbounded local prompt files are now rejected above the limit.
+Gemini retains its separate 4 MiB serialized request and response limits.
+
+The CLI drains stdout while the child is running and rejects the first byte
+beyond 4 MiB. Exactly 4 MiB is accepted; empty or malformed UTF-8 output fails.
+Unused stderr diagnostics are discarded by the process redirection, so a verbose
+child cannot grow an error file or block on an unread error pipe. The only
+per-request scratch file is the prompt. Child stdin is closed because the
+prompt file supplies the complete request.
+
+CLI deadline checks cover prompt encoding, file and launch checkpoints, output
+collection, decoding and receipt generation. Cancellation terminates the owned
+child, closes its streams and removes its prompt. Process termination and a
+busy Windows prompt-file handle have separate bounded cleanup waits of up to
+five seconds each; cleanup can therefore finish after the inference deadline.
+A primary inference error remains primary if cleanup also fails. These
+in-process deadlines do not provide operating-system containment of arbitrary
+descendant processes.
+
+JNI keeps its existing public synchronized method signatures and all native
+entry points. Its deadline starts after the Java method monitor is acquired;
+waiting to enter that synchronized method is outside the deadline. The method
+body includes encoding, native work, decoding and receipt generation in its
+deadline checks, and waiting for a native model lock also checks the remaining
+time. Java interruption is preserved and reported as `InterruptedException`.
+The native CPU abort callback observes the original caller, including virtual
+threads and callbacks on native worker threads. Each native callback thread
+uses its own JNI environment. Dawn/GPU cancellation remains cooperative at
+supported host checkpoints; this does not forcibly preempt a running GPU kernel.
+
+Provider-specific options must match their backend. CLI rejects `--jni-lib`,
+`--context-tokens` and `--threads`; JNI rejects `--llama-bin`. Supported CLI
+`--device` and `--gpu-layers` selection remains available. Unsupported options
+fail instead of silently appearing to change the selected provider.
 
 ## Build JNI from an independently licensed llama.cpp
 
@@ -172,6 +214,29 @@ for timeout, `3` for an invalid request and `4` for interruption. A truncated
 frame or partial output write terminates the session; EOF between frames ends
 it normally. A client requiring a hard deadline can retire the provider process.
 
+## Connect the existing Synexia Search2API
+
+Search2API owns multi-query retrieval, citations, comparison and visual results.
+Its existing ChromeLLM adapter can select this hosted backend while retaining
+framed sessions and exact provider/prompt receipts. With the API key already in
+the Search2API process environment, configure:
+
+```sh
+export SYNEXIA_SEARCH_CHROMELLM_JAR=/absolute/path/to/chromellm-standalone.jar
+export SYNEXIA_SEARCH_CHROMELLM_BACKEND=gemini
+export SYNEXIA_SEARCH_CHROMELLM_MODEL=gemini-4-hydrogen
+export SYNEXIA_SEARCH_CHROMELLM_THINKING_LEVEL=high
+export SYNEXIA_SEARCH_CHROMELLM_API_KEY_ENV=GEMINI_API_KEY
+```
+
+The key setting is an environment-variable name, never the key value. Hosted
+profiles default to 32768 output tokens and can also be configured as a separate
+`DEEP_` profile beside a local CLI/JNI model. This sends summarization prompts
+and retrieved evidence to the selected Gemini API model; access is separate
+from Google's Search AI Mode. See the canonical
+[Search2API configuration](https://github.com/hsoliwal/com.synexia/blob/develop/synexia-mllm/nanobrowser-java/docs/SEARCH2API.md)
+for profile inheritance and supported options.
+
 ## Synthetic JNI test (not a real model run)
 
 ```sh
@@ -179,7 +244,7 @@ cmake -S standalone/native -B /tmp/chromellm-jni-test -DCHROMELLM_SYNTHETIC_TEST
 cmake --build /tmp/chromellm-jni-test
 ctest --test-dir /tmp/chromellm-jni-test --output-on-failure
 mvn -f standalone/pom.xml test-compile
-java -cp standalone/target/classes:standalone/target/test-classes \
+java -Xcheck:jni -cp standalone/target/classes:standalone/target/test-classes \
  io.synexia.chromellm.standalone.JniSyntheticContractTestMain \
  /tmp/chromellm-jni-test/libchromellm_llama_jni.so
 ```
@@ -188,4 +253,6 @@ The CTest case builds synthetic archives solely for the real CMake compile/link 
 
 Repeat the same Java command with `CHROMELLM_TEST_NO_WEBGPU=1` in its environment to exercise rejection of an unavailable provider.
 
-These tests check JNI loading, UTF-8 input, bounded output, prompt receipt, timeout, close, stale-handle rejection and explicit CPU/WebGPU selection using a **fake test-only llama API**. They do not establish real GGUF inference or GPU offload. `mvn verify` also executes loopback HTTP tests for the Gemini adapter and provider-selection tests, without contacting Google or using credentials. Live API credentials, real models, drivers and device performance require separate runtime verification. Reusable source-change recipes and fixed-point evidence belong to hsoliwal/com.synexia; product code and tests live here.
+The existing CI workflow runs both the Java contracts and synthetic JNI contracts on Linux, Windows and macOS. JNI checks run with `-Xcheck:jni`; a separate 32 MiB heap invocation verifies that oversized prompt encoding fails before allocating an encoded copy. The native fixture links the platform thread library and uses UTF-8 source encoding on MSVC.
+
+These tests check JNI loading, strict Unicode and byte limits, bounded token pieces, prompt receipts, timeout, interruption, native-lock deadlines, independent model close, stale-handle rejection and explicit CPU/WebGPU selection using a **fake test-only llama API**. They do not establish real GGUF inference or GPU offload. `mvn verify` also executes loopback HTTP tests for the Gemini adapter and provider-selection tests, without contacting Google or using credentials. Live API credentials, real models, drivers and device performance require separate runtime verification. Reusable source-change recipes and fixed-point evidence belong to hsoliwal/com.synexia; product code and tests live here.

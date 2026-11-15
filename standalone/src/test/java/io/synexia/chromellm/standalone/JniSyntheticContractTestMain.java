@@ -2,14 +2,19 @@
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** JNI lifecycle/UTF-8 tests against a synthetic llama fixture; NOT a real model test. */
 public final class JniSyntheticContractTestMain {
@@ -17,18 +22,24 @@ public final class JniSyntheticContractTestMain {
     private JniSyntheticContractTestMain() { }
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 1) throw new IllegalArgumentException("pass absolute JNI fixture library path");
+        if (args.length < 1 || args.length > 2) throw new IllegalArgumentException("pass JNI fixture library path and optional regression name");
         Path base = Files.createTempDirectory("chromellm-jni-test-");
         Path model = base.resolve("नमस्ते-require-default-fixture.gguf");
         Path rejected = base.resolve("rejected-model.gguf");
         Path gpuModel = base.resolve("require-webgpu.gguf");
         Path cpuModel = base.resolve("require-cpu.gguf");
+        Throwable failure = null;
         try {
             Files.writeString(model, "synthetic-not-model-weights");
             Files.writeString(rejected, "synthetic-rejected-model");
             Files.writeString(gpuModel, "synthetic-selector-fixture-not-GPU-weights");
             Files.writeString(cpuModel, "synthetic-selector-fixture-not-model-weights");
             Path library = Path.of(args[0]);
+            if (args.length == 2) {
+                focusedRegression(args[1], library, model, base);
+                System.out.println("PASS JNI focused " + args[1] + ": " + checks + " checks");
+                return;
+            }
             try (LlamaCppJniBackend selected = new LlamaCppJniBackend(library, cpuModel, 1024, 2, 0, "cpu")) {
                 check(selected.infer(new ModelRequest("selected", 8, Duration.ofSeconds(1))).text().equals("OK"),
                         "CPU policy passes an explicitly empty GPU device list");
@@ -105,6 +116,8 @@ public final class JniSyntheticContractTestMain {
                 } finally {
                     Thread.interrupted(); // restore test execution
                 }
+                inputBoundaries(nativeModel);
+                pieceBoundaries(nativeModel);
             }
             nativeModel.close(); // idempotent close
             try {
@@ -113,15 +126,252 @@ public final class JniSyntheticContractTestMain {
             } catch (IOException expected) {
                 checks++;
             }
+            rejectMissingVocabulary(library, base);
+            for (String kind : List.of("platform", "foreign", "override", "virtual", "virtual-foreign")) {
+                interruptInFlight(library, base, kind);
+            }
+            nativeLockDeadline(library, base);
+            independentClose(library, base);
+        } catch (Exception | Error primary) {
+            failure = primary;
+            throw primary;
         } finally {
-            Files.deleteIfExists(model);
-            Files.deleteIfExists(rejected);
-            Files.deleteIfExists(gpuModel);
-            Files.deleteIfExists(cpuModel);
-            Files.deleteIfExists(base);
+            try { deleteFixtureTree(base); }
+            catch (IOException cleanup) {
+                if (failure == null) throw cleanup;
+                failure.addSuppressed(cleanup);
+            }
         }
         System.out.println("PASS JNI synthetic provider-selection/device-selection/lifecycle/UTF-8/timeout/close: "
                 + checks + " checks; no real model or GPU execution");
+    }
+
+    private static void focusedRegression(String name, Path library, Path model, Path base) throws Exception {
+        switch (name) {
+            case "utf16", "oversize-memory", "piece-size", "piece-retry" -> {
+                try (var backend = new LlamaCppJniBackend(library, model, 1024, 2, 0)) {
+                    switch (name) {
+                        case "utf16" -> expectInputFailure(backend, "bad\ud800text");
+                        case "oversize-memory" -> expectInputFailure(backend, "x".repeat(16 * 1024 * 1024 + 1));
+                        case "piece-size" -> expectPieceFailure(backend, "oversized-piece");
+                        case "piece-retry" -> expectPieceFailure(backend, "oversized-retry-piece");
+                        default -> throw new AssertionError(name);
+                    }
+                }
+            }
+            case "vocabulary" -> rejectMissingVocabulary(library, base);
+            case "native-lock" -> nativeLockDeadline(library, base);
+            case "close-isolation" -> independentClose(library, base);
+            case "platform", "foreign", "override", "virtual", "virtual-foreign" -> interruptInFlight(library, base, name);
+            default -> throw new IllegalArgumentException("unknown JNI regression name");
+        }
+    }
+
+    private static void inputBoundaries(LlamaCppJniBackend backend) throws Exception {
+        for (String invalid : List.of("a\ud800b", "a\udc00b", "\ud800\ud800", "a\0b")) {
+            expectInputFailure(backend, invalid);
+        }
+        expectInputFailure(backend, "x".repeat(16 * 1024 * 1024 + 1));
+        expectInputFailure(backend, "€".repeat(16 * 1024 * 1024 / 3 + 1));
+        check(backend.infer(new ModelRequest("x".repeat(16 * 1024 * 1024), 8,
+                Duration.ofSeconds(10))).text().equals("OK"), "exact 16 MiB input is accepted");
+        check(backend.infer(new ModelRequest("valid supplementary 🦙", 8,
+                Duration.ofSeconds(1))).text().equals("OK"), "supplementary UTF-16 remains accepted");
+    }
+
+    private static void expectInputFailure(LlamaCppJniBackend backend, String prompt) throws Exception {
+        try {
+            backend.infer(new ModelRequest(prompt, 8, Duration.ofSeconds(10)));
+            throw new AssertionError("malformed or oversized native prompt accepted");
+        } catch (IOException expected) {
+            checks++;
+        }
+    }
+
+    private static void pieceBoundaries(LlamaCppJniBackend backend) throws Exception {
+        expectPieceFailure(backend, "oversized-piece");
+        expectPieceFailure(backend, "oversized-retry-piece");
+        expectPieceFailure(backend, "minimum-piece-size");
+        check(backend.infer(new ModelRequest("large-valid-piece", 8, Duration.ofSeconds(1)))
+                .text().equals("A".repeat(600)), "a correctly sized large token piece is preserved");
+    }
+
+    private static void expectPieceFailure(LlamaCppJniBackend backend, String prompt) throws Exception {
+        try {
+            backend.infer(new ModelRequest(prompt, 8, Duration.ofSeconds(1)));
+            throw new AssertionError("out-of-bounds token piece accepted");
+        } catch (IOException expected) {
+            check(expected.getMessage().contains("token piece exceeds"), "token size was not rejected at the native boundary");
+        }
+    }
+
+    private static void rejectMissingVocabulary(Path library, Path base) throws Exception {
+        Path model = base.resolve("null-vocabulary.gguf");
+        Files.writeString(model, "synthetic invalid vocabulary");
+        try (var unexpected = new LlamaCppJniBackend(library, model, 1024, 2, 0)) {
+            throw new AssertionError("missing vocabulary accepted by " + unexpected.id());
+        } catch (IOException expected) {
+            check(expected.getMessage().contains("no vocabulary"), "missing vocabulary rejection");
+        }
+    }
+
+    private static void interruptInFlight(Path library, Path base, String kind) throws Exception {
+        Path model = base.resolve("interrupt-" + kind + ".gguf");
+        Path ready = Path.of(model + ".ready");
+        Files.writeString(model, "synthetic interrupt fixture");
+        LlamaCppJniBackend backend = new LlamaCppJniBackend(library, model, 1024, 2, 0);
+        AtomicReference<Throwable> outcome = new AtomicReference<>();
+        AtomicBoolean flag = new AtomicBoolean();
+        Runnable inference = () -> {
+            try {
+                String prompt = kind.contains("foreign") ? "foreign-interrupt" : "wait-interrupt";
+                backend.infer(new ModelRequest(prompt, 8, Duration.ofSeconds(10)));
+                outcome.set(new AssertionError("running native inference ignored interruption"));
+            } catch (Throwable result) {
+                outcome.set(result);
+                flag.set(Thread.interrupted()); // Bypass a deliberately overridden instance query.
+                if (flag.get()) Thread.currentThread().interrupt();
+            }
+        };
+        Thread worker = kind.startsWith("virtual") ? Thread.ofVirtual().unstarted(inference)
+                : kind.equals("override") ? new Thread(inference) {
+                    @Override public boolean isInterrupted() { return false; }
+                } : new Thread(inference);
+        if (!worker.isVirtual()) worker.setDaemon(true);
+        worker.start();
+        Throwable failure = null;
+        try {
+            awaitMarker(ready, worker, outcome);
+            worker.interrupt();
+            worker.join(3_000);
+            check(!worker.isAlive(), "interrupted native worker did not terminate");
+            check(outcome.get() instanceof InterruptedException, "native callback did not report InterruptedException: " + outcome.get());
+            check(flag.get(), "native callback cleared the caller's interrupt flag");
+            check(!Files.exists(Path.of(model + ".completed")), "native decode completed instead of observing cancellation");
+        } catch (Exception | Error primary) {
+            failure = primary;
+            throw primary;
+        } finally {
+            try { finishWorker(worker); }
+            catch (Exception | Error cleanup) {
+                if (failure == null) throw cleanup;
+                failure.addSuppressed(cleanup);
+            } finally {
+                if (!worker.isAlive()) backend.close();
+                Files.deleteIfExists(ready);
+            }
+        }
+    }
+
+    private static void nativeLockDeadline(Path library, Path base) throws Exception {
+        Path model = base.resolve("native-lock.gguf");
+        Path ready = Path.of(model + ".ready");
+        Files.writeString(model, "synthetic native contention fixture");
+        LlamaCppJniBackend backend = new LlamaCppJniBackend(library, model, 1024, 2, 0);
+        Field handle = LlamaCppJniBackend.class.getDeclaredField("handle");
+        handle.setAccessible(true);
+        long id = handle.getLong(backend);
+        Method generate = LlamaCppJniBackend.class.getDeclaredMethod("nGenerate",
+                long.class, byte[].class, int.class, long.class);
+        generate.setAccessible(true);
+        AtomicReference<Throwable> outcome = new AtomicReference<>();
+        Thread worker = new Thread(() -> {
+            try { backend.infer(new ModelRequest("wait-interrupt", 8, Duration.ofSeconds(10))); }
+            catch (Throwable result) { outcome.set(result); }
+        }, "native-lock-owner");
+        worker.setDaemon(true);
+        worker.start();
+        Throwable failure = null;
+        try {
+            awaitMarker(ready, worker, outcome);
+            try {
+                generate.invoke(null, id, "short".getBytes(StandardCharsets.UTF_8), 8, 50L);
+                throw new AssertionError("contended native deadline was ignored");
+            } catch (InvocationTargetException wrapped) {
+                check(wrapped.getCause() instanceof TimeoutException, "contended native call must time out");
+            }
+            check(worker.isAlive(), "contended native request waited for the first inference to complete");
+            check(!Files.exists(Path.of(model + ".completed")), "contended deadline waited for native work completion");
+        } catch (Exception | Error primary) {
+            failure = primary;
+            throw primary;
+        } finally {
+            try { finishWorker(worker); }
+            catch (Exception | Error cleanup) {
+                if (failure == null) throw cleanup;
+                failure.addSuppressed(cleanup);
+            } finally {
+                if (!worker.isAlive()) backend.close();
+                Files.deleteIfExists(ready);
+            }
+        }
+    }
+
+    private static void independentClose(Path library, Path base) throws Exception {
+        Path closingModel = base.resolve("slow-free.gguf");
+        Path otherModel = base.resolve("independent.gguf");
+        Path ready = Path.of(closingModel + ".free-ready");
+        Files.writeString(closingModel, "synthetic slow teardown");
+        Files.writeString(otherModel, "synthetic independent model");
+        LlamaCppJniBackend closing = new LlamaCppJniBackend(library, closingModel, 1024, 2, 0);
+        AtomicReference<Throwable> outcome = new AtomicReference<>();
+        Thread worker = new Thread(() -> {
+            try { closing.close(); }
+            catch (Throwable result) { outcome.set(result); }
+        }, "native-slow-close");
+        worker.setDaemon(true);
+        try (var other = new LlamaCppJniBackend(library, otherModel, 1024, 2, 0)) {
+            worker.start();
+            Throwable failure = null;
+            try {
+                awaitMarker(ready, worker, outcome);
+                check(other.infer(new ModelRequest("independent", 8, Duration.ofMillis(500))).text().equals("OK"),
+                        "one model teardown must not block another model lookup");
+            } catch (Exception | Error primary) {
+                failure = primary;
+                throw primary;
+            } finally {
+                try { finishWorker(worker); }
+                catch (Exception | Error cleanup) {
+                    if (failure == null) throw cleanup;
+                    failure.addSuppressed(cleanup);
+                }
+            }
+            check(outcome.get() == null, "native close failed: " + outcome.get());
+        } finally {
+            if (!worker.isAlive()) closing.close();
+            Files.deleteIfExists(ready);
+        }
+    }
+
+    private static void awaitMarker(Path marker, Thread worker, AtomicReference<Throwable> outcome) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (deadline - System.nanoTime() > 0) {
+            if (Files.isRegularFile(marker) && Files.readString(marker).equals("ready\n")) return;
+            if (!worker.isAlive()) throw new AssertionError("native worker ended before readiness", outcome.get());
+            Thread.sleep(5);
+        }
+        throw new AssertionError("native readiness deadline exceeded");
+    }
+
+    private static void finishWorker(Thread worker) throws InterruptedException {
+        worker.interrupt();
+        worker.join(6_000);
+        if (worker.isAlive()) throw new AssertionError("native worker did not retire");
+    }
+
+    private static void deleteFixtureTree(Path base) throws IOException {
+        List<Path> paths;
+        try (var walk = Files.walk(base)) { paths = walk.sorted(Comparator.reverseOrder()).toList(); }
+        IOException failure = null;
+        for (Path path : paths) {
+            try { Files.deleteIfExists(path); }
+            catch (IOException cleanup) {
+                if (failure == null) failure = cleanup;
+                else failure.addSuppressed(cleanup);
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     private static void expectInvalidCompute(Path library, Path model, String backend, int gpuLayers)

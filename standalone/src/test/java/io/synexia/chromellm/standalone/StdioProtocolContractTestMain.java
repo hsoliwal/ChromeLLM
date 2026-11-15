@@ -92,7 +92,31 @@ public final class StdioProtocolContractTestMain {
     }
 
     public static void main(String[] args) throws Exception {
+        if (args.length == 1 && args[0].equals("--bounded-memory")) {
+            boundedMemory();
+            return;
+        }
         System.out.println("stdio transport checks passed: " + run());
+    }
+
+    /** A small heap fits the supplied text but not a second unbounded encoding allocation. */
+    private static void boundedMemory() throws Exception {
+        ModelBackend model = new ModelBackend() {
+            @Override public String id() { return "fixture"; }
+            @Override public ModelResponse infer(ModelRequest request) {
+                return new ModelResponse("x".repeat(32 * 1024 * 1024), id(), "0".repeat(64));
+            }
+        };
+        ByteArrayOutputStream request = new ByteArrayOutputStream();
+        frame(request, new byte[]{'x'}, 1, 1000);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        StdioProtocol.serve(model, new ByteArrayInputStream(request.toByteArray()), output);
+        DataInputStream read = new DataInputStream(new ByteArrayInputStream(output.toByteArray()));
+        require(read.readInt() == StdioProtocol.MAGIC);
+        require(read.readInt() == 1);
+        require(string(read).equals("model inference or encoding failed"));
+        require(read.read() == -1);
+        System.out.println("bounded encoding memory check passed");
     }
 
     private static void frame(ByteArrayOutputStream target, byte[] prompt, int tokens, long timeout)

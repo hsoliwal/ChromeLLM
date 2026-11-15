@@ -8,7 +8,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
+import java.nio.charset.MalformedInputException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.TimeoutException;
@@ -76,14 +79,40 @@ final class StdioProtocol {
         }
     }
 
-    private static byte[] encode(String text, int limit) throws IOException {
-        ByteBuffer encoded = StandardCharsets.UTF_8.newEncoder()
+    /** Shared by framing and local providers: validate and bound before allocating UTF-8 bytes. */
+    static byte[] encode(String text, int limit) throws IOException {
+        if (limit < 0 || text.length() > limit) throw new IOException("UTF-8 text exceeds bounded limit");
+        int length = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char current = text.charAt(i);
+            int width;
+            if (current < 0x80) width = 1;
+            else if (current < 0x800) width = 2;
+            else if (Character.isHighSurrogate(current)) {
+                if (i + 1 == text.length() || !Character.isLowSurrogate(text.charAt(i + 1))) {
+                    throw new MalformedInputException(1);
+                }
+                i++;
+                width = 4;
+            } else if (Character.isLowSurrogate(current)) {
+                throw new MalformedInputException(1);
+            } else width = 3;
+            if (width > limit - length) throw new IOException("UTF-8 text exceeds bounded limit");
+            length += width;
+        }
+        byte[] bytes = new byte[length];
+        ByteBuffer encoded = ByteBuffer.wrap(bytes);
+        var encoder = StandardCharsets.UTF_8.newEncoder()
                 .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT)
-                .encode(java.nio.CharBuffer.wrap(text));
-        if (encoded.remaining() > limit) throw new IOException("framed response limit");
-        byte[] bytes = new byte[encoded.remaining()];
-        encoded.get(bytes);
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+        CoderResult result = encoder.encode(CharBuffer.wrap(text), encoded, true);
+        if (result.isError()) result.throwException();
+        if (!result.isUnderflow()) throw new IOException("UTF-8 encoding exceeded verified size");
+        result = encoder.flush(encoded);
+        if (result.isError()) result.throwException();
+        if (!result.isUnderflow() || encoded.position() != length) {
+            throw new IOException("UTF-8 encoding did not match verified size");
+        }
         return bytes;
     }
 

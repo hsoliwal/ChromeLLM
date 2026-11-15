@@ -24,10 +24,23 @@ jobs:
         shell: bash
         run: test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar | tr -d '\r')" = java.base,java.net.http
   jni-synthetic:
-    runs-on: ubuntu-latest
-    env:
-      LANG: C.UTF-8
-      LC_ALL: C.UTF-8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            library: standalone/native/build/libchromellm_llama_jni.so
+            separator: ':'
+          - os: windows-latest
+            library: standalone/native/build/Release/chromellm_llama_jni.dll
+            separator: ';'
+          - os: macos-latest
+            library: standalone/native/build/libchromellm_llama_jni.dylib
+            separator: ':'
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -43,19 +56,22 @@ jobs:
           test ! -e docs/OPENAI_COMPAT_API.md
           test ! -e docs/M3_REBUILD_AND_DISTILLATION.md
           test ! -e '关键数据.md'
-      - run: cmake -S standalone/native -B standalone/native/build -DCHROMELLM_SYNTHETIC_TEST=ON
-      - run: cmake --build standalone/native/build --parallel 2
+      - run: cmake -S standalone/native -B standalone/native/build -DCHROMELLM_SYNTHETIC_TEST=ON -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build standalone/native/build --config Release --parallel 2
       - name: Test native library discovery
-        run: ctest --test-dir standalone/native/build --output-on-failure
+        run: ctest --test-dir standalone/native/build -C Release --output-on-failure
       - name: Verify no browser runtime linkage
+        if: runner.os == 'Linux'
         run: |
           if readelf -d standalone/native/build/libchromellm_llama_jni.so | grep -Ei 'optimization_guide_internal|libnode'; then
             echo 'Forbidden browser runtime linkage detected' >&2
             exit 1
           fi
       - run: mvn -B -ntp -f standalone/pom.xml test-compile
-      - run: java -cp standalone/target/classes:standalone/target/test-classes io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/standalone/native/build/libchromellm_llama_jni.so"
+      - run: java -Xcheck:jni -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}"
       - name: Reject an unavailable WebGPU provider
         env:
           CHROMELLM_TEST_NO_WEBGPU: '1'
-        run: java -cp standalone/target/classes:standalone/target/test-classes io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/standalone/native/build/libchromellm_llama_jni.so"
+        run: java -Xcheck:jni -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}"
+      - name: Bound JNI prompt encoding before allocation
+        run: java -Xcheck:jni -Xmx32m -cp "standalone/target/classes${{ matrix.separator }}standalone/target/test-classes" io.synexia.chromellm.standalone.JniSyntheticContractTestMain "${{ github.workspace }}/${{ matrix.library }}" oversize-memory
