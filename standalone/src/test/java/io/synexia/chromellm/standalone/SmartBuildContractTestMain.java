@@ -117,7 +117,9 @@ public final class SmartBuildContractTestMain {
             canonicalWorkspaceAliases(root);
             lazyModelOptions(root, target);
             lazyRecipe(root, target);
-            offlineModels(root, target);
+            offlineModels(canonicalRoot, target.toRealPath());
+            downloadRecipe(canonicalRoot, target.toRealPath());
+            offlineRecipe(canonicalRoot, target.toRealPath());
             nativePin(root);
         } finally {
             try (var files = Files.walk(root)) {
@@ -354,6 +356,66 @@ public final class SmartBuildContractTestMain {
                 return new ModelResponse("offline-candidate", id(), hash(request.prompt()));
             }
         };
+    }
+
+    private static void downloadRecipe(Path root, Path target) throws Exception {
+        Files.writeString(root.resolve("recipe.properties"), String.join("\n", "promptFile=prompt.txt",
+                "backend=jni", "modelUrl=https://example.invalid/model.gguf", "modelSha256=" + "a".repeat(64),
+                "modelCacheDir=target/model-cache", "modelFollowRedirects=true",
+                "modelDownloadTimeoutSeconds=120", "modelMaxBytes=2097152") + "\n");
+        AtomicInteger opened = new AtomicInteger();
+        SmartBuildMain.ProviderFactory provider = (options, ignored) -> {
+            opened.incrementAndGet();
+            check(options.get("--model-cache-dir").equals(target.resolve("model-cache").toString()),
+                    "relative cache did not resolve against standalone root");
+            check(!Files.exists(target.resolve("model-cache")), "managed cache created before provider validation");
+            check(options.get("--model-follow-redirects").equals("true")
+                    && options.get("--model-download-timeout-seconds").equals("120")
+                    && options.get("--model-max-bytes").equals("2097152"), "download policy options lost");
+            check(!options.containsKey("--jni-lib"), "packaged provider must not require an explicit JNI path");
+            return new ModelBackend() {
+                public String id() { return "llama.cpp-jni"; }
+                public ModelResponse infer(ModelRequest request) {
+                    check(Files.isDirectory(target.resolve("model-cache")), "managed cache missing at first inference");
+                    return new ModelResponse("download recipe candidate", id(), hash(request.prompt()));
+                }
+            };
+        };
+        SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider);
+        check(opened.get() == 1, "one explicit provider expected");
+        rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, root.resolve("other-target"), Map.of(), provider));
+        check(opened.get() == 1, "invalid Maven target reached model initialization");
+    }
+
+    private static void offlineRecipe(Path root, Path target) throws Exception {
+        Path cache = Files.createDirectory(root.resolve("offline-existing"));
+        byte[] fixture = "verified offline model".getBytes(StandardCharsets.UTF_8);
+        String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(fixture));
+        Path model = Files.write(cache.resolve(digest + ".gguf"), fixture);
+        Files.writeString(root.resolve("offline.properties"), String.join("\n", "promptFile=prompt.txt",
+                "backend=jni", "modelUrl=https://offline.invalid/model", "modelSha256=" + digest,
+                "modelCacheDir=offline-existing", "modelFollowRedirects=true",
+                "modelDownloadTimeoutSeconds=5", "modelMaxBytes=64") + "\n");
+        AtomicInteger opens = new AtomicInteger();
+        SmartBuildMain.ProviderFactory provider = (options, environment) -> {
+            opens.incrementAndGet();
+            check(Path.of(options.get("--model")).equals(model), "offline model path was not verified");
+            check(options.keySet().stream().noneMatch(key -> key.equals("--model-url")
+                    || key.equals("--model-sha256") || key.equals("--model-cache-dir")
+                    || key.equals("--model-follow-redirects") || key.equals("--model-download-timeout-seconds")
+                    || key.equals("--model-max-bytes")), "offline local provider retained acquisition-only options");
+            return new ModelBackend() {
+                public String id() { return "llama.cpp-jni"; }
+                public ModelResponse infer(ModelRequest request) {
+                    return new ModelResponse("offline candidate", id(), hash(request.prompt()));
+                }
+            };
+        };
+        SmartBuildMain.run(Path.of("offline.properties"), root, target, Map.of(), provider, true);
+        check(opens.get() == 1, "offline recipe opened more than one provider");
+        Files.write(model, new byte[fixture.length]);
+        rejectIo(() -> SmartBuildMain.run(Path.of("offline.properties"), root, target, Map.of(), provider, true));
+        check(opens.get() == 1, "corrupt offline model initialized the provider");
     }
 
     private static void nativePin(Path root) throws Exception {
