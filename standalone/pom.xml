@@ -55,6 +55,25 @@
           <classpathScope>test</classpathScope>
         </configuration>
       </execution>
+      <execution>
+        <id>agent-session-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.AgentSessionContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
+        <id>coding-agent-tools-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.CodingAgentToolsContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
+        <id>agent-entrypoint-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.AgentEntrypointContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution>
       </executions>
     </plugin>
   </plugins></build>

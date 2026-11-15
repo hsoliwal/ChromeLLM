@@ -91,6 +91,11 @@ int32_t llama_tokenize(const llama_vocab*, const char* input, int32_t len, llama
     if (prompt.rfind("Unicode:", 0) == 0 && prompt != "Unicode: नमस्ते 🦙") return 0;
     if (out == nullptr || cap == 0) return -1;
     if (len == 0 || cap < 1) return -1;
+    // Scripted agent protocol fixture. This exercises JNI bytes, never model quality.
+    if (prompt.find("fixture-agent-contract") != std::string::npos) {
+        out[0] = prompt.find("fixture-observation-ready") == std::string::npos ? 16 : 17;
+        return 1;
+    }
     out[0] = prompt == "Unicode: नमस्ते 🦙" ? 7 :
         (prompt == "invalid-utf8" ? 8 : (prompt == "blank-output" ? 9 :
         (prompt == "wait-interrupt" ? 10 : (prompt == "foreign-interrupt" ? 11 :
@@ -139,7 +144,11 @@ llama_token llama_sampler_sample(llama_sampler*, llama_context* ctx, int32_t) {
     if (ctx->mode == 9) return -1; // blank result
     if (ctx->mode == 8) return ctx->sampled++ == 0 ? 0xff : -1; // invalid UTF-8
     if (ctx->mode >= 12 && ctx->mode <= 15) return ctx->sampled++ == 0 ? -100 - ctx->mode : -1;
-    const std::string response = ctx->mode == 7 ? "नमस्ते 🦙" : "OK";
+    const std::string response = ctx->mode == 16
+        ? "{\"type\":\"tool\",\"name\":\"fixture_status\",\"arguments\":{}}"
+        : (ctx->mode == 17
+            ? "{\"type\":\"final\",\"answer\":\"native agent fixture completed\"}"
+            : (ctx->mode == 7 ? "नमस्ते 🦙" : "OK"));
     if (static_cast<size_t>(ctx->sampled) >= response.size()) return -1;
     return static_cast<unsigned char>(response[static_cast<size_t>(ctx->sampled++)]);
 }

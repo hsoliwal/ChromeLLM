@@ -308,3 +308,9 @@ Repeat the same Java command with `CHROMELLM_TEST_NO_WEBGPU=1` in its environmen
 The existing CI workflow runs both the Java contracts and synthetic JNI contracts on Linux, Windows and macOS. JNI checks run with `-Xcheck:jni`; a separate 32 MiB heap invocation verifies that oversized prompt encoding fails before allocating an encoded copy. The native fixture links the platform thread library and uses UTF-8 source encoding on MSVC.
 
 These tests check JNI loading, strict Unicode and byte limits, bounded token pieces, prompt receipts, timeout, interruption, native-lock deadlines, independent model close, stale-handle rejection and explicit CPU/WebGPU selection using a **fake test-only llama API**. They do not establish real GGUF inference or GPU offload. `mvn verify` also executes loopback HTTP tests for the Gemini adapter and provider-selection tests, without contacting Google or using credentials. Live API credentials, real models, drivers and device performance require separate runtime verification. Reusable source-change recipes and fixed-point evidence belong to hsoliwal/com.synexia; product code and tests live here.
+## Bounded coding-agent sessions
+
+Run `--agent true` with an explicitly configured headless repository service to
+use the existing Java/JNI model provider for multi-step source inspection and
+candidate previews. See [AGENT.md](AGENT.md) for setup, tools, MCP integration,
+budgets, source-hash checks and qualification boundaries.

@@ -132,6 +132,7 @@ public final class JniSyntheticContractTestMain {
             }
             nativeLockDeadline(library, base);
             independentClose(library, base);
+            JniAgentContractTestMain.main(new String[] {library.toString()});
         } catch (Exception | Error primary) {
             failure = primary;
             throw primary;
