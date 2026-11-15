@@ -62,6 +62,8 @@ public final class SmartBuildMain {
     static Path run(Path recipe, Path workspace, Path buildDirectory,
                     Map<String, String> environment, ProviderFactory providerFactory, boolean offline) throws Exception {
         Path root = workspace.toRealPath();
+        // Reject the destination before any artifact acquisition or provider initialization.
+        Path outputRoot = validateOutputRoot(root, buildDirectory);
         // Reject the destination before cache preparation or provider initialization.
         Path outputRoot = validateOutputRoot(root, buildDirectory);
         NativeBuildArtifacts.buildDirectory(root, outputRoot.getParent());
@@ -183,6 +185,7 @@ public final class SmartBuildMain {
     }
 
     private static Path validateOutputRoot(Path root, Path buildDirectory) throws IOException {
+        Path target = NativeBuildArtifacts.buildDirectory(root, buildDirectory);
         Path suppliedTarget = buildDirectory.toAbsolutePath().normalize();
         Path target = root.resolve("target");
         // Resolve ancestor aliases consistently with workspace.toRealPath(), while

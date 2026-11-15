@@ -391,6 +391,12 @@ final class ModelArtifactCache {
     private static InputStream fetch(URI url, long maxBytes) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(Duration.ofSeconds(20)).build();
+        return fetch(url, client);
+    }
+
+    /** HTTP compatibility seam; all requests share the owned transport and body lifecycle. */
+    static InputStream fetch(URI url, HttpClient client) throws IOException, InterruptedException {
+        Objects.requireNonNull(client, "HTTP client");
         return fetch(url, new Transport() {
             @Override public HttpResponse<InputStream> send(HttpRequest request)
                     throws IOException, InterruptedException {
