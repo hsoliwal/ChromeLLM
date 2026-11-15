@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 // Agent additions: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project; Apache-2.0.
 package io.synexia.chromellm.standalone;
 
@@ -26,38 +27,29 @@ final class McpStdioServer {
     private static final int MAX_INPUT = StdioProtocol.MAX_PROMPT_BYTES + 2048;
     private static final int MAX_OUTPUT = StdioProtocol.MAX_RESPONSE_BYTES;
     private final ModelBackend backend;
+    private final List<AgentSession.Tool> sessionAgentTools;
+    private final AgentSession.Limits agentLimits;
     private final List<AgentTool> agentTools;
-    private final List<AgentSession.Tool> sessionTools;
-    private final AgentSession.Limits sessionLimits;
     private boolean negotiated;
     private boolean initialized;
 
-    private McpStdioServer(ModelBackend backend, List<AgentTool> agentTools) {
-        this(backend, agentTools, List.of(), AgentSession.Limits.defaults());
-    }
-
-    private McpStdioServer(ModelBackend backend, List<AgentSession.Tool> sessionTools,
-                           AgentSession.Limits sessionLimits) {
-        this(backend, null, sessionTools, sessionLimits);
-    }
-
-    private McpStdioServer(ModelBackend backend, List<AgentTool> agentTools,
-                           List<AgentSession.Tool> sessionTools, AgentSession.Limits sessionLimits) {
+    private McpStdioServer(ModelBackend backend, List<AgentSession.Tool> sessionAgentTools,
+                           AgentSession.Limits agentLimits, List<AgentTool> agentTools) {
         this.backend = Objects.requireNonNull(backend, "backend");
+        this.sessionAgentTools = List.copyOf(sessionAgentTools);
+        this.agentLimits = Objects.requireNonNull(agentLimits, "agentLimits");
         this.agentTools = agentTools == null ? null : List.copyOf(agentTools);
-        this.sessionTools = List.copyOf(sessionTools);
-        this.sessionLimits = Objects.requireNonNull(sessionLimits, "sessionLimits");
     }
 
     /** Caller owns model, input and output streams. All processing is sequential. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output) throws IOException {
-        serveTools(backend, input, output, null);
+        serve(backend, input, output, List.of(), AgentSession.Limits.defaults());
     }
 
     /** A configured tool set adds one bounded agent entry point; the caller owns all resources. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output,
-                      List<AgentSession.Tool> tools, AgentSession.Limits limits) throws IOException {
-        serveSession(new McpStdioServer(backend, tools, limits), input, output);
+                      List<AgentSession.Tool> agentTools, AgentSession.Limits limits) throws IOException {
+        serveSession(new McpStdioServer(backend, agentTools, limits, null), input, output);
     }
 
     /** Workspace access is explicitly enabled by the process owner, never by a model argument. */
@@ -67,14 +59,14 @@ final class McpStdioServer {
 
     static void serveTools(ModelBackend backend, InputStream input, OutputStream output, List<AgentTool> tools)
             throws IOException {
-        serveSession(new McpStdioServer(backend, tools), input, output);
+        serveSession(new McpStdioServer(backend, List.of(), AgentSession.Limits.defaults(), tools), input, output);
     }
 
-    /** Independently configured workspace and endpoint capabilities may share one MCP session. */
+    /** Independently configured workspace and endpoint capabilities share one bounded MCP stream. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output,
                       List<AgentTool> workspaceTools, List<AgentSession.Tool> endpointTools,
                       AgentSession.Limits limits) throws IOException {
-        serveSession(new McpStdioServer(backend, workspaceTools, endpointTools, limits), input, output);
+        serveSession(new McpStdioServer(backend, endpointTools, limits, workspaceTools), input, output);
     }
 
     private static void serveSession(McpStdioServer session, InputStream input, OutputStream output)
@@ -179,7 +171,9 @@ final class McpStdioServer {
                 return encoded(success(id, toolResult("Agent planning interrupted", true)));
             }
         }
-        if ("run_agent".equals(tool) && !sessionTools.isEmpty()) return runSession(id, arguments);
+        if ("run_agent".equals(tool) && !sessionAgentTools.isEmpty()) {
+            return runSessionAgent(id, arguments);
+        }
         if ("agent_run".equals(tool) && agentTools != null) return runAgent(id, arguments);
         if (!"infer_text".equals(tool)) return encoded(error(id, -32602, "Unknown tool"));
         if (!(arguments.get("prompt") instanceof String prompt) || prompt.isBlank()
@@ -211,7 +205,7 @@ final class McpStdioServer {
         }
     }
 
-    private String runSession(Object id, Map<?, ?> arguments) throws IOException {
+    private String runSessionAgent(Object id, Map<?, ?> arguments) throws IOException {
         if (!(arguments.get("goal") instanceof String goal) || goal.isBlank()
                 || arguments.keySet().stream().anyMatch(key -> !List.of(
                         "goal", "maxSteps", "maxTokens", "timeoutSeconds").contains(key))) {
@@ -219,18 +213,18 @@ final class McpStdioServer {
         }
         final AgentSession.Limits selected;
         try {
-            StdioProtocol.encode(goal, sessionLimits.maxContextBytes());
-            int seconds = Math.toIntExact(sessionLimits.timeout().toSeconds());
+            StdioProtocol.encode(goal, agentLimits.maxContextBytes());
+            int seconds = Math.toIntExact(agentLimits.timeout().toSeconds());
             selected = new AgentSession.Limits(
-                    integer(arguments, "maxSteps", sessionLimits.maxSteps(), 1, sessionLimits.maxSteps()),
-                    integer(arguments, "maxTokens", sessionLimits.maxTokens(), 1, sessionLimits.maxTokens()),
-                    sessionLimits.maxContextBytes(), sessionLimits.maxToolResultBytes(),
+                    integer(arguments, "maxSteps", agentLimits.maxSteps(), 1, agentLimits.maxSteps()),
+                    integer(arguments, "maxTokens", agentLimits.maxTokens(), 1, agentLimits.maxTokens()),
+                    agentLimits.maxContextBytes(), agentLimits.maxToolResultBytes(),
                     Duration.ofSeconds(integer(arguments, "timeoutSeconds", seconds, 1, seconds)));
         } catch (IOException | IllegalArgumentException | ArithmeticException invalid) {
             return encoded(error(id, -32602, "Invalid agent arguments or operator budget exceeded"));
         }
         try {
-            AgentSession.Result result = new AgentSession(backend, sessionTools, selected).run(goal);
+            AgentSession.Result result = new AgentSession(backend, sessionAgentTools, selected).run(goal);
             Map<String, Object> response = new LinkedHashMap<>(toolResult(result.answer(), false));
             response.put("structuredContent", result.structured());
             return encoded(success(id, response));
@@ -308,18 +302,18 @@ final class McpStdioServer {
                                         "maxTokens", Map.of("type", "integer", "minimum", 1, "maximum", 32768),
                                         "timeoutSeconds", Map.of("type", "integer", "minimum", 1, "maximum", 3600)),
                                 "required", List.of("prompt")))));
-        if (!sessionTools.isEmpty()) {
+        if (!sessionAgentTools.isEmpty()) {
             tools.add(Map.of("name", "run_agent", "description",
                     "Run a bounded Java/JNI coding-agent session against operator-configured repository tools; "
                             + "candidate previews do not authorize source application or prove behavior.",
                     "inputSchema", Map.of("type", "object", "additionalProperties", false,
                             "properties", Map.of("goal", Map.of("type", "string"),
                                     "maxSteps", Map.of("type", "integer", "minimum", 1,
-                                            "maximum", sessionLimits.maxSteps()),
+                                            "maximum", agentLimits.maxSteps()),
                                     "maxTokens", Map.of("type", "integer", "minimum", 1,
-                                            "maximum", sessionLimits.maxTokens()),
+                                            "maximum", agentLimits.maxTokens()),
                                     "timeoutSeconds", Map.of("type", "integer", "minimum", 1,
-                                            "maximum", sessionLimits.timeout().toSeconds())),
+                                            "maximum", agentLimits.timeout().toSeconds())),
                             "required", List.of("goal")),
                     "annotations", Map.of("readOnlyHint", false, "destructiveHint", false,
                             "idempotentHint", false, "openWorldHint", false)));

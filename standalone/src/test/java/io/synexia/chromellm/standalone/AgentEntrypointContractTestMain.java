@@ -59,13 +59,17 @@ public final class AgentEntrypointContractTestMain {
         StandaloneMain.validateAgentMode(valid);
         check(StandaloneMain.agentLimits(valid).maxSteps() == 3);
         StandaloneMain.validateAgentMode(Map.of("--mcp-stdio", "true"));
-        StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--workspace", ".",
-                "--agent-max-steps", "4", "--agent-max-calls", "3"));
+        StandaloneMain.validateAgentMode(Map.of());
+        StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--workspace", "."));
+        StandaloneMain.validateAgentMode(Map.of("--mcp-stdio", "true", "--workspace", "."));
         reject(() -> StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--workspace", ".",
                 "--agent-endpoint", "http://127.0.0.1:32123", "--agent-token-env", "TOKEN")));
         StandaloneMain.validateAgentMode(Map.of("--mcp-stdio", "true", "--workspace", ".",
                 "--agent-endpoint", "http://127.0.0.1:32123", "--agent-token-env", "TOKEN"));
-        StandaloneMain.validateAgentMode(Map.of());
+        StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--workspace", ".",
+                "--agent-max-steps", "4", "--agent-max-calls", "3"));
+        reject(() -> StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--agent-max-calls", "2",
+                "--agent-endpoint", "http://127.0.0.1:32123", "--agent-token-env", "TOKEN")));
         reject(() -> StandaloneMain.validateAgentMode(Map.of("--agent", "true")));
         reject(() -> StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--stdio", "true")));
         reject(() -> StandaloneMain.validateAgentMode(Map.of("--agent", "true", "--mcp-stdio", "true")));

@@ -25,11 +25,13 @@ cache. Every cache hit is SHA-256 checked, a corrupt cache entry fails closed,
 and an incomplete or mismatched download is removed without replacing existing
 unowned paths. Missing artifacts use HTTPS GET.
 
-An explicit URL of the form
+Pinned native binary acquisition distinguishes an explicit URL of the form
 `https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>` on the default
 HTTPS port may follow up to three HTTPS redirects within GitHub release-download
 endpoints and `release-assets.githubusercontent.com`, also on the default HTTPS
-port. Other explicit HTTPS origins may follow up to five validated HTTPS redirects.
+port. General model acquisition and other explicit HTTPS origins retain up to five
+validated HTTPS redirects. The native-binary GitHub release lane retains its
+three-hop endpoint allowlist; both lanes use the same bounded lifecycle engine.
 Every hop rejects downgrades, user-info and fragments; redirect cycles and blank or
 ambiguous locations fail. Redirects carry no cookies or authorization. Redirected
 responses are closed before the next request, and the full pinned SHA-256 is checked

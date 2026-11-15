@@ -251,7 +251,7 @@ public final class WorkspaceToolsContractTestMain {
             Object scan = scanConstructor.newInstance(tools, false, Map.of(), deadline);
             try (AutoCloseable resource = (AutoCloseable) directory) {
                 try {
-                    invoke(scan, "walk", directory, Path.of(""), 0);
+                    invoke(scan, "walk", resource, Path.of(""), 0);
                     throw new AssertionError("directory enumeration failure returned a result");
                 } catch (IOException actual) {
                     check(actual == providerFailure, "directory iteration retains the original checked provider cause");

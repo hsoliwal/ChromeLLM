@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project.
 // Agent additions: Copyright © 2026 Hitesh Soliwal and Contributors to the Synexia Project; Apache-2.0.
 package io.synexia.chromellm.standalone;
 
@@ -24,8 +25,8 @@ public final class StandaloneMain {
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
         validateAgentMode(options);
+        validateChromeModes(options);
         if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
-            validateChromeModes(options);
             Path goalFile = Path.of(required(options, "--prompt-file"));
             AgentSession.Limits limits = agentLimits(options);
             String goal = readAgentGoal(goalFile, limits);
@@ -41,7 +42,6 @@ public final class StandaloneMain {
         }
         Path workspace = agentWorkspace(options);
         List<AgentTool> tools = workspace == null ? null : new WorkspaceTools(workspace).tools();
-        validateChromeModes(options);
         if (flag(options, "--chrome-status") || flag(options, "--chrome-prepare")) {
             Duration timeout = setupTimeout(options);
             try (ModelBackend selected = backend(options, System.getenv())) {
@@ -126,7 +126,8 @@ public final class StandaloneMain {
                 || options.containsKey("--agent-max-context-bytes")
                 || options.containsKey("--agent-max-tool-result-bytes");
         boolean configured = options.keySet().stream().anyMatch(key -> key.startsWith("--agent-"));
-        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
+        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices")
+                || flag(options, "--chrome-status") || flag(options, "--chrome-prepare"))) {
             throw new IllegalArgumentException("agent execution requires its own exclusive session mode");
         }
         if (agent && workspace && endpoint) {
