@@ -20,7 +20,26 @@ public final class FakeLlamaCppMain {
         }
         String prompt = Files.readString(Path.of(a.get(index + 1)));
         if (a.contains(prompt)) System.exit(9); // Prompt must never be placed on argv.
-        if (prompt.equals("sleep")) Thread.sleep(3000);
+        if (prompt.equals("check-webgpu")) {
+            int device = a.indexOf("--device");
+            int layers = a.indexOf("-ngl");
+            if (device < 0 || device + 1 >= a.size() || !a.get(device + 1).equals("WebGPU0")
+                    || layers < 0 || layers + 1 >= a.size() || !a.get(layers + 1).equals("16")) {
+                System.exit(12);
+            }
+        }
+        int readyIndex = a.indexOf("--ready-file");
+        if (readyIndex >= 0) {
+            Files.writeString(Path.of(a.get(readyIndex + 1)), ProcessHandle.current().pid() + "\n");
+        }
+        if (prompt.equals("sleep")) Thread.sleep(readyIndex >= 0 ? 60_000 : 3000);
+        if (prompt.startsWith("cleanup-failure")) {
+            Path promptFile = Path.of(a.get(index + 1));
+            Files.delete(promptFile);
+            Files.createDirectory(promptFile);
+            Files.writeString(promptFile.resolve("owned-marker"), "force a cleanup refusal");
+            if (prompt.equals("cleanup-failure-exit")) System.exit(4);
+        }
         if (prompt.equals("fail")) System.exit(4);
         System.out.print("synthetic reply");
     }

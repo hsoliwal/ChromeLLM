@@ -5,6 +5,7 @@
 #include <thread>
 #include <algorithm>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 struct ggml_backend_reg { const char* name; };
 struct ggml_backend_device {
@@ -27,10 +28,21 @@ struct llama_model { llama_model_params params; std::string path; };
 struct llama_vocab {};
 struct llama_context { llama_context_params p; int sampled = 0; int mode = 2; };
 struct llama_sampler {};
+static bool HasWebGpu() {
+    const char* disabled = std::getenv("CHROMELLM_TEST_NO_WEBGPU");
+    return disabled == nullptr || std::strcmp(disabled, "1") != 0;
+}
 extern "C" {
+ggml_backend_reg_t ggml_backend_reg_by_name(const char* name) {
+    return HasWebGpu() && std::strcmp(name, "WebGPU") == 0 ? &webgpu : nullptr;
+}
 void llama_backend_init() {}
-size_t ggml_backend_dev_count() { return sizeof(devices) / sizeof(devices[0]); }
-ggml_backend_dev_t ggml_backend_dev_get(size_t index) { return index < ggml_backend_dev_count() ? &devices[index] : nullptr; }
+// Without the WebGPU provider the registry simply has no entry at the WebGPU position.
+size_t ggml_backend_dev_count() { return sizeof(devices) / sizeof(devices[0]) - (HasWebGpu() ? 0 : 1); }
+ggml_backend_dev_t ggml_backend_dev_get(size_t index) {
+    if (index >= ggml_backend_dev_count()) return nullptr;
+    return &devices[!HasWebGpu() && index >= 1 ? index + 1 : index];
+}
 const char* ggml_backend_dev_name(ggml_backend_dev_t device) { return device->name; }
 const char* ggml_backend_dev_description(ggml_backend_dev_t device) { return device->description; }
 enum ggml_backend_dev_type ggml_backend_dev_type(ggml_backend_dev_t device) { return device->type; }
@@ -103,4 +115,3 @@ int32_t llama_token_to_piece(const llama_vocab*, llama_token t, char* out, int32
     return 1;
 }
 }
-

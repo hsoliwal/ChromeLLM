@@ -2,6 +2,9 @@
 package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -25,7 +28,40 @@ public final class JniSyntheticContractTestMain {
             Files.writeString(rejected, "synthetic-rejected-model");
             Files.writeString(gpuModel, "synthetic-selector-fixture-not-GPU-weights");
             Files.writeString(cpuModel, "synthetic-selector-fixture-not-model-weights");
-            deviceSelection(Path.of(args[0]), gpuModel, cpuModel);
+            Path library = Path.of(args[0]);
+            try (LlamaCppJniBackend selected = new LlamaCppJniBackend(library, cpuModel, 1024, 2, 0, "cpu")) {
+                check(selected.infer(new ModelRequest("selected", 8, Duration.ofSeconds(1))).text().equals("OK"),
+                        "CPU policy passes an explicitly empty GPU device list");
+            }
+            try (LlamaCppJniBackend automatic = new LlamaCppJniBackend(library, model, 1024, 2, 0, "auto")) {
+                check(automatic.infer(new ModelRequest("automatic", 8, Duration.ofSeconds(1))).text().equals("OK"),
+                        "auto policy preserves the original native entry point");
+            }
+            boolean noWebGpu = "1".equals(System.getenv("CHROMELLM_TEST_NO_WEBGPU"));
+            // The explicit backend/device contract is written against the full fixture registry.
+            if (!noWebGpu) deviceSelection(library, gpuModel, cpuModel);
+            if (noWebGpu) {
+                try (LlamaCppJniBackend unexpected = new LlamaCppJniBackend(library, gpuModel, 1024, 2, 3, "webgpu")) {
+                    throw new AssertionError("missing WebGPU provider silently accepted by " + unexpected.id());
+                } catch (IOException expected) {
+                    check(expected.getMessage().contains("WebGPU provider is unavailable"),
+                            "explicit WebGPU failure identifies the missing provider");
+                }
+            } else {
+                try (LlamaCppJniBackend selected = new LlamaCppJniBackend(library, gpuModel, 1024, 2, 3, "webgpu")) {
+                    check(selected.infer(new ModelRequest("selected", 8, Duration.ofSeconds(1))).text().equals("OK"),
+                            "WebGPU policy passes only WebGPU devices and positive GPU layers");
+                }
+            }
+            expectInvalidCompute(library, model, "webgpu", 0);
+            expectInvalidCompute(library, model, "cpu", 1);
+            expectInvalidCompute(library, model, "unknown", 1);
+            Method nativeOpen = LlamaCppJniBackend.class.getDeclaredMethod("nOpenWithBackend",
+                    byte[].class, int.class, int.class, int.class, int.class);
+            nativeOpen.setAccessible(true);
+            expectNativeComputeFailure(nativeOpen, model, 1, 1); // CPU with GPU layers
+            expectNativeComputeFailure(nativeOpen, model, 0, 2); // WebGPU without GPU layers
+            expectNativeComputeFailure(nativeOpen, model, 0, 3); // invalid native selector
             try {
                 new LlamaCppJniBackend(Path.of(args[0]), rejected, 1024, 2, 0);
                 throw new AssertionError("native model-load failure was accepted");
@@ -84,8 +120,27 @@ public final class JniSyntheticContractTestMain {
             Files.deleteIfExists(cpuModel);
             Files.deleteIfExists(base);
         }
-        System.out.println("PASS JNI synthetic lifecycle/UTF-8/timeout/device-selection: " + checks
-                + " checks; no real model or GPU execution");
+        System.out.println("PASS JNI synthetic provider-selection/device-selection/lifecycle/UTF-8/timeout/close: "
+                + checks + " checks; no real model or GPU execution");
+    }
+
+    private static void expectInvalidCompute(Path library, Path model, String backend, int gpuLayers)
+            throws IOException {
+        try (LlamaCppJniBackend unexpected = new LlamaCppJniBackend(library, model, 1024, 2, gpuLayers, backend)) {
+            throw new AssertionError("invalid compute selection accepted by " + unexpected.id() + ": " + backend + "/" + gpuLayers);
+        } catch (IllegalArgumentException expected) {
+            checks++;
+        }
+    }
+
+    private static void expectNativeComputeFailure(Method open, Path model, int gpuLayers, int backend)
+            throws Exception {
+        try {
+            open.invoke(null, model.toString().getBytes(StandardCharsets.UTF_8), 1024, 2, gpuLayers, backend);
+            throw new AssertionError("native compute selection bypassed validation");
+        } catch (InvocationTargetException wrapped) {
+            check(wrapped.getCause() instanceof IOException, "native boundary rejects invalid compute selection");
+        }
     }
 
     private static void deviceSelection(Path library, Path gpuModel, Path cpuModel) throws Exception {
@@ -149,4 +204,3 @@ public final class JniSyntheticContractTestMain {
         if (!condition) throw new AssertionError(message);
     }
 }
-

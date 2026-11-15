@@ -53,7 +53,14 @@ public final class LlamaCppJniBackend implements ModelBackend {
     /** Both shared library and licensed GGUF model must be supplied explicitly. */
     public LlamaCppJniBackend(Path jniLibrary, Path model, int contextTokens, int threads, int gpuLayers)
             throws IOException {
-        this(jniLibrary, model, contextTokens, threads, gpuLayers, null, null, false);
+        this(jniLibrary, model, contextTokens, threads, gpuLayers, "auto", null, null, false);
+    }
+
+    /** Select a linked GGML provider policy (auto, cpu or webgpu) without a browser runtime. */
+    LlamaCppJniBackend(Path jniLibrary, Path model, int contextTokens, int threads, int gpuLayers,
+                       String computeBackend) throws IOException {
+        this(jniLibrary, model, contextTokens, threads, gpuLayers,
+                Objects.requireNonNull(computeBackend, "computeBackend"), null, null, false);
     }
 
     /**
@@ -64,11 +71,12 @@ public final class LlamaCppJniBackend implements ModelBackend {
      */
     public LlamaCppJniBackend(Path jniLibrary, Path model, int contextTokens, int threads, int gpuLayers,
                               String backend, String device) throws IOException {
-        this(jniLibrary, model, contextTokens, threads, gpuLayers, backend, device, true);
+        this(jniLibrary, model, contextTokens, threads, gpuLayers, "auto", backend, device, true);
     }
 
     private LlamaCppJniBackend(Path jniLibrary, Path model, int contextTokens, int threads, int gpuLayers,
-                               String backend, String device, boolean explicit) throws IOException {
+                               String computeBackend, String backend, String device, boolean explicit)
+            throws IOException {
         Path bridge = Objects.requireNonNull(jniLibrary, "jniLibrary").toAbsolutePath().normalize();
         Path weights = Objects.requireNonNull(model, "model").toAbsolutePath().normalize();
         requireReadableBridge(bridge);
@@ -79,21 +87,35 @@ public final class LlamaCppJniBackend implements ModelBackend {
                 || gpuLayers < 0 || gpuLayers > 1024) {
             throw new IllegalArgumentException("invalid context, thread count or GPU layer count");
         }
+        int selectedBackend = switch (computeBackend) {
+            case "auto" -> 0;
+            case "cpu" -> 1;
+            case "webgpu" -> 2;
+            default -> throw new IllegalArgumentException("compute backend must be auto, cpu or webgpu");
+        };
+        if (selectedBackend == 1 && gpuLayers != 0) {
+            throw new IllegalArgumentException("cpu requires zero GPU layers");
+        }
+        if (selectedBackend == 2 && gpuLayers == 0) {
+            throw new IllegalArgumentException("webgpu requires a positive GPU layer count");
+        }
         byte[] backendName = explicit ? selector(backend, "backend") : null;
         byte[] deviceName = explicit ? selector(device, "device") : null;
-        // Native JNI library is supplied explicitly; no auto-discovery or plugin download.
+        // Native JNI library is supplied explicitly; no auto-discovery, plugin search or download.
         System.load(bridge.toString());
-        // Preserve the original native symbol for callers using an existing five-argument bridge.
+        byte[] modelPath = weights.toString().getBytes(StandardCharsets.UTF_8);
         if (explicit) {
             try {
-                this.handle = nOpenOnDevice(weights.toString().getBytes(StandardCharsets.UTF_8),
-                        contextTokens, threads, gpuLayers, backendName, deviceName);
+                this.handle = nOpenOnDevice(modelPath, contextTokens, threads, gpuLayers,
+                        backendName, deviceName);
             } catch (UnsatisfiedLinkError unsupported) {
                 throw new IOException("JNI bridge does not support explicit device selection", unsupported);
             }
         } else {
-            this.handle = nOpen(weights.toString().getBytes(StandardCharsets.UTF_8),
-                    contextTokens, threads, gpuLayers);
+            // Keep the original native entry point for existing Java clients and native bridges.
+            this.handle = selectedBackend == 0
+                    ? nOpen(modelPath, contextTokens, threads, gpuLayers)
+                    : nOpenWithBackend(modelPath, contextTokens, threads, gpuLayers, selectedBackend);
         }
         if (handle == 0) throw new IOException("native model loader returned no handle");
     }
@@ -214,6 +236,8 @@ public final class LlamaCppJniBackend implements ModelBackend {
 
     private static native long nOpen(byte[] utf8ModelPath, int contextTokens, int threads, int gpuLayers)
             throws IOException;
+    private static native long nOpenWithBackend(byte[] utf8ModelPath, int contextTokens, int threads,
+                                               int gpuLayers, int computeBackend) throws IOException;
     private static native long nOpenOnDevice(byte[] utf8ModelPath, int contextTokens, int threads,
                                              int gpuLayers, byte[] backend, byte[] device) throws IOException;
     private static native byte[][] nAvailableDevices() throws IOException;
@@ -222,4 +246,3 @@ public final class LlamaCppJniBackend implements ModelBackend {
             throws IOException, TimeoutException;
     private static native void nClose(long handle);
 }
-

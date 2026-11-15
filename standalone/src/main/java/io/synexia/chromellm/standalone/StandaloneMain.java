@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 package io.synexia.chromellm.standalone;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -11,7 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** Explicit browser-free inference, once or through a bounded persistent stdio session. */
+/** Explicit browser-free inference with a local or hosted provider, once or through a bounded stdio session. */
 public final class StandaloneMain {
     private StandaloneMain() { }
 
@@ -32,7 +35,7 @@ public final class StandaloneMain {
             if (options.containsKey("--prompt-file")) {
                 throw new IllegalArgumentException("stdio requests supply their own prompts");
             }
-            try (ModelBackend backend = backend(options);
+            try (ModelBackend backend = backend(options, System.getenv());
                  FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
                 // PrintStream suppresses pipe failures; binary framing needs the original IOException.
                 StdioProtocol.serve(backend, System.in, output);
@@ -44,35 +47,105 @@ public final class StandaloneMain {
             throw new IllegalArgumentException("prompt file does not exist");
         }
         ModelRequest request = new ModelRequest(
-                Files.readString(promptFile, StandardCharsets.UTF_8),
-                Integer.parseInt(options.getOrDefault("--max-tokens", "512")),
+                readPrompt(promptFile, "gemini".equals(options.get("--backend"))),
+                Integer.parseInt(options.getOrDefault("--max-tokens",
+                        "gemini".equals(options.get("--backend")) ? "32768" : "512")),
                 Duration.ofSeconds(Long.parseLong(options.getOrDefault("--timeout-seconds", "120"))));
-        try (ModelBackend backend = backend(options)) {
+        try (ModelBackend backend = backend(options, System.getenv())) {
             System.out.print(backend.infer(request).text());
         }
     }
 
-    private static ModelBackend backend(Map<String, String> options) throws Exception {
-        Path model = Path.of(required(options, "--model"));
-        String selection = options.getOrDefault("--backend", "cli");
-        boolean explicitDevice = options.containsKey("--device-backend") || options.containsKey("--device");
-        if (explicitDevice && !"jni".equals(selection)) {
-            throw new IllegalArgumentException("explicit device selection requires the JNI backend");
+    static String readPrompt(Path promptFile, boolean hosted) throws IOException {
+        if (!hosted) return Files.readString(promptFile, StandardCharsets.UTF_8);
+        // Bound the read itself: a size-only check could race a growing prompt file.
+        try (var input = Files.newInputStream(promptFile)) {
+            byte[] bytes = input.readNBytes(GeminiApiBackend.MAX_REQUEST_BYTES + 1);
+            if (bytes.length > GeminiApiBackend.MAX_REQUEST_BYTES) {
+                throw new IOException("Gemini prompt file exceeds the bounded input limit");
+            }
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes)).toString();
         }
-        if ("cli".equals(selection)) {
-            return new LlamaCppCliBackend(Path.of(required(options, "--llama-bin")), model);
+    }
+
+    static ModelBackend backend(Map<String, String> options, Map<String, String> environment) throws Exception {
+        String provider = options.getOrDefault("--backend", "cli");
+        if ("gemini".equals(provider)) {
+            rejectOptions(options, "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
+                    "--gpu-layers", "--compute-backend", "--device-backend", "--device", "--tier",
+                    "--fast-model", "--reasoning-model", "--frontier-model");
+            String keyVariable = options.getOrDefault("--api-key-env", "GEMINI_API_KEY");
+            if (!keyVariable.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                throw new IllegalArgumentException("--api-key-env must name an environment variable");
+            }
+            String apiKey = environment.get(keyVariable);
+            if (apiKey == null || apiKey.isBlank()) {
+                throw new IllegalArgumentException("Gemini API key environment variable is not set");
+            }
+            return new GeminiApiBackend(apiKey,
+                    options.getOrDefault("--model", GeminiApiBackend.DEFAULT_MODEL),
+                    options.getOrDefault("--thinking-level", GeminiApiBackend.DEFAULT_THINKING_LEVEL));
         }
-        if (!"jni".equals(selection)) {
-            throw new IllegalArgumentException("unknown backend (expected cli or jni)");
+        rejectOptions(options, "--thinking-level", "--api-key-env");
+        Path model = localModel(options);
+        return switch (provider) {
+            case "cli" -> {
+                // --device alone names the llama.cpp CLI device; the backend/device pair is JNI-only.
+                rejectOptions(options, "--compute-backend", "--device-backend");
+                yield options.containsKey("--device") || options.containsKey("--gpu-layers")
+                        ? new LlamaCppCliBackend(Path.of(required(options, "--llama-bin")), model,
+                                options.get("--device"),
+                                Integer.parseInt(options.getOrDefault("--gpu-layers", "-1")))
+                        : new LlamaCppCliBackend(Path.of(required(options, "--llama-bin")), model);
+            }
+            case "jni" -> {
+                Path library = Path.of(required(options, "--jni-lib"));
+                int context = Integer.parseInt(options.getOrDefault("--context-tokens", "4096"));
+                int threads = Integer.parseInt(options.getOrDefault("--threads", "4"));
+                int layers = Integer.parseInt(options.getOrDefault("--gpu-layers", "0"));
+                if (options.containsKey("--device-backend") || options.containsKey("--device")) {
+                    // One observed backend/device pair; a provider policy would contradict it.
+                    rejectOptions(options, "--compute-backend");
+                    yield new LlamaCppJniBackend(library, model, context, threads, layers,
+                            required(options, "--device-backend"), required(options, "--device"));
+                }
+                yield new LlamaCppJniBackend(library, model, context, threads, layers,
+                        options.getOrDefault("--compute-backend", "auto"));
+            }
+            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni or gemini)");
+        };
+    }
+
+    /** One local model path: --model, or the path named for the explicitly selected --tier. */
+    private static Path localModel(Map<String, String> options) {
+        String tierValue = options.get("--tier");
+        if (tierValue == null) {
+            if (options.containsKey("--fast-model") || options.containsKey("--reasoning-model")
+                    || options.containsKey("--frontier-model")) {
+                throw new IllegalArgumentException("tier-specific models require --tier");
+            }
+            return Path.of(required(options, "--model"));
         }
-        Path library = Path.of(required(options, "--jni-lib"));
-        int context = Integer.parseInt(options.getOrDefault("--context-tokens", "4096"));
-        int threads = Integer.parseInt(options.getOrDefault("--threads", "4"));
-        int layers = Integer.parseInt(options.getOrDefault("--gpu-layers", "0"));
-        return explicitDevice
-                ? new LlamaCppJniBackend(library, model, context, threads, layers,
-                        required(options, "--device-backend"), required(options, "--device"))
-                : new LlamaCppJniBackend(library, model, context, threads, layers);
+        if (options.containsKey("--model")) {
+            throw new IllegalArgumentException("--model and --tier-specific model paths are exclusive");
+        }
+        String key = switch (InferenceTier.parse(tierValue)) {
+            case FAST -> "--fast-model";
+            case REASONING -> "--reasoning-model";
+            case FRONTIER -> "--frontier-model";
+        };
+        return Path.of(required(options, key));
+    }
+
+    private static void rejectOptions(Map<String, String> options, String... incompatible) {
+        for (String option : incompatible) {
+            if (options.containsKey(option)) {
+                throw new IllegalArgumentException(option + " is not supported by the selected backend");
+            }
+        }
     }
 
     private static String required(Map<String, String> options, String key) {
@@ -99,11 +172,13 @@ public final class StandaloneMain {
         return result.toString();
     }
 
-    private static Map<String, String> parse(String[] args) {
+    static Map<String, String> parse(String[] args) {
         if ((args.length & 1) != 0) throw new IllegalArgumentException("options require values");
         Set<String> allowed = Set.of("--llama-bin", "--backend", "--jni-lib", "--context-tokens",
                 "--threads", "--gpu-layers", "--model", "--prompt-file", "--max-tokens",
-                "--timeout-seconds", "--stdio", "--list-devices", "--device-backend", "--device");
+                "--timeout-seconds", "--stdio", "--list-devices", "--device-backend", "--device",
+                "--compute-backend", "--thinking-level", "--api-key-env", "--tier", "--fast-model",
+                "--reasoning-model", "--frontier-model");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String option = args[i];
