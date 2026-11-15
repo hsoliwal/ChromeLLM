@@ -107,6 +107,25 @@ class HostTests(unittest.TestCase):
                                     launch_args=(origin + "/", "--parent-window=0"))
         self.assertEqual(messages, with_window)
 
+    def test_packaged_jvm_config_admits_chrome_arguments(self):
+        origin = "chrome-extension://" + "a" * 32
+        command = ["java", "-Dchromellm.agent.config=" + str(self.config),
+                   "-cp", str(CLASSES), "io.synexia.chromellm.webmcp.AgentHost"]
+        request = frame('{"op":"hello"}')
+        allowed = subprocess.run(command + [origin, "--parent-window=0"],
+                                 input=request, capture_output=True, timeout=10, check=False)
+        self.assertEqual(allowed.returncode, 0, allowed.stderr)
+        self.assertEqual(messages_from_bytes(allowed.stdout)[0]["access"], "read-only")
+        # The property is authoritative. A second positional config is not accepted.
+        invalid = subprocess.run(command + [str(self.config), origin],
+                                 input=request, capture_output=True, timeout=10, check=False)
+        self.assertEqual(invalid.returncode, 2)
+        self.assertEqual(invalid.stdout, b"")
+        denied = subprocess.run(command + ["chrome-extension://" + "b" * 32],
+                                input=request, capture_output=True, timeout=10, check=False)
+        self.assertEqual(denied.returncode, 2)
+        self.assertEqual(denied.stdout, b"")
+
     def test_chrome_launcher_denies_bad_or_mismatched_origin(self):
         origin = "chrome-extension://" + "a" * 32
         examples = [

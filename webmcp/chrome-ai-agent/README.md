@@ -37,7 +37,7 @@ The regression suite constructs its own temporary approved repository roots and 
 
 1. Build the Java host (above). Copy the **whole package** to a stable user-owned path.
 2. Copy `host/config.example.properties` to an operator-owned configuration path and set `repo.ChromeLLM`, `repo.dawn`, `repo.synexia-llmcpp`, `repo.maven` to actual, approved checkout paths (nonexistent paths remain unavailable).
-3. Create an executable launcher in an approved directory that calls `java -cp /absolute/path/to/host/target/classes AgentHost /absolute/path/to/config.properties` with stdout reserved for the native protocol.
+3. Create an executable launcher in an approved directory using `host/launch.example.sh` as a template. The effective command is `java -cp /absolute/path/to/host/target/classes io.synexia.chromellm.webmcp.AgentHost /absolute/path/to/config.properties "$@"`, forwarding Chrome's origin argument unchanged and reserving stdout exclusively for native protocol frames.
 4. In `chrome://extensions`, enable Developer mode and choose **Load unpacked** for `extension/`. Copy the resulting extension ID.
 5. In the same properties file set `agent.allowed_origin=chrome-extension://YOUR_EXTENSION_ID/`. Register the `io.synexia.m3_chrome_ai_agent` Native Messaging host with a manifest pointing to the absolute launcher path and `allowed_origins` containing only `chrome-extension://YOUR_EXTENSION_ID/`.
 6. Use the extension popup to inspect the repo and request a proposal from the Chrome-managed model. After reviewing the advisory, press **Copy candidate**. Save the text explicitly to an approved file and pass that file with Maven `-Dm3.smart.candidateFile=/approved/candidate.txt`; model text remains untrusted and never authorizes or executes commands. This is an opt-in model download, subject to Chrome's Prompt API eligibility checks.
@@ -52,10 +52,15 @@ The launcher forwards Chrome's extension-origin launch argument and optional Win
 
 The native host manifest on Windows must identify an executable, not a `.ps1` file.
 An operator can build the JAR with Java 21, then use Windows `jpackage --type
-app-image --win-console` with the approved configuration path as the launcher’s
-fixed argument; Chrome appends the extension origin and optional parent-window
-argument. Register the host manifest in the user's HKCU NativeMessagingHosts key
-only after reviewing the installed executable and extension ID. The installer,
+app-image --win-console` and pass `--java-options
+"-Dchromellm.agent.config=C:/approved/config.properties"` as a fixed JVM option.
+**Do not use `--arguments` for the fixed config path**: JDK 21 documents that
+those defaults apply when no launcher arguments are supplied, while Chrome
+supplies its origin as an argument. The host receives the Chrome origin and
+optional parent-window handle as runtime arguments and reads the fixed config
+path only from the operator-packaged JVM property. Register the host manifest
+in the user's HKCU NativeMessagingHosts key only after reviewing the installed
+executable and extension ID. The installer,
 Windows launcher, Chrome permissions, GPU/CPU model eligibility and live browser
 transport have **not** been tested here. No registry writes or system installs are
 performed by these sources.
