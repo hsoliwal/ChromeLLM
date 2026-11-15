@@ -4,18 +4,24 @@ The standalone Java/JNI runtime stays browser-free. Legacy `--model` and tier-sp
 paths remain authoritative. A local CLI or JNI invocation may instead supply all
 three options `--model-url`, `--model-sha256`, and `--model-cache-dir`; these are
 exclusive with `--model`, `--tier`, and all tier-specific paths. The cache directory
-must already exist and be writable; acquisition never creates an implicit user-home
-cache. Hosted Gemini rejects these options.
+must already exist and be writable for the direct CLI; acquisition never creates an
+implicit user-home cache. The explicitly selected Maven binary profiles and smart-build
+entrypoint prepare their documented cache directories. Hosted Gemini rejects these options.
 
 `--model-url` must be an explicitly supplied HTTPS URL, without user-info or fragment.
 `--model-sha256` is a 64-hex-character digest of the entire licensed GGUF artifact.
-The model is fetched no earlier than the first inference request, never at build
-or argument parse time. The CLI executable or JNI bridge remains separately installed.
+The lazy provider fetches the model no earlier than the first inference request and
+never at argument parse time. An explicitly selected Maven `real-model` profile may
+provision its pinned test model before verification. The CLI executable or JNI bridge
+remains separately installed or built from the selected native source.
 The caller must review model redistribution, export, and use rights.
 
 The implementation stores verified model bytes as `<sha256>.gguf` in the specified
 cache. Every cache hit is SHA-256 checked, a corrupt cache entry fails closed,
 and an incomplete or mismatched download is removed without replacing existing
+unowned paths. Missing artifacts use HTTPS GET with at most five validated HTTPS
+redirects. Downgrades, credentials and fragments are rejected on every hop. Transfer
+size is bounded to 64 GiB; transient failures have no automatic retry or provider
 unowned paths. Missing artifacts use HTTPS GET. An explicit GitHub release-download URL may follow
 up to three HTTPS redirects within GitHub release-download endpoints and
 `release-assets.githubusercontent.com`, on the default HTTPS port only and without
@@ -23,8 +29,9 @@ user-info or fragments. Other redirects remain refused. The full pinned SHA-256
 is checked after transfer; redirected responses are closed before the next request.
 Transfer size is bounded to 64 GiB; transient failures have no automatic retry or provider
 fallback. Files are staged in the same directory and published via an exclusive
-hard link only on successful verification. Directory creation, implicit writes
-to home/root, and silent repair of corrupted cached artifacts are forbidden.
+hard link only on successful verification. The cache owner itself does not create
+directories or silently repair corrupt artifacts. Maven offline mode revalidates
+existing binary inputs and refuses cache misses before opening the downloader.
 
 The artifact is acquired before native or subprocess model initialization. The
 request's inference timeout applies to inference after successful acquisition.

@@ -87,6 +87,27 @@ public final class SmartBuildContractTestMain {
             rejectIllegal(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
             Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\nmaxTokens=32769\n");
             rejectIllegal(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
+            Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\n"
+                    + "llamaBin=bin/llama-cli\nmodel=models/model.gguf\n");
+            int beforeInvalidTarget = requests.get();
+            rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, root, Map.of(), provider));
+            check(requests.get() == beforeInvalidTarget, "invalid target opened provider");
+            SmartBuildMain.ProviderFactory relative = (options, env) -> {
+                check(options.get("--llama-bin").equals(root.resolve("bin/llama-cli").toString()), "relative launcher root");
+                check(options.get("--model").equals(root.resolve("models/model.gguf").toString()), "relative model root");
+                return new ModelBackend() {
+                    public String id() { return "llama.cpp-cli"; }
+                    public ModelResponse infer(ModelRequest request) {
+                        return new ModelResponse("relative-candidate", id(), hash(request.prompt()));
+                    }
+                };
+            };
+            SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), relative);
+            Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\n"
+                    + "llamaBin=bin/llama-cli\nmodelUrl=https://example.invalid/model\n"
+                    + "modelSha256=" + "0".repeat(64) + "\nmodelCacheDir=offline-cache\n");
+            rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider, true));
+            check(requests.get() == beforeInvalidTarget, "offline cache miss opened provider");
             lazyModelOptions(root, target);
             lazyRecipe(root, target);
             nativePin(root);
