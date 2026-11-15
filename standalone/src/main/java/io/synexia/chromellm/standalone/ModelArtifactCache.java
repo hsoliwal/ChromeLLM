@@ -512,17 +512,6 @@ final class ModelArtifactCache {
                 finally { releaseBody(); }
             }
         }
-            InputStream source = fetch(url, client);
-            return new FilterInputStream(source) {
-                @Override
-                public void close() throws IOException {
-                    try { super.close(); } finally { client.shutdownNow(); }
-                }
-            };
-        } catch (IOException | InterruptedException | RuntimeException | Error failure) {
-            client.shutdownNow();
-            throw failure;
-        }
     }
 
     static InputStream fetch(URI url, HttpClient client) throws IOException, InterruptedException {
