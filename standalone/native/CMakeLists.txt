@@ -41,7 +41,7 @@ elseif(CHROMELLM_LLAMA_SOURCE_DIR)
   set(LLAMA_CURL OFF CACHE BOOL "Enable llama.cpp downloads" FORCE)
   # Maven's opt-in native-dawn profile stages a pinned release outside donor source.
   # A blank prefix preserves existing operator-managed Dawn discovery.
-  if(CHROMELLM_WEBGPU AND CHROMELLM_DAWN_PREFIX)
+  if(CHROMELLM_WEBGPU AND CHROMELLM_DAWN_PREFIX AND NOT CHROMELLM_DAWN_PREFIX STREQUAL "NONE")
     if(NOT EXISTS "${CHROMELLM_DAWN_PREFIX}/lib64/cmake/Dawn/DawnConfig.cmake"
         AND NOT EXISTS "${CHROMELLM_DAWN_PREFIX}/lib/cmake/Dawn/DawnConfig.cmake")
       message(FATAL_ERROR "CHROMELLM_DAWN_PREFIX lacks a DawnConfig.cmake: ${CHROMELLM_DAWN_PREFIX}")
