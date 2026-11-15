@@ -58,6 +58,8 @@ public final class SmartBuildContractTestMain {
             rejectIo(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
             Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=gemini\n");
             rejectIllegal(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
+            Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\nbackend=jni\n");
+            rejectIllegal(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
             Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\nunknown=1\n");
             rejectIllegal(() -> SmartBuildMain.run(Path.of("recipe.properties"), root, target, Map.of(), provider));
             Files.writeString(root.resolve("recipe.properties"), "promptFile=prompt.txt\nbackend=cli\nmaxTokens=32769\n");
@@ -90,6 +92,8 @@ public final class SmartBuildContractTestMain {
         Files.writeString(source.resolve("include/llama.h"), "// changed\n");
         rejectIo(() -> ForkSourcePin.verify(source, sha));
         rejectIllegal(() -> ForkSourcePin.verify(source, "not-a-sha"));
+        Files.writeString(source.resolve("untracked.c"), "// untracked\n");
+        rejectIo(() -> ForkSourcePin.verify(source, sha));
     }
     private static String git(Path root, String... args) throws Exception {
         java.util.ArrayList<String> commands = new java.util.ArrayList<>(java.util.List.of("git", "-C", root.toString()));
