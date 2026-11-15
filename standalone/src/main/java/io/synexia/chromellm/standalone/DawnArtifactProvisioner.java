@@ -23,6 +23,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /** Maven-only, checksum-pinned Dawn Release install archive provisioner. Never launches Chrome. */
 public final class DawnArtifactProvisioner {
@@ -68,7 +70,8 @@ public final class DawnArtifactProvisioner {
         if (Files.isSymbolicLink(workspace) || !workspace.toRealPath().equals(workspace)) {
             throw new IOException("Dawn workspace is not an ordinary target directory");
         }
-        Path archive = workspace.resolve("dawn-" + expected + ".tar.gz");
+        boolean wrappedZip = url.getPath().endsWith(".zip");
+        Path archive = workspace.resolve("dawn-" + expected + (wrappedZip ? ".zip" : ".tar.gz"));
         if (Files.exists(archive, LinkOption.NOFOLLOW_LINKS)) {
             checkDigest(archive, expected);
         } else {
@@ -82,7 +85,7 @@ public final class DawnArtifactProvisioner {
         Path install = workspace.resolve("dawn");
         Path extraction = Files.createTempDirectory(workspace, ".dawn-extract-");
         try {
-            extract(archive, extraction);
+            extractPackage(archive, extraction, wrappedZip);
             if (!hasDawnConfig(extraction)) throw new IOException("Dawn archive lacks DawnConfig.cmake");
             if (Files.exists(install, LinkOption.NOFOLLOW_LINKS)) {
                 verifySameTree(extraction, install);
@@ -103,7 +106,7 @@ public final class DawnArtifactProvisioner {
         if (!"https".equalsIgnoreCase(uri.getScheme()) || !"github.com".equalsIgnoreCase(uri.getHost())
                 || uri.getUserInfo() != null || uri.getFragment() != null || uri.getPort() != -1
                 || uri.getRawQuery() != null || !uri.getPath().matches(
-                    "/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/download/[^/]+/[^/]+\\.(?:tar\\.gz|tgz)")) {
+                    "/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/download/[^/]+/[^/]+\\.(?:tar\\.gz|tgz|zip)")) {
             throw new IllegalArgumentException("Dawn archive must be a pinned HTTPS GitHub release tar.gz URL");
         }
         return uri;
@@ -183,6 +186,39 @@ public final class DawnArtifactProvisioner {
         if (count == 0 || !MessageDigest.isEqual(digest.digest(), HexFormat.of().parseHex(expected))) {
             throw new IOException("cached Dawn archive SHA-256 mismatch");
         }
+    }
+
+    /** GitHub Release assets may wrap the Dawn install .tar.gz in an Actions-style ZIP. */
+    private static void extractPackage(Path archive, Path outputRoot, boolean zip) throws IOException {
+        if (!zip) { extract(archive, outputRoot); return; }
+        Path nested = Files.createTempFile(outputRoot.getParent(), ".dawn-nested-", ".tar.gz");
+        try (ZipInputStream outer = new ZipInputStream(Files.newInputStream(archive, LinkOption.NOFOLLOW_LINKS))) {
+            ZipEntry entry;
+            boolean extracted = false;
+            while ((entry = outer.getNextEntry()) != null) {
+                if (entry.isDirectory()) { outer.closeEntry(); continue; }
+                String name = entry.getName();
+                if (extracted || !name.startsWith("Dawn-") || !name.endsWith(".tar.gz")
+                        || name.contains("/") || name.indexOf((char) 92) >= 0) {
+                    throw new IOException("Dawn release ZIP must contain exactly one Dawn-*.tar.gz");
+                }
+                long count = 0;
+                try (OutputStream destination = Files.newOutputStream(nested, StandardOpenOption.TRUNCATE_EXISTING)) {
+                    byte[] buffer = new byte[64 * 1024];
+                    int n;
+                    while ((n = outer.read(buffer)) != -1) {
+                        if (n > MAX_ARCHIVE_BYTES - count) throw new IOException("nested Dawn archive exceeds byte bound");
+                        count += n;
+                        destination.write(buffer, 0, n);
+                    }
+                }
+                if (count == 0) throw new IOException("nested Dawn archive is empty");
+                extracted = true;
+                outer.closeEntry();
+            }
+            if (!extracted) throw new IOException("Dawn Release ZIP has no install archive");
+            extract(nested, outputRoot);
+        } finally { Files.deleteIfExists(nested); }
     }
 
     private static void extract(Path archive, Path outputRoot) throws IOException {
