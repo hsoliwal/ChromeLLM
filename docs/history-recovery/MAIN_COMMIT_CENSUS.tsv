@@ -1,0 +1,200 @@
+index_newest_first	commit_sha	parent_count	changed_files_first_parent	deleted_paths_first_parent	renamed_paths_first_parent	commit_subject
+0	9746f57901b75245e870163406bcb63d74ba7132	2	6	0	0	Merge pull request #49 from hsoliwal/feature/agent-plan-dag-20261115
+1	33545cc48bcd4f9a96b7a6736739158f775adef3	1	1	0	0	test(standalone): include agent planning in default Maven verification
+2	caf3337fc7e82503bd8467c27e16e3ffff9ce178	1	1	0	0	test(standalone): cover agent DAG admission and MCP planning wire contract
+3	869ddb4db8e75dfb2633614b2ee164e493a084fa	2	7	0	0	Merge pull request #48 from hsoliwal/feat/maven-lazy-dawn-release-20261115
+4	65ae311b1ec344f69f4663bcacceb82bdb87f6b9	1	1	0	0	feat(mcp): expose opt-in plan_steps without action execution
+5	1167b79e9e3bd1aacffe0fc091c3b9e30a6a1361	1	1	0	0	feat(standalone): bind agent plan to one verified provider call
+6	851d78f05b7f138de836faff2800d2849e47441d	1	1	0	0	feat(standalone): validate and deterministically order bounded candidate plans
+7	8fd447343cf053b233c3b1b5e1d435f0d3b186ac	1	1	0	0	docs: specify deterministic Dawn cache tree seal and explicit mismatch refusal
+8	f1a27a023fd4100985ab260267a9e9dc13409b21	1	1	0	0	test: detect Dawn extracted-content cache tampering as well as wrong digest
+9	08c1d45a382a91d99edf999d18f0cb7f1f8e8a12	1	1	0	0	docs(standalone): specify bounded candidate-only agent planning contract
+10	391e7f273d3707dd8e5b266ca2047b16e79754f8	1	1	0	0	build: verify extracted Dawn tree integrity before reusing cache
+11	99e400da158045116f871f879cdde1c26759865b	1	1	0	0	ci: download pinned Dawn via Maven and verify WebGPU package plus JNI source build
+12	45819594066dfd81307bfd129e18662c95581011	1	1	0	0	test: require downloaded Dawn CMake package and exported WebGPU target
+13	e6c7c3c5160273e171f4b59a1ea69921060ee3e8	1	1	0	0	build: add opt-in Maven native-dawn lazy artifact bootstrap before CMake
+14	ae44943ec71cedcb19984889f3b7e2b822fc491f	1	1	0	0	build: preserve externally supplied Dawn when Maven bootstrap is inactive
+15	7af55c7615540548bc4738053da0062a84d0baf5	1	1	0	0	build: connect Maven-staged Dawn prefix to native WebGPU CMake discovery
+16	edcf8c38ba4b9dd668253af873f47207d8d4351a	1	1	0	0	test: verify Dawn checksum, layout, cache and unsupported-platform refusal
+17	2517644a860a9d955ebb0fbfe5777f22527cb1ec	1	1	0	0	build: install SHA-256-pinned Dawn release lazily with Java 21
+18	35994c0ec902d8467d8ed2221dd29453a36a6464	1	1	0	0	docs: specify pinned lazy Dawn artifact downloads for Maven WebGPU builds
+19	2dfcbe1739b06b4890d9c1009a6fa10e682f7192	2	6	0	0	Merge pull request #47 from hsoliwal/feature/native-model-lifecycle-20261115
+20	d22f2053d5f88e12ae2f9dc1ca94d34377ec76f1	2	3	0	0	Merge pull request #46 from hsoliwal/fix/native-maven-profile-conflict-20261115
+21	6bbca355af0e2dd48bed616c600e7a410ddfbf3b	1	6	0	0	Harden lazy native model acquisition, cancellation and lifecycle status
+22	c318ad6e86a142ca50285b758cd9abd3714e50b5	1	1	0	0	ci: assert conflicting native profiles fail before native artifact creation
+23	688776c599c7bb151f298019f0f6bde65aa1c03f	1	1	0	0	build: reject simultaneous native-fork and native-synthetic profiles before CMake
+24	bf9c99858b63db148f518a14d2ebb7bacd68ab5b	1	1	0	0	docs: require fail-closed rejection of conflicting native Maven profiles
+25	9e706aee7b0a4716fb1338af4cd2ee401e3f86fb	2	2	0	0	Merge pull request #45 from hsoliwal/fix/windows-jni-dependent-dll-search-20261115
+26	96d55a260a4819a2f2c8bca4bfd2685c5e70475e	1	1	0	0	ci: include Windows synthetic JNI dependency directory in process PATH
+27	d2f209fa7b227ac11dc4598fbb6abf3b0deb4cf2	1	1	0	0	docs: record Windows JNI dependent DLL loader invariant
+28	b701d7ba1398e3a68e262b6268f01f1f75fe8e40	2	3	0	0	Merge pull request #43 from hsoliwal/feat/maven-native-fork-build-20261115
+29	3719ef90121a5ec8583dfbab188221e3011bc5d2	2	16	0	0	Merge pull request #42 from hsoliwal/feature/lazy-model-artifact-20261115
+30	571c650c7761f988b33ace6b4b7709a0dd7728ab	1	1	0	0	ci: exercise Maven-owned synthetic JNI build across Linux Windows macOS
+31	2740add66083dd7300cce2735431791e9ce113ed	1	1	0	0	build: drive browser-free native JNI CMake builds from opt-in Maven profiles
+32	9bfbde127ffc92194a7e27fefd33c2082ea58e9c	1	1	0	0	docs: define opt-in Maven builds for licensed native forks
+33	4957d2c053433491d3db7257b7fdf93afbba06d3	1	1	0	0	docs: link opt-in browser WebMCP adapter and standalone MCP transport
+34	827f9f9caebc5d999bd715aa48426270413c744e	1	1	0	0	ci(webmcp): run no-dependency Node 22 browser-tool contract tests
+35	4226788ff338cf470e1e0824634ad8f0005c8be7	1	1	0	0	test(webmcp): verify browser-tool lifecycle and authorization offline
+36	c0b5e9684632c27439d7c05263d8095bbd342b89	1	1	0	0	feat(webmcp): register opt-in browser tools with authorization callback
+37	f2ab51ef34bbc8b9d6ed1dde4e6b1644bd36c2e2	1	1	0	0	docs(webmcp): specify browser tool adapter and explicit security boundary
+38	dfa038a05c38d3f578ebae274b5c1a2d6478fab5	1	1	0	0	fix(standalone): reject non-ASCII JSON escapes and unsafe MCP numeric IDs
+39	32c5a2206fe67442362fdf0b8d1ba74e5b23c5ed	1	1	0	0	fix(standalone): reject non-ASCII JSON escapes and unsafe MCP numeric IDs
+40	151c8f72e2878492f57cf187a77455f5541fe937	1	1	0	0	fix(standalone): reject non-ASCII JSON escapes and unsafe MCP numeric IDs
+41	e568ef41c122581c0bd78607760707a7beb07321	1	1	0	0	docs(standalone): document MCP stdio server and lazy model interoperability
+42	8b670d365c1eaa80d216375fd893db78fe74c911	1	1	0	0	test(standalone): run MCP wire contract suite in provider CI
+43	78522d97f5b52a5ff992d4ea05acadf79b1d2741	1	1	0	0	feat(standalone): add opt-in MCP stdio entry point without changing CLM1
+44	30c6422aa316ee8585fd56cb2f4c24dd566f163a	1	1	0	0	test(standalone): verify MCP handshake, framing, tool calls and errors offline
+45	ab58ebb7010e46df59b8465fe4771b264c4cd364	1	1	0	0	feat(standalone): implement opt-in sequential MCP tools over JSON-RPC stdio
+46	5af8bc3c3aba5099feae8cea8991604baf3a0793	1	1	0	0	feat(standalone): add bounded strict MCP JSON codec
+47	1dab979952d915666e66cf13e19bd8b60aa93b9d	1	1	0	0	docs(standalone): specify opt-in bounded MCP JSON-RPC stdio contract
+48	b63b91e1a26f9e1213287f5f6bcdc221a8e0fd06	1	1	0	0	docs(standalone): distinguish request timeout from streamed-body deadline
+49	9cd54ff707024b2d891512f521e2c849f68c239c	1	1	0	0	docs(standalone): document on-demand model download and WebMCP boundary
+50	b32cdc1745bbf0a49b3478470c63e30637589108	1	1	0	0	test(standalone): include lazy artifact contracts in provider verification
+51	e308ad8b5583071d12930475a01b8699a9d043e9	1	1	0	0	test(standalone): cover checksum-pinned lazy model caching without network
+52	bf5580bbafa7922c8d230b915dbe149355fa7efd	1	1	0	0	feat(standalone): opt in lazy model artifacts without changing existing paths
+53	7678030c0627b0931edcb873bf3f46ff0e7ba982	1	1	0	0	feat(standalone): add LazyModelBackend.java for opt-in verified runtime acquisition
+54	4b75836713370694afe0106a5e6abf366e3a55cf	1	1	0	0	feat(standalone): add ModelArtifactCache.java for opt-in verified runtime acquisition
+55	7e8bf6d88800edc87bf6dc04ee887c9d7841fce8	1	1	0	0	docs(standalone): specify opt-in lazy model artifact contract
+56	ca676ceb8ef9ad8b9de73879674cba45f15d20ad	2	14	0	0	Merge pull request #41 from hsoliwal/codex/chromellm-runtime-search-20261115-c1be8815
+57	ba863c5d132ec5c954fb9cd4bb4a4539d178bf41	1	14	0	0	fix(runtime): bound Java process output and propagate JNI cancellation
+58	099ac1e4f03c1b05f0799e28208db251a723a6e6	2	4	0	0	Merge Dawn library discovery and native CI regression coverage
+59	fd124d6de859c3de039e9c42201dcc59ae4bd0b4	1	1	0	0	Run native library discovery regressions in the JNI CI job
+60	40fdb6d1a91a7e3c5078c300382e06b990eb466a	2	26	0	0	Merge current main with the qualified GGML library discovery fix
+61	4b14917ebb603eae11edce9bcfc06583fecbc59f	1	3	0	0	fix(native): prefer GGML libraries beside the selected llama build
+62	9cdab1f0d5bd6edb46508838014574878699208c	2	3	0	0	Merge pull request #39 from hsoliwal/integrate/cli-cleanup-cancellation-20261115
+63	895fc660941755f79e674ae0dfe37a0528e4f54e	2	3	0	0	Merge CLI cleanup ownership and cancellation proof (#36 follow-up)
+64	16c008a91dca78c6aa7613570890f6458e3a602b	2	27	0	0	Merge pull request #38 from hsoliwal/integrate/standalone-tiers-hydrogen-sessions-20261115
+65	feccbecc8bd63fbafa78dc4e7656632831eba299	2	12	0	0	Merge persistent stdio sessions and exact GGML device selection (#37)
+66	90c276f818cd5c4c8dbf024bb3893baadb5baec9	1	1	0	0	fix(standalone): retry scratch-file deletion while Windows releases a stopped child's files
+67	cd55866cec50a96efa0bd79f8d20a70107abe1e4	2	21	0	0	Merge branch 'p36' into integ
+68	ac2be77fc6b2b3fc42127f04a9f8ba6ea49192c9	1	3	0	0	Preserve inference failures during CLI cleanup and prove cancellation
+69	658227ff4fc9d95305fdeecb33b57ca03b625277	1	10	0	0	Add persistent stdio sessions and exact GGML device selection
+70	316c0d168f99ea9c2b82760494f0390ea0d928cf	1	21	0	0	Add Hydrogen API inference and explicit Dawn WebGPU selection
+71	b92be630c5d13e74400882650fd5592628136fc9	1	1	0	0	docs(standalone): specify explicit tiers and Dawn/WebGPU execution contract
+72	1660bafc030b1e8196f652e059474a317345be91	1	1	0	0	test(standalone): prove exact WebGPU argv and no-fallback tier routing
+73	a95294b7aea6cb12152e8e5aadd44c6376cad6de	1	1	0	0	test(standalone): prove exact WebGPU argv and no-fallback tier routing
+74	244bd3968d3ff2b07ae75651fb3927832ce8a14b	1	1	0	0	feat(standalone): select tier-specific model and GGML/Dawn CLI device explicitly
+75	8c1b6ec3f1fdff09a1dfd163cd69042d2ebcb977	1	1	0	0	feat(standalone): preserve executable validation for WebGPU CLI constructor
+76	489d2ba809646f36d27f31dbe9776e4a120ccbf0	1	1	0	0	feat(standalone): pin GGML device and GPU layers for CLI inference
+77	9d266807f1530d8c20e2b60cdfb6c0294536ad0b	1	1	0	0	feat(standalone): add explicit contract-checked inference tiers
+78	e1f3c2c9bdc1265ac8be3d632229ace9f0fe3318	1	1	0	0	feat(standalone): add explicit contract-checked inference tiers
+79	9323f40867cf5424b1e4d01ff8146660d2c7adbc	1	1	0	0	feat(standalone): add explicit contract-checked inference tiers
+80	75f46098d4996763e8dedb5aae036471a716c627	2	75	67	0	Merge pull request #34 from hsoliwal/m3/clean-output-evacuate-20261114
+81	a11d5989253e977eb55cadf36efd6bfdaccbb707	1	75	67	0	Move the workspace trees and receipts to com.synexia (clean output)
+82	089af6710a226eb280067bba949a25d6e03f711b	2	1	0	0	Merge pull request #33 from hsoliwal/docs/agents-clean-output-rule-20261114
+83	b7321fd553a6ee302bcc731e9161a7fec6d13eae	1	1	0	0	AGENTS.md: clean output rule (results here, recipes and evidence in com.synexia)
+84	7b92e9649c076a898322af0c00d26665dcd15e65	2	9	0	0	Merge PR #21: additive historical source and ancestry consolidation
+85	d2f1f46476254c6e09c5ca6fdaba68ffda7a07f1	2	47	0	0	Merge PR #32: preserve PR21 historical variants and current main
+86	90524a628a2db45aef8c5eb8ab2fc7d2c5e5f6ea	2	46	0	0	Merge current main into PR21 with exact historical variant preservation
+87	c343ec41da8c48f4dea53151df73c6c8177b3b97	1	1	0	0	docs: define exact PR21 historical source preservation
+88	ca13b385acf7909a5825babdfba19aa4893d05e2	2	10	0	0	Merge pull request #31 from hsoliwal/recovery/pr19-pr20-source-completeness-20261104
+89	657af238ca70af30af1cd909a76b8184896744ed	1	10	0	0	Retain five omitted PR20 images and bind both JNI source histories
+90	114a51e0dd3a29f12df8bfe24ecb76a8c8b9924c	2	5	0	0	Merge pull request #30 from hsoliwal/codex/m3-deleted-doc-custody-20261103-01a12921
+91	b38861af2c9e8b6059a6b7b1da9a5ba334895433	1	5	0	0	Restore exact retired M3 rebuild document in retained history
+92	9aa3499e882d081ac0d98ac93ba72ac9fe6e668f	2	79	21	0	Merge pull request #23 from hsoliwal/m3/superset-20261031e
+93	08bb92d5ef65791bd18fc094bd02b0af4b85483a	2	1	0	0	Superset: merge PR #29 (test(cli): activate retained condition-vector JUnit contracts)
+94	ecc95d6058c9e382d9baf3fb2994318a22bd6a4f	1	1	0	0	test(cli): activate retained condition-vector JUnit contracts
+95	dc3812fd74849f58a4871cecb8161ae7de47ced1	2	2	0	0	Superset: retain PR #28 (ci(chromellm): fail closed on browserless Git-index read errors [HOLD])
+96	329cb826270eedbd32f40c9e8d9e7fcdfced0f6b	2	7	0	0	Superset: retain PR #27 (docs(chromellm): source-seal 7 browser-free JNI guides and legacy retirement [HOLD])
+97	6b0928e4211e959d7636b857bf4fb696345625f7	1	1	0	0	ci(chromellm): stage source-sealed Git index fail-closed browser guard [HOLD]
+98	cee1539f065f0324bb565d3980424fa5590bb872	1	3	0	0	docs(chromellm): stage sealed current Java contracts and historical architecture [HOLD]
+99	03f9789324ff6930d4aba230cd8e9212594f591a	1	4	1	0	docs(chromellm): stage sealed browserless active guides and legacy removal [HOLD]
+100	6945e26a4ac072bdea830411bc0a4343dec3d542	2	1	0	0	docs: record verified standalone model publication (#26)
+101	13fbc911b35c0bee505b54031ef18061e52c6a92	1	1	0	0	docs: record pinned ChromeLLM model release
+102	837050874cf6aa16324df263bb054da12e8a93f0	2	1	0	0	docs: merge reviewed ChromeLLM superset audit (#25)
+103	4cabd974ea233a70ffef4372d86b594222d6b38a	1	1	0	0	docs: record ChromeLLM superset and pinned model readiness
+104	23077f6e748671c4e0302aea38e086d1ca3ca0aa	2	2	0	0	Superset: retain PR #20 (feat: strip browser runtime and introduce standalone Java 21 llama.cpp JNI backend [HOLD])
+105	ed908801fc1116bd607a49bac9f71ea138af6609	1	1	0	0	fix(native): source-sealed clean pinned llama.cpp donor checkout [HOLD]
+106	a48d74ce4b14689d6e40a241515a014893ec0465	2	0	0	0	Superset: merge PR #24 (docs(chromellm): retire obsolete ChromeML rebuild guide [HOLD])
+107	25526fb211b8f4e783e511b0cfb6570cb659abbc	1	1	1	0	docs(chromellm): retire source-pinned ChromeML rebuild instructions
+108	f16129490df32116acbd7cdbefcacf4e8cd43b02	2	24	0	0	Superset: retain PR #20 (feat: strip browser runtime and introduce standalone Java 21 llama.cpp JNI backend [HOLD])
+109	ce831edf7685c596cda082c16e2ebb9b86da3d7a	2	45	21	0	Superset: merge PR #19 (feat: remove browser/ChromeML runtime and implement standalone Java 21 llama.cpp JNI)
+110	8a9d83b24d0f9ee779f2fa1705d6170899f75573	1	3	0	0	fix(jni): replace raw pointers with guarded native handle registry and retain nanos deadlines
+111	610dfdc45b24560da3d0753a03ffbab3dd2fd705	1	2	0	0	fix(jni): source-sealed submillisecond timeout refusal and contract test [HOLD]
+112	72d008f5889fd5493c7cbafef627d444dd6c1e50	1	1	0	0	ci(chromellm): stage canonical always-on browser artifact guard [HOLD]
+113	256f6503f61f22b806ba2490ccf13e814b6a651a	1	5	0	0	test(chromellm): pinned real-native malformed GGUF and Windows/macOS ABI gates
+114	abde03b3dae91df8bfafa7a67f80d1f2b12edf99	1	1	0	0	test(chromellm): CI executable real pinned Apache-2.0 GGUF model through JNI
+115	fc0502291b2f53b105c4cc6b64f9210900784e5e	1	1	0	0	test(chromellm): real pinned licensed GGUF JNI inference, receipts and deterministic lifecycle
+116	00b219a870a8a3a7c13aef9f1206df1c2db1c1d7	2	19	0	0	Superset: retain PR #20 (feat: strip browser runtime and introduce standalone Java 21 llama.cpp JNI backend [HOLD])
+117	cc3d0cc9bd81987b838258ba081332a4ebed8215	2	45	21	0	Superset: merge PR #19 (feat: remove browser/ChromeML runtime and implement standalone Java 21 llama.cpp JNI)
+118	9f6acd2c84f8e8997b1d8f5b22b2fd0d6d81b60e	1	1	0	0	test(chromellm): validate exact, malformed and oversized prompt file reads
+119	43e705422dc040c24f6fd2878b0fb3bbd699cdee	1	1	0	0	fix(chromellm): reuse bounded source reader in CLI provider
+120	7a75a004d6dccdd1909cd508b1f7dd5227c2f38e	1	1	0	0	fix(chromellm): pre-bound JNI CLI source file before inference
+121	0f3a09d79cd458943bd5745b66121b71a8d712f4	1	1	0	0	feat(chromellm): shared fail-closed bounded UTF-8 prompt file reader
+122	b880ce1ee714c79885e374ffff48c596fe89e9ad	1	1	0	0	docs(chromellm): document versioned JNI ABI and negative fixture
+123	5f77332b1cbecd711eb60dd0fa98cc4f6260bf14	1	1	0	0	test(chromellm): enforce incompatible JNI ABI failure in GitHub Actions
+124	2b7efffc1b3e2030d2e4695cbf0047ab624e8ab2	1	1	0	0	test(chromellm): reject mismatched JNI fixture in isolated JVM
+125	05e409adacc81da068f2523ee5ed20abbe3b4892	1	1	0	0	feat(chromellm): export native JNI ABI compatibility version
+126	e8554be658241dc3f009bacdecfc0b239b3e24c0	1	1	0	0	feat(chromellm): fail closed on incompatible JNI ABI before model open
+127	e7562aa54512966af68f60976cfc35e9e1f44aa9	1	1	0	0	test(chromellm): enforce bounded stdout and stderr refusal in subprocess contract
+128	ea6051c176dc772e5df3ff06f98da583d11b4a97	1	1	0	0	fix(chromellm): bound llama-cli stdout/stderr in memory with timed virtual-thread readers
+129	07874a19464e28d3849ae361b8f3f3d5ef20555a	1	1	0	0	test(chromellm): reject subprocess stderr/stdout overflow before accepting response
+130	a85b78f3a5bef20000c1b562e9284b11f70eae7d	1	1	0	0	docs(chromellm): make standalone JNI and operator-supplied GGUF path authoritative
+131	f0a3a7bbf17be0d0c18362ab81efea58f6538d79	1	3	0	0	fix(chromellm): preserve exact UTF-8 CLI candidates and reject malformed subprocess data
+132	73f0c2675e63e4e21020d0edc0ea82f960c1ae74	1	3	0	0	fix(jni): preserve exact candidate output and fail-closed interruption with fixture tests
+133	c5495b4ff2a56a1e9d75bdac1b57d8b4520079fd	1	1	0	0	test(chromellm): strict JNI input and no browser artifacts (ci)
+134	609b5108f6db45e0f6425c2e816b1724fbec3454	1	1	0	0	test(chromellm): strict JNI input and no browser artifacts (test)
+135	e505d7f8cf07b9a5f9fdcd55edaf9752d7d2470a	1	1	0	0	test(chromellm): strict JNI input and no browser artifacts (java)
+136	90c66bab51d3dd247acaa56400f1adf781be34b7	1	1	0	0	test(browserless): receive exact Maven recipe JUnit vector and obsolete-browser flags refusal
+137	1b2b6f12cc1e0f3bfc80ad40c0bbdca04154ce91	1	1	0	0	feat(browserless): receive source-sealed alternate branch condition vector CLI without Chrome
+138	ffc8468b6557fd563d4cb735cb36a09183702c53	1	1	0	0	fix(jni): use valid mutable CPU deadline callback state
+139	908bde876924723896d8b7149713247348873d38	1	1	0	0	fix(jni): chunk prompt prefill and preserve native model ownership
+140	252b0f4c4d3d602efee33fc778c0272a2d9e094d	1	1	0	0	test(jni): compile and inspect actual pinned llama.cpp native ABI
+141	90b4a52a14ac723ec16e68910fb4ca565fda7639	1	1	0	0	ci(jni): enforce source-sealed strict CheckJNI warning-free fixture
+142	c63657e92e6e348d9222748b45193c413352af65	1	15	3	0	docs(chromellm): retire browser launch guides and make JNI the active entry
+143	35435cd0a0a439aa2c903c54717bbf8d0089b9db	1	1	0	0	fix(jni): receive source-sealed CheckJNI exception-probe correction
+144	2013161142e1906cb7dcc4a0685a554ffa1008e5	1	1	0	0	ci(jni): enforce browser runtime deletion, UTF-8 and no ChromeML/Dawn linkage
+145	19b29509bc95027099cee728128c476a30335062	1	1	0	0	test(jni): real Unicode checks plus negative native failure lifecycle cases
+146	6fe65df26942746b5ac3f5d61807802add845c9d	1	1	0	0	test(jni): validate UTF-8 roundtrip and error injection in fake llama API
+147	97d2513d9afaf227942c0476a5d2e56ddd83babc	1	1	0	0	fix(jni): RAII model ownership and explicit native bounds validation
+148	ce16aa51a06c25b8adf6a41f3d38085f94220cdb	1	1	0	0	fix(jni): close local Thread refs and reject failed llama batch insertion
+149	122441eb3194532241d2c13c949d31902498bfd6	1	1	0	0	docs(browserless): correct NOTICE after removing Chrome proprietary runtime candidates
+150	7cbed270644e32d71a6a00e656dc65d09e95e214	1	1	0	0	docs(jni): document required ggml include directory
+151	20b525bdfd3880074e46fd88a29fc31449700a69	1	1	0	0	build(jni): resolve ggml headers for independent llama.cpp builds
+152	ad712b0f03ad662e787edeaca413af57d3922b29	1	27	27	0	feat(browserless): remove 27 Chrome/Node/ChromeML/Dawn runtime and asset paths (review candidate)
+153	4d4b62eaaf41db2d964b6d51f08f9b94d90fa4b5	1	1	0	0	feat(browserless): native JNI build and synthetic CI
+154	886ee99ba1f407f614c250d99de36b728ae38909	1	1	0	0	feat(browserless): native JNI build and synthetic CI
+155	37f1a9e99ed3969d659c4a146aa5d255531a7c34	1	1	0	0	docs(browserless): replace obsolete Chrome runtime documentation
+156	eccf9af4fc8f3628cf93807e4e0f5bd377b88768	1	1	0	0	docs(browserless): replace obsolete Chrome runtime documentation
+157	b9f7018d1df8926fa04c679cf6c3deb24daf01bc	1	1	0	0	feat(browserless): remove Chrome HTTP planner from media CLI
+158	22f482308eba95bc2db080ae62d570ed42869666	1	1	0	0	feat(jni): receive source-sealed browserless inference candidate standalone/native/chromellm_llama_jni.cpp
+159	10633fcc6243df32f06a25cca2629592c6acd7ee	1	1	0	0	feat(jni): receive source-sealed browserless inference candidate standalone/native/CMakeLists.txt
+160	8356a8bd52dcefc65516a731280cfc837173771b	1	1	0	0	feat(jni): receive source-sealed browserless inference candidate standalone/src/test/java/io/synexia/chromellm/standalone/JniContractTestMain.java
+161	20dd55bc12b1088bc342032b91d70f67427dc382	1	1	0	0	feat(jni): receive source-sealed browserless inference candidate standalone/src/main/java/io/synexia/chromellm/standalone/JniStandaloneMain.java
+162	e0a476fdba5b845092c654931a97dfe8056a225b	1	1	0	0	feat(jni): receive source-sealed browserless inference candidate standalone/src/main/java/io/synexia/chromellm/standalone/JniLlamaCppBackend.java
+163	76f75395ed4c861e9cb08ea3a65a2fe10acc6c76	1	32	18	0	feat(inference): strip Chrome runtime and add independent llama.cpp JNI backend
+164	17a27eaeee83cc0bb7004d5191aca890a5c1d4f4	2	3	0	0	Merge pull request #18 from hsoliwal/m3/superset-landing-20261030b
+165	9331bd8fd96f4b5b26b166d102661a0c0e24ceaa	2	1	0	0	Superset: merge PR #17 (docs(chromellm): make standalone inference divergence an explicit RFC [HOLD])
+166	f6af122d47f81de17ca1f925e1c35e6efd76135a	2	2	0	0	Superset: merge PR #15 (Introduce a browser-independent Java 21 inference core)
+167	bc433aa635ba0e364771dcc2ff05b6493401d431	2	11	0	0	Merge pull request #16 from hsoliwal/m3/superset-landing-20261030
+168	0d6895b87571ad141d4ae3089a723bc5c54d8dcf	1	1	0	0	docs(chromellm): stage independent inference boundary RFC (unverified candidate)
+169	c8bab7a85a46a5a6964b9f88d82d37fe11e2a698	1	2	0	0	docs: codify ChromeLLM browser-independence invariant and release gates
+170	01c06f76d0ebca83151e5d1ed06dac75434eaa05	2	11	0	0	Superset: merge PR #15 (Introduce a browser-independent Java 21 inference core)
+171	0661908991c9dbce68d0cdc5edc7b6f5c7149d31	1	11	0	0	feat: introduce browser-independent Java 21 inference core
+172	9cdfe7665dc5555f9ea554ba1f1c60f82e806a09	2	1	0	0	merge: additive superset PR #14
+173	11e1bd124e284f08046d9c2fa2c1ac7a12ef9cd5	1	1	0	0	docs: expand fork homepage with concepts, quickstart and worked examples
+174	58e324cd6d6fbbe59cdd30a682a690951891e2af	2	2	0	0	merge: additive superset PR #13
+175	d4bff7143031c864be430eb38e22b4633d35e931	2	7	0	0	merge: additive superset PR #12
+176	bab367ba671ccfde924ba9cc86539230956f6740	2	2	0	0	merge: additive superset PR #11
+177	c469718a09719dc232fff55037a427ffac58b621	1	6	0	0	docs: document project package and native lifecycle contracts
+178	55cc33b9ef567f13eeb0ab083078c7e5cd31ccac	1	1	0	0	docs: link the fork learning guide from README
+179	1cb51ba5ed29633b33f73eafba3f607408de557a	1	1	0	0	docs: deepen worked examples and boundary-specific troubleshooting
+180	26473e370c6d7cedace4a0b21e8ad56a35ff2dfc	1	1	0	0	docs: describe runner-backed SSE streaming accurately
+181	5bdd56080177160748c0863d96b3c89c10f404a1	1	1	0	0	docs: add runtime selection guide and chat request walkthrough
+182	cf6e3c3956930a79062c1ab5a8a2d971ca79dc6c	1	2	0	0	docs: add fork navigation and subsystem development guide
+183	90b9f828b558ec8c03137b0879c74b6fdffb828d	1	2	0	0	build(chromellm): add no-weights Windows runner rebuild receipt
+184	11d834102a56c1f8db2f7b658a233c212a62ac18	2	0	0	0	merge: additive superset PR #10
+185	eb8159e6e26d653ddfa7df9e61f07ee43b4c7edd	1	0	0	0	chore(m3): install mastered atom-pattern analysis bootstrap
+186	3d2892078575a89d64a373e96ad902450db06023	1	1	0	0	docs: introduce fork direction and link M3 design paper (#9)
+187	a69bc5ddb5265f5b51ad256181b4c8e7a0871175	1	150	0	0	First public release baseline
+188	406c5c7a33a6c364c0bd42892250ad1b6a103dad	1	2	0	1	docs: 规范中文 README 文件名
+189	00ae62618433e363eba8816e0db02263fe4eb2e7	1	2	0	0	docs: 添加 README 语言切换
+190	659dcf578c5aaf6c26ede9403ddbfb3ca9bda550	1	3	0	0	docs: 添加模型权重获取说明
+191	f8a081a10b5dcef97b334db7cc1f716b9ae7238b	1	2	0	0	docs: 更新运行文件说明
+192	369b6e495aa63bc54e23f9d23a2c9b5f789429c4	1	1	0	0	chore: 添加编译后的 runner
+193	17739584de852dc7551e29c2a6fa16d1d3b415c1	1	1	0	0	Support base64 image data URLs
+194	3dfb10f8ab59d087dd1575d2a94ba8cc3b02d4ce	1	1	0	0	Add LINUX.DO friend link
+195	e0d782afcd1d699c8b063c026bcf8688b23745a0	1	2	0	0	Add runtime DLL dependencies
+196	481b972f2b75215f8fdf777c0c08846ac36d4199	1	6	0	0	Add Chinese usage notes and test assets
+197	1b0e8d1cdca5589fa5a11eee6fb72da08bddf381	1	2	0	0	Document local runtime file requirements
+198	ac152dabe636d67761208912e15b7ea7211bfb73	0	19	0	0	Initial Chrome2api open source package
