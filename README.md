@@ -35,3 +35,11 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
 Provider selection is explicit. Local inference never switches to a remote API, and a missing WebGPU provider is an error when WebGPU was requested. The Hydrogen adapter uses Google's hosted model; Dawn accelerates independently supplied local models. See the [standalone README](standalone/README.md) for builds, options, limits and verification commands.
 
 A passing synthetic JNI test proves binding/lifecycle behavior only, not trained model correctness, GPU acceleration, or OS qualification. Older ChromeML documentation is historical. Transform recipes and fixed-point source qualification are owned by hsoliwal/com.synexia; downstream M3jdk21 imports only separately qualified implementation outputs.
+
+## Maven smart build and real model verification
+
+The opt-in Maven `fork-native`, `real-model-test` and `smart-build` profiles compose
+a pinned source build, digest-verified lazy model download, real JNI inference and
+a bounded candidate-producing build recipe. The existing Java and synthetic JNI
+profiles remain available. See [Maven model verification](standalone/MAVEN_MODEL_TEST.md)
+and [fork-backed smart recipes](standalone/FORK_NATIVE_SMART_BUILD.md).

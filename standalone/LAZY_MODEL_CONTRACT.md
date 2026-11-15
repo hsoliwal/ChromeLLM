@@ -9,18 +9,24 @@ cache. Hosted Gemini rejects these options.
 
 `--model-url` must be an explicitly supplied HTTPS URL, without user-info or fragment.
 `--model-sha256` is a 64-hex-character digest of the entire licensed GGUF artifact.
-The model is fetched no earlier than the first inference request, never at build
-or argument parse time. The CLI executable or JNI bridge remains separately installed.
+For ordinary CLI/MCP use, the model is fetched no earlier than the first inference
+request, never at argument parse time. The explicit Maven `real-model-test` profile
+resolves its pinned test model during integration-test, then executes real JNI inference. The CLI executable or JNI bridge remains separately installed.
 The caller must review model redistribution, export, and use rights.
 
 The implementation stores verified model bytes as `<sha256>.gguf` in the specified
 cache. Every cache hit is SHA-256 checked, a corrupt cache entry fails closed,
 and an incomplete or mismatched download is removed without replacing existing
-unowned paths. Missing artifacts use HTTPS GET with redirects disabled; transfer
-size is bounded to 64 GiB; transient failures have no automatic retry or provider
+unowned paths. Missing artifacts use HTTPS GET with at most five redirects. Every
+destination must remain HTTPS without credentials or a fragment; cycles and ambiguous
+locations fail. Redirects carry no cookies or authorization. Transfer size is bounded
+to 64 GiB, or the smaller caller-supplied test bound; transient failures have no automatic retry or provider
 fallback. Files are staged in the same directory and published via an exclusive
-hard link only on successful verification. Directory creation, implicit writes
-to home/root, and silent repair of corrupted cached artifacts are forbidden.
+hard link only on successful verification. Runtime acquisition requires a pre-existing
+cache directory. The opt-in Maven test creates its explicitly configured directory;
+its default is `${settings.localRepository}/io/synexia/chromellm/models`. Corrupt cached
+artifacts fail instead of being overwritten. Maven `-o` forbids downloads in the
+real-model test and smart-build profiles while still verifying existing cache bytes.
 
 The artifact is acquired before native or subprocess model initialization. The
 request's inference timeout applies to inference after successful acquisition.

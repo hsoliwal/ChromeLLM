@@ -26,7 +26,8 @@ first-party authorship of donor code.
 
 ## Maven profiles
 
-The existing `mvn -f standalone/pom.xml verify` remains unchanged and offline.
+The default `mvn -f standalone/pom.xml verify` remains Java-only and performs
+no model acquisition or native compilation.
 Its Java contract suite also verifies the fork-source pin and inference recipe;
 no native library or model is required by those offline test fixtures.
 
@@ -70,7 +71,8 @@ Model acquisition starts on the first inference through the existing lazy provid
 with the bounded acquisition and shutdown behavior in
 [`LAZY_MODEL_CONTRACT.md`](LAZY_MODEL_CONTRACT.md). Reading the recipe and selecting
 the provider do not fetch weights or initialize a native model.
-The selected model and JNI/CLI binaries must be provided by the operator.
+The selected JNI/CLI runtime is supplied or built from the pinned source. Model bytes
+may be acquired through the explicit checksum-pinned URL or the `real-model-test` profile.
 `modelUrl` is an explicit, checksum-pinned HTTPS artifact, not a Chrome-managed
 proprietary model component.
 
@@ -92,15 +94,16 @@ checked-out commit. To enable the separately built Dawn fork, use
 If Dawn, compiler, or native dependencies are missing, CMake fails; there is
 no automatic browser, GPU or provider substitution.
 
-To use the receiving baseline's `native-dawn` installer with a pinned fork build,
-first stage the verified dependency with
-`mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources`.
-Then run `fork-native` in a separate Maven invocation with
-`-Dchromellm.fork.webgpu=ON` and `-Dchromellm.fork.prefix` set to the absolute
-`standalone/target/native-deps/dawn` directory. The existing `native-dawn` profile
-also supports the existing `native-fork` profile as documented in
-[`NATIVE_MAVEN_BUILD.md`](NATIVE_MAVEN_BUILD.md). Its admission rules remain unchanged;
-do not combine `native-dawn` and `fork-native` in one invocation.
+The `native-dawn` installer can accompany the commit-validated fork build in
+one invocation: `-Pfork-native,native-dawn`. It stages the verified dependency,
+enables WebGPU, and supplies the staged Dawn prefix to CMake. The existing
+`native-fork,native-dawn` combination remains supported.
+
+Separate staging remains available with
+`mvn -B -ntp -f standalone/pom.xml -Pnative-dawn generate-sources`, followed by
+`fork-native` with `-Dchromellm.fork.webgpu=ON` and `-Dchromellm.fork.prefix`
+pointing to the absolute `standalone/target/native-deps/dawn` directory.
+See [`NATIVE_MAVEN_BUILD.md`](NATIVE_MAVEN_BUILD.md) for dependency qualification.
 
 Run the model **from the Maven build**, not from Chrome:
 
@@ -113,6 +116,14 @@ Edit the provided recipe first to select your JNI library and licensed GGUF
 model. When explicitly requested, both profiles can be selected:
 `-Pfork-native,smart-build`. The smart-build recipe is a *candidate generator*,
 not an automatic source patcher or a guaranteed deterministic model runner.
+
+## Maven model acquisition and offline reuse
+
+The `real-model-test` profile downloads and tests the published, pinned model during
+integration-test. It creates the configured cache directory and verifies every hit.
+The `smart-build` profile accepts the same model URL/SHA/cache triple; Maven `-o`
+requires a verified cached artifact before initializing the selected provider.
+See [MAVEN_MODEL_TEST.md](MAVEN_MODEL_TEST.md) for the combined command and pins.
 
 ## Artifact and safety contract
 

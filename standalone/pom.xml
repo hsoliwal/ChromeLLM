@@ -70,6 +70,7 @@
             <configuration><rules><requireProperty>
               <property>chromellm.native.mode</property><regex>^pinned-fork$</regex>
               <message>fork-native cannot be combined with another native build profile</message>
+              <regexMessage>fork-native cannot be combined with another native build profile</regexMessage>
             </requireProperty></rules></configuration>
           </execution></executions>
         </plugin>
@@ -96,7 +97,9 @@
                 <argument>-DCHROMELLM_LLAMA_SOURCE_DIR=${chromellm.fork.source}</argument>
                 <argument>-DCHROMELLM_WEBGPU=${chromellm.fork.webgpu}</argument>
                 <argument>-DCMAKE_PREFIX_PATH=${chromellm.fork.prefix}</argument>
+                <argument>-DCHROMELLM_DAWN_PREFIX=${chromellm.native.dawn.prefix}</argument>
                 <argument>-DCMAKE_BUILD_TYPE=${chromellm.fork.configuration}</argument>
+                <argument>-DGGML_NATIVE=OFF</argument>
               </arguments>
             </configuration>
           </execution>
@@ -126,6 +129,7 @@
               <argument>${chromellm.smart.recipe}</argument>
               <argument>${project.basedir}</argument>
               <argument>${project.build.directory}</argument>
+              <argument>--offline=${settings.offline}</argument>
             </arguments>
           </configuration>
         </execution></executions>
@@ -143,6 +147,7 @@
             <configuration><rules><requireProperty>
               <property>chromellm.native.mode</property><regex>^synthetic$</regex>
               <message>native-synthetic and native-fork cannot be active together</message>
+              <regexMessage>native-synthetic and native-fork cannot be active together</regexMessage>
             </requireProperty></rules></configuration>
           </execution></executions>
         </plugin>
@@ -195,6 +200,7 @@
             </requireProperty><requireProperty>
               <property>chromellm.native.mode</property><regex>^fork$</regex>
               <message>native-synthetic and native-fork cannot be active together</message>
+              <regexMessage>native-synthetic and native-fork cannot be active together</regexMessage>
             </requireProperty></rules></configuration>
           </execution></executions>
         </plugin>
@@ -229,6 +235,7 @@
       <id>native-dawn</id>
       <properties>
         <chromellm.native.webgpu>ON</chromellm.native.webgpu>
+        <chromellm.fork.webgpu>ON</chromellm.fork.webgpu>
         <chromellm.native.dawn.prefix>${project.build.directory}/native-deps/dawn</chromellm.native.dawn.prefix>
       </properties>
       <build><plugins>
@@ -238,12 +245,19 @@
             <id>require-dawn-compatible-build</id><phase>validate</phase><goals><goal>enforce</goal></goals>
             <configuration><rules>
               <requireProperty>
-                <property>chromellm.native.mode</property><regex>^(none|fork)$</regex>
+                <property>chromellm.native.mode</property><regex>^(none|fork|pinned-fork)$</regex>
                 <message>native-dawn cannot be used with native-synthetic</message>
+                <regexMessage>native-dawn cannot be used with native-synthetic</regexMessage>
               </requireProperty>
               <requireProperty>
                 <property>chromellm.native.webgpu</property><regex>^ON$</regex>
                 <message>native-dawn requires WebGPU=ON</message>
+                <regexMessage>native-dawn requires WebGPU=ON</regexMessage>
+              </requireProperty>
+              <requireProperty>
+                <property>chromellm.fork.webgpu</property><regex>^ON$</regex>
+                <message>native-dawn requires the pinned fork WebGPU setting to be ON</message>
+                <regexMessage>native-dawn requires the pinned fork WebGPU setting to be ON</regexMessage>
               </requireProperty>
             </rules></configuration>
           </execution></executions>
@@ -259,6 +273,38 @@
           </execution></executions>
         </plugin>
       </plugins></build>
+    </profile>
+    <profile>
+      <id>real-model-test</id>
+      <properties>
+        <chromellm.real.library>${project.build.directory}/fork-native/libchromellm_llama_jni.so</chromellm.real.library>
+        <chromellm.real.model.url>https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/weights.bin</chromellm.real.model.url>
+        <chromellm.real.model.sha256>8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684</chromellm.real.model.sha256>
+        <chromellm.real.model.bytes>105454144</chromellm.real.model.bytes>
+        <chromellm.real.model.cache>${settings.localRepository}/io/synexia/chromellm/models</chromellm.real.model.cache>
+      </properties>
+      <build><plugins><plugin>
+        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId>
+        <executions><execution>
+          <id>real-gguf-contract-tests</id><phase>integration-test</phase><goals><goal>exec</goal></goals>
+          <configuration>
+            <executable>${java.home}/bin/java</executable>
+            <classpathScope>test</classpathScope>
+            <timeout>600000</timeout>
+            <arguments>
+              <argument>-Xcheck:jni</argument>
+              <argument>-cp</argument><classpath/>
+              <argument>io.synexia.chromellm.standalone.RealGgufContractTestMain</argument>
+              <argument>${chromellm.real.library}</argument>
+              <argument>${chromellm.real.model.url}</argument>
+              <argument>${chromellm.real.model.sha256}</argument>
+              <argument>${chromellm.real.model.cache}</argument>
+              <argument>${chromellm.real.model.bytes}</argument>
+              <argument>--offline=${settings.offline}</argument>
+            </arguments>
+          </configuration>
+        </execution></executions>
+      </plugin></plugins></build>
     </profile>
   </profiles>
 </project>
