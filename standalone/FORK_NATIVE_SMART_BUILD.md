@@ -13,7 +13,7 @@ a model runtime with a hosted provider.
 - `hsoliwal/ChromeLLM`: Java 21 API, JNI bridge, fixed build lifecycle.
 - `hsoliwal/synexia-llmcpp`: the independently checked-out llama.cpp/GGML native
   source to compile via ChromeLLM's existing CMake integration; the checkout must
-  be at the **full operator-supplied 40-hex commit** and have no modified tracked files.
+  be at the **full operator-supplied 40-hex commit** and have no modified or untracked files.
 - `hsoliwal/dawn`: optional, separately built WebGPU dependency found by CMake
   using `CMAKE_PREFIX_PATH`; it is not a browser dependency.
 - Chromium's `optimization_guide/core/model_execution` provides an architectural
@@ -36,8 +36,8 @@ Required properties:
 `chromellm.fork.configuration` (default `Release`).
 Output stays in `standalone/target/fork-native`. CMake neither checks out
 nor downloads donor source, and changing a tracked file or HEAD causes failure
-before native configuration. Untracked files in the donor are not silently
-removed or staged.
+before native configuration. Dirty or untracked donor files are never
+silently removed or staged: the build fails closed.
 
 `-Psmart-build` invokes the compiled Java inference API during Maven's
 `verify` phase only when `chromellm.smart.recipe` identifies an existing
