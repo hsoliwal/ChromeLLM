@@ -145,10 +145,7 @@ public final class SmartBuildMain {
         if (!offline && managedModelCache == null && options.containsKey("--model-url")) {
             // Preserve explicit external-cache preparation after option admission.
             Path cache = Path.of(options.get("--model-cache-dir"));
-            Files.createDirectories(cache);
-            if (!Files.isDirectory(cache, LinkOption.NOFOLLOW_LINKS) || !cache.toRealPath().equals(cache)) {
-                throw new IOException("model cache must be an existing directory without symlinks");
-            }
+            prepareModelCache(cache);
         }
         if (offline && options.containsKey("--model-url")) {
             String redirects = options.getOrDefault("--model-follow-redirects", "false");
@@ -197,6 +194,22 @@ public final class SmartBuildMain {
         System.out.println("ChromeLLM smart-build candidate SHA-256: " + hex(sha256(candidate)));
         return output;
     }
+
+    private static void prepareModelCache(Path cache) throws IOException {
+        Path ancestor = cache;
+        while (!Files.exists(ancestor, LinkOption.NOFOLLOW_LINKS)) {
+            ancestor = ancestor.getParent();
+            if (ancestor == null) throw new IOException("model cache has no existing directory ancestor");
+        }
+        if (!Files.isDirectory(ancestor, LinkOption.NOFOLLOW_LINKS) || !ancestor.toRealPath().equals(ancestor)) {
+            throw new IOException("model cache must not traverse symlinks");
+        }
+        Files.createDirectories(cache);
+        if (!Files.isDirectory(cache, LinkOption.NOFOLLOW_LINKS) || !cache.toRealPath().equals(cache)) {
+            throw new IOException("model cache must not traverse symlinks");
+        }
+    }
+
 
     private static void createManagedCache(Path target, Path cache) throws IOException {
         Path current = target;

@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: MIT
+name: ChromeLLM build advice
+description: Run bounded ChromeLLM advice before or after a build using a verified Java artifact.
+inputs:
+  phase:
+    description: pre-build or post-build
+    required: true
+  enabled:
+    description: Set false to report disabled without invoking Java or preparing a model.
+    default: 'true'
+  jar:
+    description: Path to an independently built ChromeLLM standalone JAR.
+  jar-sha256:
+    description: Expected SHA-256 of the standalone JAR.
+  provider:
+    description: Explicit chrome, jni, or cli provider; no automatic fallback.
+    default: chrome
+  prompt-file:
+    description: UTF-8 source/diagnostic packet; required for pre-build, optional instructions for post-build.
+  build-log:
+    description: Existing build log; required for post-build. Only a bounded complete-line tail is used.
+  build-outcome:
+    description: Actual success or failure from steps.build.outcome; required for post-build.
+  chrome-bin:
+    description: Installed Chrome executable. Empty uses ChromeLLM discovery.
+  chrome-profile:
+    description: Dedicated ChromeLLM profile, retained for model reuse.
+  headless:
+    description: Request headless Chrome. Eligibility depends on the selected browser and host.
+    default: 'true'
+  allow-download:
+    description: Permit provider-managed lazy model preparation. False requires a warm Chrome model or explicit native model file.
+    default: 'true'
+  jni-library:
+    description: Native library for provider jni.
+  llama-bin:
+    description: Existing llama.cpp executable for provider cli.
+  model:
+    description: Existing local model file for native providers.
+  model-url:
+    description: Explicit licensed HTTPS model URL for lazy native acquisition.
+  model-sha256:
+    description: Required model digest when model-url is selected.
+  model-cache-dir:
+    description: Existing cache directory when model-url is selected.
+  max-tokens:
+    description: Provider output admission budget.
+    default: '512'
+  timeout-seconds:
+    description: Provider deadline including any permitted preparation, from 1 through 3600 seconds.
+    default: '180'
+  max-input-bytes:
+    description: Total assembled prompt byte limit, from 1024 through 1048576.
+    default: '65536'
+outputs:
+  status:
+    description: completed, failed, or disabled
+    value: ${{ steps.advice.outputs.status }}
+  report-dir:
+    description: Unique report directory under RUNNER_TEMP.
+    value: ${{ steps.advice.outputs.report-dir }}
+  advice-file:
+    description: Completed advice path, empty on failure or when disabled.
+    value: ${{ steps.advice.outputs.advice-file }}
+  exit-code:
+    description: Adapter/provider exit code. Build outcome is recorded separately.
+    value: ${{ steps.advice.outputs.exit-code }}
+runs:
+  using: composite
+  steps:
+    - id: advice
+      shell: bash
+      env:
+        BUILD_AI_PHASE: ${{ inputs.phase }}
+        BUILD_AI_ENABLED: ${{ inputs.enabled }}
+        BUILD_AI_JAR: ${{ inputs.jar }}
+        BUILD_AI_JAR_SHA256: ${{ inputs.jar-sha256 }}
+        BUILD_AI_PROVIDER: ${{ inputs.provider }}
+        BUILD_AI_PROMPT_FILE: ${{ inputs.prompt-file }}
+        BUILD_AI_BUILD_LOG: ${{ inputs.build-log }}
+        BUILD_AI_BUILD_OUTCOME: ${{ inputs.build-outcome }}
+        BUILD_AI_CHROME_BIN: ${{ inputs.chrome-bin }}
+        BUILD_AI_CHROME_PROFILE: ${{ inputs.chrome-profile }}
+        BUILD_AI_HEADLESS: ${{ inputs.headless }}
+        BUILD_AI_ALLOW_DOWNLOAD: ${{ inputs.allow-download }}
+        BUILD_AI_JNI_LIBRARY: ${{ inputs.jni-library }}
+        BUILD_AI_LLAMA_BIN: ${{ inputs.llama-bin }}
+        BUILD_AI_MODEL: ${{ inputs.model }}
+        BUILD_AI_MODEL_URL: ${{ inputs.model-url }}
+        BUILD_AI_MODEL_SHA256: ${{ inputs.model-sha256 }}
+        BUILD_AI_MODEL_CACHE_DIR: ${{ inputs.model-cache-dir }}
+        BUILD_AI_MAX_TOKENS: ${{ inputs.max-tokens }}
+        BUILD_AI_TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
+        BUILD_AI_MAX_INPUT_BYTES: ${{ inputs.max-input-bytes }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh"

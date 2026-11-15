@@ -126,6 +126,7 @@ public final class SmartBuildContractTestMain {
             check(requests.get() == beforeInvalidTarget, "offline cache miss opened provider");
             offlineCacheHit(root, target);
             canonicalWorkspaceAliases(root);
+            onlineCacheAdmission(root, target);
             lazyModelOptions(root, target);
             lazyRecipe(root, target);
             offlineModels(root, target);
@@ -277,6 +278,45 @@ public final class SmartBuildContractTestMain {
 
     }
 
+    private static void onlineCacheAdmission(Path root, Path target) throws Exception {
+        Path cache = root.resolve("rejected-online-cache/nested");
+        String recipe = "promptFile=prompt.txt\nbackend=cli\nllamaBin=/explicit/llama-cli\n"
+                + "modelUrl=https://example.invalid/model\nmodelSha256=" + "a".repeat(64)
+                + "\nmodelCacheDir=rejected-online-cache/nested\n";
+        AtomicInteger opened = new AtomicInteger();
+        SmartBuildMain.ProviderFactory forbidden = (options, environment) -> {
+            opened.incrementAndGet();
+            throw new AssertionError("invalid online cache request opened a provider");
+        };
+        for (String invalid : java.util.List.of(recipe + "model=/explicit/model.gguf\n",
+                recipe + "jniLib=/explicit/foreign.so\n",
+                recipe.replace("https://example.invalid/model", "http://example.invalid/model"),
+                recipe.replace("a".repeat(64), "not-a-sha256"))) {
+            Files.writeString(root.resolve("online-admission.properties"), invalid);
+            rejectIllegal(() -> SmartBuildMain.run(Path.of("online-admission.properties"), root,
+                    target, Map.of(), forbidden));
+            check(!Files.exists(cache.getParent()), "invalid provider options created cache directories");
+        }
+        Files.writeString(root.resolve("online-admission.properties"), recipe);
+        rejectIo(() -> SmartBuildMain.run(Path.of("online-admission.properties"), root,
+                root.resolve("not-target"), Map.of(), forbidden));
+        check(!Files.exists(cache.getParent()), "invalid output path created cache directories");
+        try {
+            Path real = Files.createDirectory(root.resolve("cache-real"));
+            Path alias = Files.createSymbolicLink(root.resolve("cache-alias"), real);
+            Files.writeString(root.resolve("online-admission.properties"),
+                    recipe.replace("rejected-online-cache/nested", "cache-alias/nested"));
+            rejectIo(() -> SmartBuildMain.run(Path.of("online-admission.properties"), root,
+                    target, Map.of(), forbidden));
+            check(!Files.exists(real.resolve("nested")), "cache ancestor alias received writes before refusal");
+            Files.delete(alias);
+        } catch (UnsupportedOperationException | FileSystemException unavailable) {
+            System.out.println("online-cache symbolic-link fixture unavailable: " + unavailable);
+        }
+        check(opened.get() == 0, "rejected cache admission performed provider work");
+    }
+
+
     private static void lazyModelOptions(Path root, Path target) throws Exception {
         Path cache = root.resolve("lazy-options-cache");
         Files.writeString(root.resolve("lazy.properties"), String.join("\n",
@@ -292,6 +332,7 @@ public final class SmartBuildContractTestMain {
             check(options.get("--model-url").endsWith("/pinned/weights.bin"), "model URL lost");
             check(options.get("--model-sha256").equals("a".repeat(64)), "model digest lost");
             check(Path.of(options.get("--model-cache-dir")).equals(cache), "model cache lost");
+            check(Files.isDirectory(cache), "online absolute cache was not prepared");
             check(!options.containsKey("--model"), "lazy model replaced with a local path");
             check(options.get("--compute-backend").equals("cpu") && options.get("--gpu-layers").equals("0"),
                     "explicit CPU policy lost");
@@ -316,6 +357,8 @@ public final class SmartBuildContractTestMain {
                     "relative JNI library lost");
             check(options.get("--model-cache-dir").equals(root.resolve("model-options-cache").toString()),
                     "relative model cache lost");
+            check(Files.isDirectory(Path.of(options.get("--model-cache-dir"))),
+                    "online lazy model must create its missing cache before opening the provider");
             return new ModelBackend() {
                 public String id() { return "llama.cpp-jni"; }
                 public ModelResponse infer(ModelRequest request) {
