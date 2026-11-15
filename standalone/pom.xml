@@ -13,6 +13,10 @@
     <plugin>
       <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.1</version>
       <configuration><release>21</release></configuration>
+      <executions><execution>
+        <id>default-testCompile</id>
+        <configuration><useModulePath>false</useModulePath></configuration>
+      </execution></executions>
     </plugin>
     <plugin>
       <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
@@ -20,6 +24,18 @@
         <id>standalone-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
         <configuration>
           <mainClass>io.synexia.chromellm.standalone.StandaloneContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
+        <id>gemini-api-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.GeminiApiBackendContractTestMain</mainClass>
+          <classpathScope>test</classpathScope>
+        </configuration>
+      </execution><execution>
+        <id>provider-selection-contract-tests</id><phase>verify</phase><goals><goal>java</goal></goals>
+        <configuration>
+          <mainClass>io.synexia.chromellm.standalone.ProviderSelectionContractTestMain</mainClass>
           <classpathScope>test</classpathScope>
         </configuration>
       </execution></executions>

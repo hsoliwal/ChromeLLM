@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: MIT
-// Independent llama.cpp JNI provider. No browser, ChromeML, Dawn or model extraction.
+// Independent llama.cpp JNI provider. Uses only backends registered by the supplied llama.cpp
+// build; optional native Dawn through GGML WebGPU. No browser assets.
 #include <jni.h>
 #include <llama.h>
+#include <ggml-backend.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -22,14 +27,25 @@ using Clock = std::chrono::steady_clock;
 struct DeadlineExceeded : std::runtime_error {
     DeadlineExceeded() : std::runtime_error("model inference exceeded configured deadline") {}
 };
+struct DeviceSelection {
+    std::string backend, name, description, type;
+    // llama_model retains a copy of its parameters, so this list lives with the model.
+    std::array<ggml_backend_dev_t, 2> offload_devices{{nullptr, nullptr}};
+};
 struct Model {
     llama_model* model;
     const llama_vocab* vocab;
     uint32_t context_tokens;
     int threads;
+    // Offload list of a compute-backend policy; llama_model keeps a pointer into it.
+    std::vector<ggml_backend_dev_t> devices;
+    // One explicitly selected backend/device pair, or null for automatic and policy selection.
+    std::shared_ptr<DeviceSelection> selection;
     std::mutex inference_mutex;
-    Model(llama_model* m, uint32_t c, int t)
-        : model(m), vocab(llama_model_get_vocab(m)), context_tokens(c), threads(t) {}
+    Model(llama_model* m, uint32_t c, int t, std::vector<ggml_backend_dev_t> policy_devices,
+          std::shared_ptr<DeviceSelection> selected)
+        : model(m), vocab(llama_model_get_vocab(m)), context_tokens(c), threads(t),
+          devices(std::move(policy_devices)), selection(std::move(selected)) {}
     ~Model() { llama_model_free(model); }
 };
 std::mutex registry_lock;
@@ -51,6 +67,85 @@ std::vector<uint8_t> Bytes(JNIEnv* env, jbyteArray bytes) {
     if (size) env->GetByteArrayRegion(bytes, 0, size, reinterpret_cast<jbyte*>(result.data()));
     if (env->ExceptionCheck()) throw std::runtime_error("unable to copy JNI input");
     return result;
+}
+std::string DeviceText(const char* value) {
+    if (value == nullptr) throw std::runtime_error("missing native device metadata");
+    const size_t length = std::strlen(value);
+    if (length > 65536) throw std::runtime_error("native device metadata exceeds limit");
+    return std::string(value, length);
+}
+DeviceSelection DescribeDevice(ggml_backend_dev_t device) {
+    if (device == nullptr) throw std::runtime_error("invalid registered device");
+    ggml_backend_reg_t backend = ggml_backend_dev_backend_reg(device);
+    if (backend == nullptr) throw std::runtime_error("device has no registered backend");
+    DeviceSelection result;
+    result.backend = DeviceText(ggml_backend_reg_name(backend));
+    result.name = DeviceText(ggml_backend_dev_name(device));
+    result.description = DeviceText(ggml_backend_dev_description(device));
+    switch (ggml_backend_dev_type(device)) {
+        case GGML_BACKEND_DEVICE_TYPE_CPU: result.type = "CPU"; break;
+        case GGML_BACKEND_DEVICE_TYPE_GPU: result.type = "GPU"; break;
+        case GGML_BACKEND_DEVICE_TYPE_IGPU: result.type = "IGPU"; break;
+        case GGML_BACKEND_DEVICE_TYPE_ACCEL: result.type = "ACCEL"; break;
+        default: throw std::runtime_error("unknown native device type");
+    }
+    return result;
+}
+std::string Selector(JNIEnv* env, jbyteArray field) {
+    const auto bytes = Bytes(env, field);
+    if (bytes.empty() || bytes.size() > 4096) throw std::invalid_argument("invalid device selector length");
+    std::string value(bytes.begin(), bytes.end());
+    if (std::any_of(value.begin(), value.end(), [](unsigned char c) { return c < 0x20 || c == 0x7f; }))
+        throw std::invalid_argument("control character in device selector");
+    return value;
+}
+size_t DeviceCount() {
+    const size_t count = ggml_backend_dev_count();
+    if (count > 1024) throw std::runtime_error("native device inventory exceeds limit");
+    return count;
+}
+std::shared_ptr<DeviceSelection> SelectDevice(
+        const std::string& backend, const std::string& name, int gpu_layers) {
+    std::shared_ptr<DeviceSelection> selected;
+    const size_t count = DeviceCount();
+    for (size_t i = 0; i < count; ++i) {
+        ggml_backend_dev_t device = ggml_backend_dev_get(i);
+        DeviceSelection candidate = DescribeDevice(device);
+        if (candidate.backend != backend || candidate.name != name) continue;
+        if (selected) throw std::invalid_argument("backend/device selector is ambiguous");
+        if (candidate.type == "ACCEL")
+            throw std::invalid_argument("accelerator is not a selectable model offload device");
+        if (candidate.type == "CPU") {
+            if (gpu_layers != 0) throw std::invalid_argument("explicit CPU device requires zero GPU layers");
+        } else {
+            if (gpu_layers <= 0) throw std::invalid_argument("explicit GPU device requires positive GPU layers");
+            candidate.offload_devices[0] = device;
+        }
+        selected = std::make_shared<DeviceSelection>(std::move(candidate));
+    }
+    if (!selected) throw std::invalid_argument("requested backend/device is not registered by this llama.cpp build");
+    return selected;
+}
+jobjectArray DeviceFields(JNIEnv* env, const std::vector<DeviceSelection>& devices) {
+    if (devices.size() > 1024) throw std::runtime_error("native device inventory exceeds limit");
+    jclass byte_array = env->FindClass("[B");
+    if (byte_array == nullptr) return nullptr;
+    jobjectArray fields = env->NewObjectArray(static_cast<jsize>(devices.size() * 4), byte_array, nullptr);
+    env->DeleteLocalRef(byte_array);
+    if (fields == nullptr) return nullptr;
+    jsize index = 0;
+    for (const auto& device : devices) {
+        for (const std::string* value : {&device.backend, &device.name, &device.description, &device.type}) {
+            jbyteArray field = env->NewByteArray(static_cast<jsize>(value->size()));
+            if (field == nullptr) return nullptr;
+            if (!value->empty()) env->SetByteArrayRegion(field, 0, static_cast<jsize>(value->size()),
+                    reinterpret_cast<const jbyte*>(value->data()));
+            if (!env->ExceptionCheck()) env->SetObjectArrayElement(fields, index++, field);
+            env->DeleteLocalRef(field);
+            if (env->ExceptionCheck()) return nullptr;
+        }
+    }
+    return fields;
 }
 std::shared_ptr<Model> Lookup(jlong handle) {
     std::lock_guard<std::mutex> lock(registry_lock);
@@ -142,15 +237,19 @@ std::string Generate(Model& state, const std::vector<uint8_t>& input, int max_to
     CheckDeadline(deadline);
     return output;
 }
-} // namespace
-
-extern "C" JNIEXPORT jlong JNICALL
-Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nOpen(
-        JNIEnv* env, jclass, jbyteArray model_path, jint context, jint threads, jint gpu_layers) {
-    try {
+// compute_backend: 0 automatic, 1 CPU only, 2 every registered WebGPU device. An explicit
+// backend/device selection is a separate request and is only combined with compute_backend 0.
+jlong OpenModel(JNIEnv* env, jbyteArray model_path, jint context, jint threads, jint gpu_layers,
+                jint compute_backend, std::shared_ptr<DeviceSelection> selection = nullptr) {
         if (context < 32 || context > 1'048'576 || threads < 1 || threads > 1024
-                || gpu_layers < 0 || gpu_layers > 1024)
+                || gpu_layers < 0 || gpu_layers > 1024 || compute_backend < 0 || compute_backend > 2)
             throw std::invalid_argument("invalid native model settings");
+        if (compute_backend != 0 && selection)
+            throw std::invalid_argument("a compute backend policy and an explicit device are exclusive");
+        if (compute_backend == 1 && gpu_layers != 0)
+            throw std::invalid_argument("cpu requires zero GPU layers");
+        if (compute_backend == 2 && gpu_layers == 0)
+            throw std::invalid_argument("webgpu requires a positive GPU layer count");
         const auto bytes = Bytes(env, model_path);
         const std::string path(bytes.begin(), bytes.end());
         if (path.empty() || path.find('\0') != std::string::npos)
@@ -158,21 +257,102 @@ Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nOpen(
         std::call_once(backend_initialized, [] { llama_backend_init(); });
         llama_model_params params = llama_model_default_params();
         params.n_gpu_layers = gpu_layers;
+        std::vector<ggml_backend_dev_t> devices;
+        if (compute_backend == 2) {
+            // Use the devices already registered by GGML. Calling the provider's device factory
+            // again can reinitialize native GPU state. No plugin-directory search or download.
+            ggml_backend_reg_t webgpu = ggml_backend_reg_by_name("WebGPU");
+            if (webgpu == nullptr)
+                throw std::runtime_error("GGML WebGPU provider is unavailable; build llama.cpp with GGML_WEBGPU=ON and native Dawn");
+            const size_t count = DeviceCount();
+            for (size_t i = 0; i < count; ++i) {
+                ggml_backend_dev_t device = ggml_backend_dev_get(i);
+                if (device != nullptr && ggml_backend_dev_backend_reg(device) == webgpu)
+                    devices.push_back(device);
+            }
+            if (devices.empty())
+                throw std::runtime_error("GGML WebGPU provider has no registered device");
+        }
+        if (compute_backend != 0) {
+            // An empty, terminated list explicitly disables GPU selection for CPU policy.
+            devices.push_back(nullptr);
+            params.devices = devices.data();
+            params.split_mode = LLAMA_SPLIT_MODE_NONE;
+            params.main_gpu = 0;
+        } else if (selection) {
+            params.devices = selection->offload_devices.data();
+            params.split_mode = LLAMA_SPLIT_MODE_NONE;
+            params.main_gpu = 0;
+        }
         // Own the model even when validation or shared_ptr allocation throws.
         std::unique_ptr<llama_model, decltype(&llama_model_free)> raw(
                 llama_model_load_from_file(path.c_str(), params), &llama_model_free);
         if (!raw) throw std::runtime_error("llama.cpp could not load the supplied model");
         if (llama_model_has_encoder(raw.get()) || !llama_model_has_decoder(raw.get()))
             throw std::invalid_argument("this JNI provider currently supports decoder-only models");
+        // Moving the vector keeps its heap buffer, so params.devices stays valid inside the model.
         std::shared_ptr<Model> value = std::make_shared<Model>(
-                raw.get(), static_cast<uint32_t>(context), threads);
+                raw.get(), static_cast<uint32_t>(context), threads, std::move(devices), std::move(selection));
         raw.release();
         const jlong id = next_id.fetch_add(1);
         if (id <= 0) throw std::runtime_error("native model session IDs exhausted");
         { std::lock_guard<std::mutex> lock(registry_lock); registry.emplace(id, std::move(value)); }
         return id;
+}
+} // namespace
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nOpen(
+        JNIEnv* env, jclass, jbyteArray model_path, jint context, jint threads, jint gpu_layers) {
+    try {
+        return OpenModel(env, model_path, context, threads, gpu_layers, 0);
     } catch (const std::exception& ex) { if (!env->ExceptionCheck()) Fail(env, ex.what()); return 0; }
       catch (...) { if (!env->ExceptionCheck()) Fail(env, "unclassified native model load failure"); return 0; }
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nOpenWithBackend(
+        JNIEnv* env, jclass, jbyteArray model_path, jint context, jint threads, jint gpu_layers,
+        jint compute_backend) {
+    try {
+        return OpenModel(env, model_path, context, threads, gpu_layers, compute_backend);
+    } catch (const std::exception& ex) { if (!env->ExceptionCheck()) Fail(env, ex.what()); return 0; }
+      catch (...) { if (!env->ExceptionCheck()) Fail(env, "unclassified native model load failure"); return 0; }
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nOpenOnDevice(
+        JNIEnv* env, jclass, jbyteArray model_path, jint context, jint threads, jint gpu_layers,
+        jbyteArray backend, jbyteArray device) {
+    try {
+        std::call_once(backend_initialized, [] { llama_backend_init(); });
+        auto selection = SelectDevice(Selector(env, backend), Selector(env, device), gpu_layers);
+        return OpenModel(env, model_path, context, threads, gpu_layers, 0, std::move(selection));
+    } catch (const std::exception& ex) { if (!env->ExceptionCheck()) Fail(env, ex.what()); return 0; }
+      catch (...) { if (!env->ExceptionCheck()) Fail(env, "unclassified native device selection failure"); return 0; }
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nAvailableDevices(JNIEnv* env, jclass) {
+    try {
+        std::call_once(backend_initialized, [] { llama_backend_init(); });
+        std::vector<DeviceSelection> devices;
+        const size_t count = DeviceCount();
+        devices.reserve(count);
+        for (size_t i = 0; i < count; ++i) devices.push_back(DescribeDevice(ggml_backend_dev_get(i)));
+        return DeviceFields(env, devices);
+    } catch (const std::exception& ex) { if (!env->ExceptionCheck()) Fail(env, ex.what()); return nullptr; }
+      catch (...) { if (!env->ExceptionCheck()) Fail(env, "unclassified native device inventory failure"); return nullptr; }
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_io_synexia_chromellm_standalone_LlamaCppJniBackend_nSelectedDevice(JNIEnv* env, jclass, jlong handle) {
+    try {
+        auto state = Lookup(handle);
+        return DeviceFields(env, state->selection ? std::vector<DeviceSelection>{*state->selection}
+                                                 : std::vector<DeviceSelection>{});
+    } catch (const std::exception& ex) { if (!env->ExceptionCheck()) Fail(env, ex.what()); return nullptr; }
+      catch (...) { if (!env->ExceptionCheck()) Fail(env, "unclassified native device observation failure"); return nullptr; }
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL

@@ -44,7 +44,29 @@ public final class StandaloneContractTestMain {
                 } catch (TimeoutException expected) {
                     checks++;
                 }
+                Thread.currentThread().interrupt();
+                try {
+                    backend.infer(new ModelRequest("sleep", 8, Duration.ofSeconds(10)));
+                    throw new AssertionError("interrupted call accepted");
+                } catch (InterruptedException expected) {
+                    check(Thread.currentThread().isInterrupted());
+                } finally {
+                    Thread.interrupted();
+                }
             }
+            try (ModelBackend gpu = new LlamaCppCliBackend(
+                    List.of(java, "-cp", testClasses, FakeLlamaCppMain.class.getName()),
+                    model, temp, "WebGPU0", 16)) {
+                ModelResponse result = gpu.infer(new ModelRequest("check-webgpu", 8, Duration.ofSeconds(10)));
+                check(result.text().equals("synthetic reply"));
+                check(result.backendId().equals("llama.cpp-cli"));
+            }
+            reject(() -> new LlamaCppCliBackend(
+                    List.of(java, "-cp", testClasses, FakeLlamaCppMain.class.getName()),
+                    model, temp, "--unsafe", 16));
+            reject(() -> new LlamaCppCliBackend(
+                    List.of(java, "-cp", testClasses, FakeLlamaCppMain.class.getName()),
+                    model, temp, "WebGPU0", -2));
             try (var files = Files.list(temp)) {
                 check(files.count() == 1); // No prompt, stdout or stderr survives.
             }
@@ -52,6 +74,8 @@ public final class StandaloneContractTestMain {
             Files.deleteIfExists(model);
             Files.deleteIfExists(temp);
         }
+        TieredInferenceTestMain.main(new String[0]);
+        checks += StdioProtocolContractTestMain.run();
         System.out.println("standalone contract checks passed: " + checks);
     }
 

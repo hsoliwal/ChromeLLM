@@ -3,6 +3,7 @@ package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -18,9 +19,13 @@ import java.util.concurrent.TimeoutException;
 public final class LlamaCppCliBackend implements ModelBackend {
     private static final long MAX_STDOUT_BYTES = 4L * 1024 * 1024;
     private static final String BACKEND_ID = "llama.cpp-cli";
+    private static final long SCRATCH_DELETE_SECONDS = 5;
+    private static final long SCRATCH_DELETE_RETRY_MILLIS = 20;
     private final List<String> launcher;
     private final Path model;
     private final Path scratch;
+    private final String device;
+    private final int gpuLayers;
 
     public LlamaCppCliBackend(Path executable, Path model) {
         this(List.of(Objects.requireNonNull(executable, "executable").toAbsolutePath().toString()),
@@ -30,11 +35,33 @@ public final class LlamaCppCliBackend implements ModelBackend {
         }
     }
 
+    /** Explicit native-device selection without changing legacy CLI defaults. */
+    public LlamaCppCliBackend(Path executable, Path model, String device, int gpuLayers) {
+        this(List.of(Objects.requireNonNull(executable, "executable").toAbsolutePath().toString()),
+                model, Path.of(System.getProperty("java.io.tmpdir")), device, gpuLayers);
+        if (!Files.isRegularFile(executable)) {
+            throw new IllegalArgumentException("llama.cpp executable is not a regular file");
+        }
+    }
+
     /** Explicit argv prefix also supports test launchers without shell interpretation. */
     public LlamaCppCliBackend(List<String> launcher, Path model, Path scratch) {
+        this(launcher, model, scratch, null, -1);
+    }
+
+    /** Explicit GGML device selection; the llama.cpp executable supplies any Dawn/WebGPU backend. */
+    public LlamaCppCliBackend(List<String> launcher, Path model, Path scratch, String device, int gpuLayers) {
         this.launcher = List.copyOf(Objects.requireNonNull(launcher, "launcher"));
         this.model = Objects.requireNonNull(model, "model").toAbsolutePath().normalize();
         this.scratch = Objects.requireNonNull(scratch, "scratch").toAbsolutePath().normalize();
+        if (device != null && !device.matches("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")) {
+            throw new IllegalArgumentException("device must be an exact, bounded GGML device name");
+        }
+        if (gpuLayers < -1 || gpuLayers > 1024) {
+            throw new IllegalArgumentException("GPU layers must be omitted or in [0, 1024]");
+        }
+        this.device = device;
+        this.gpuLayers = gpuLayers;
         if (this.launcher.isEmpty() || this.launcher.stream().anyMatch(s -> s == null || s.isBlank())) {
             throw new IllegalArgumentException("launcher must contain nonblank argv elements");
         }
@@ -75,9 +102,36 @@ public final class LlamaCppCliBackend implements ModelBackend {
             }
             return new ModelResponse(text, id(), sha256(request.prompt()));
         } finally {
-            Files.deleteIfExists(promptFile);
-            if (stdoutFile != null) Files.deleteIfExists(stdoutFile);
-            if (stderrFile != null) Files.deleteIfExists(stderrFile);
+            deleteScratch(promptFile);
+            deleteScratch(stdoutFile);
+            deleteScratch(stderrFile);
+        }
+    }
+
+    /**
+     * Deletes one scratch file. Windows can report a redirected file as in use for a short
+     * time after its child process has exited, so a busy file is retried within a bound.
+     */
+    private static void deleteScratch(Path file) throws IOException {
+        if (file == null) return;
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(SCRATCH_DELETE_SECONDS);
+        boolean interrupted = false;
+        try {
+            while (true) {
+                try {
+                    Files.deleteIfExists(file);
+                    return;
+                } catch (FileSystemException busy) {
+                    if (System.nanoTime() >= deadline) throw busy;
+                }
+                try {
+                    Thread.sleep(SCRATCH_DELETE_RETRY_MILLIS);
+                } catch (InterruptedException duringCleanup) {
+                    interrupted = true;
+                }
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 
@@ -86,6 +140,8 @@ public final class LlamaCppCliBackend implements ModelBackend {
         args.addAll(List.of("-m", model.toString(), "-f", prompt.toString(), "-n",
                 Integer.toString(request.maxTokens()), "--no-display-prompt", "--no-show-timings",
                 "--simple-io", "--single-turn"));
+        if (device != null) args.addAll(List.of("--device", device));
+        if (gpuLayers >= 0) args.addAll(List.of("-ngl", Integer.toString(gpuLayers)));
         return new ProcessBuilder(args)
                 .redirectOutput(stdout.toFile())
                 .redirectError(stderr.toFile())
@@ -109,6 +165,20 @@ public final class LlamaCppCliBackend implements ModelBackend {
     private static void stopProcess(Process process) {
         process.destroy();
         if (process.isAlive()) process.destroyForcibly();
+        // Termination is asynchronous. Wait for handle release before deleting redirected
+        // files, especially on Windows where an exiting child can still hold them open.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        boolean interrupted = false;
+        while (process.isAlive()) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) break;
+            try {
+                process.waitFor(remaining, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException duringCleanup) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) Thread.currentThread().interrupt();
         // Child-process trees require a separate operating-system-specific containment policy.
     }
 

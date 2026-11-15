@@ -1,6 +1,14 @@
 # ChromeLLM: browser-free Java/JNI entry points
 
-The active inference module is **standalone/** (Java 21 JPMS, java.base only). ChromeML/Dawn, Node HTTP, PowerShell runners and Chrome-managed model paths have been removed from the draft product source. A licensed, independent GGUF model and compatible llama.cpp native library are required for real inference.
+The active inference module is **standalone/** (Java 21 JPMS, `java.base` and `java.net.http`). It supports local llama.cpp CLI/JNI inference and explicit Gemini 4 Hydrogen API access. The local JNI provider can select native Dawn/WebGPU through llama.cpp. A browser, ChromeML, Node HTTP runner and Chrome-managed model files are not required.
+
+## Choose the model provider
+
+- For Hydrogen, set `GEMINI_API_KEY` and select `--backend gemini`; `--model gemini-4-hydrogen` and `--thinking-level high` are defaults. This sends the prompt to Google's API.
+- For local inference, supply a licensed GGUF model and select `--backend cli` or `--backend jni`.
+- For local WebGPU, build llama.cpp with its existing Dawn provider and select `--backend jni --compute-backend webgpu --gpu-layers 32`.
+
+See the [standalone README](../standalone/README.md) for complete build commands, options and limits. Each provider is selected explicitly; the runtime never silently changes between local and remote inference.
 
 ## Build and run the in-process JNI backend
 
@@ -39,4 +47,4 @@ The fixture is test-only, **not a real language model**. Synthetic success does 
 
 The root pom.xml and CMakeLists.txt build a distinct Java/C++ diffusion, image, GPU, vision and video subsystem. The separate diffusion CLI no longer supports --prompt or --chrome-base; optional numeric conditioning uses exactly 16 finite values passed with --condition-vector.
 
-Canonical refactor/deletion recipes belong in [com.synexia](https://github.com/hsoliwal/com.synexia/pull/14522); ChromeLLM only receives reviewable product files. See [migration record](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/BROWSER_REMOVAL_MIGRATION.md), [standalone README](../standalone/README.md) and [draft PR #19](https://github.com/hsoliwal/ChromeLLM/pull/19).
+Canonical recipes belong in [com.synexia](https://github.com/hsoliwal/com.synexia); ChromeLLM receives product code, product tests and documentation. The [migration record](https://github.com/hsoliwal/com.synexia/blob/develop/forks/ChromeLLM/docs/BROWSER_REMOVAL_MIGRATION.md) documents the earlier browser-removal work.
