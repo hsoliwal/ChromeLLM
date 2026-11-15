@@ -45,7 +45,19 @@
     <!-- No native tools are required for the default Java-only Maven build. -->
     <profile>
       <id>native-synthetic</id>
-      <build><plugins><plugin>
+      <properties><chromellm.native.mode>synthetic</chromellm.native.mode></properties>
+      <build><plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
+          <executions><execution>
+            <id>require-synthetic-only</id><phase>validate</phase><goals><goal>enforce</goal></goals>
+            <configuration><rules><requireProperty>
+              <property>chromellm.native.mode</property><regex>^synthetic$</regex>
+              <message>native-synthetic and native-fork cannot be active together</message>
+            </requireProperty></rules></configuration>
+          </execution></executions>
+        </plugin>
+        <plugin>
         <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.0</version>
         <executions>
           <execution>
@@ -78,7 +90,10 @@
     </profile>
     <profile>
       <id>native-fork</id>
-      <properties><chromellm.native.webgpu>OFF</chromellm.native.webgpu></properties>
+      <properties>
+        <chromellm.native.webgpu>OFF</chromellm.native.webgpu>
+        <chromellm.native.mode>fork</chromellm.native.mode>
+      </properties>
       <build><plugins>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.5.0</version>
@@ -88,6 +103,9 @@
               <property>chromellm.native.source</property>
               <regex>.*\S.*</regex>
               <message>native-fork requires -Dchromellm.native.source=/absolute/path/to/llama.cpp</message>
+            </requireProperty><requireProperty>
+              <property>chromellm.native.mode</property><regex>^fork$</regex>
+              <message>native-synthetic and native-fork cannot be active together</message>
             </requireProperty></rules></configuration>
           </execution></executions>
         </plugin>
