@@ -86,6 +86,19 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
   --context-tokens 4096 --threads 4 --gpu-layers 0 --max-tokens 256
 ```
 
+For prebuilt libraries, CMake first checks whether `libllama` exports the required GGML device APIs itself. Monolithic distributions need no extra libraries. If GGML is split into `ggml` and `ggml-base`, CMake searches beside the selected `LLAMA_LIBRARY` before ordinary library paths. Explicit `GGML_LIBRARY` and `GGML_BASE_LIBRARY` values take precedence. Use headers and libraries from the same compatible build; CMake validates the selected libraries against the device-selection API.
+
+If the split libraries are installed elsewhere, provide their full paths:
+
+```sh
+cmake -S standalone/native -B standalone/native/build \
+  -DLLAMA_INCLUDE_DIR=/path/to/llama/include \
+  -DGGML_INCLUDE_DIR=/path/to/llama/ggml/include \
+  -DLLAMA_LIBRARY=/path/to/llama-build/bin/libllama.so \
+  -DGGML_LIBRARY=/other/library/directory/libggml.so \
+  -DGGML_BASE_LIBRARY=/other/library/directory/libggml-base.so
+```
+
 On Windows/macOS, build the platform DLL/dylib and provide correct loader paths for its transitive dependencies. `--backend cli --llama-bin /path/to/llama-cli` remains available. No automatic provider fallback is permitted.
 
 The JNI provider supports decoder-only text models. It uses one model handle per Java backend, a fresh context per bounded call, deterministic greedy decoding, checked UTF-8 and SHA-256 prompt receipts. Per-instance generation and close serialize in Java; native handles are registry-validated. The deadline uses periodic checks and llama.cpp's CPU abort callback; long GPU kernels may not be interruptible immediately. The `--gpu-layers` argument requests offload but cannot prove actual device execution.
@@ -100,6 +113,10 @@ Build and install a compatible Dawn checkout using its [CMake instructions](http
 cmake -S standalone/native -B standalone/native/build-webgpu \
   -DCHROMELLM_LLAMA_SOURCE_DIR=/path/to/synexia-llmcpp \
   -DCHROMELLM_WEBGPU=ON \
+  -DGGML_BACKEND_DL=OFF \
+  -DGGML_WEBGPU_DEBUG=OFF \
+  -DGGML_WEBGPU_CPU_PROFILE=OFF \
+  -DGGML_WEBGPU_GPU_PROFILE=OFF \
   -DCMAKE_PREFIX_PATH=/path/to/dawn/install \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build standalone/native/build-webgpu --parallel
@@ -113,6 +130,8 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
 
 The source-build option uses linked GGML providers (`GGML_BACKEND_DL=OFF`) and delegates WebGPU configuration to llama.cpp. ChromeLLM itself does not download source or models. The independently installed Dawn package and its build prerequisites must already be available.
 
+Alternatively, point `Dawn_DIR` at the directory containing the installed `DawnConfig.cmake`. When building llama.cpp separately for the prebuilt-library path, enable `GGML_WEBGPU=ON` and keep `GGML_BACKEND_DL=OFF`; use the resulting matching llama/GGML libraries above. The pinned [WebGPU build](https://github.com/hsoliwal/synexia-llmcpp/blob/650ac3739d993e1d425f2d5db3c4205b3606cc30/ggml/src/ggml-webgpu/CMakeLists.txt) requires Python 3 to embed WGSL shaders. Keep the three WebGPU debug/profile flags off for binary stdio sessions because those modes can write native diagnostics to stdout. Device enumeration observes registered providers; it does not automatically load backend plugins.
+
 `--compute-backend auto` is the JNI default and preserves the original provider behavior and JNI entry point. `cpu` explicitly selects the CPU provider and requires `--gpu-layers 0`. `webgpu` explicitly selects the WebGPU provider and requires a positive layer count; an absent provider fails instead of silently substituting CPU. These options are valid only with `--backend jni`. The original public Java constructor and JNI `nOpen` entry point remain available.
 
 Selecting a WebGPU device and requesting layers does not measure which model operations execute on the device. Validate actual inference with your chosen GGUF model, Dawn build and driver before making performance or device-execution claims.
@@ -122,6 +141,8 @@ Selecting a WebGPU device and requesting layers does not measure which model ope
 `--list-devices true --jni-lib /absolute/path/libchromellm_llama_jni.so` prints
 one line per device registered by the supplied llama.cpp build: backend, device
 name, type (`CPU`, `GPU`, `IGPU` or `ACCEL`) and description, tab-separated.
+Listing does not require model weights. Control characters in display fields are
+escaped; use the exact names reported by the supplied build.
 
 `--backend jni --device-backend <backend> --device <name>` selects exactly one
 listed pair. Both options are required together, the match is case-sensitive, a
@@ -136,16 +157,34 @@ bounded, end of input between frames ends the session, and a partial frame is an
 error. A llama.cpp build that prints diagnostics to stdout is incompatible with
 this mode.
 
+Stdio clients, including the Synexia ChromeLLM text-model adapter, receive the
+`CLM1` magic first. Numeric fields use big-endian encoding:
+
+| Frame | Fields |
+| --- | --- |
+| Request | 32-bit prompt byte length, 32-bit maximum tokens, 64-bit timeout in milliseconds, UTF-8 prompt bytes |
+| Success | 32-bit status `0`, then length-prefixed UTF-8 answer, backend ID and SHA-256 prompt receipt |
+| Failure | 32-bit nonzero status, then a length-prefixed UTF-8 error message |
+
+Each length prefix is a 32-bit byte count. Prompts are limited to 16 MiB and
+answers to 4 MiB. Failure statuses are `1` for inference/encoding failure, `2`
+for timeout, `3` for an invalid request and `4` for interruption. A truncated
+frame or partial output write terminates the session; EOF between frames ends
+it normally. A client requiring a hard deadline can retire the provider process.
+
 ## Synthetic JNI test (not a real model run)
 
 ```sh
 cmake -S standalone/native -B /tmp/chromellm-jni-test -DCHROMELLM_SYNTHETIC_TEST=ON
 cmake --build /tmp/chromellm-jni-test
+ctest --test-dir /tmp/chromellm-jni-test --output-on-failure
 mvn -f standalone/pom.xml test-compile
 java -cp standalone/target/classes:standalone/target/test-classes \
  io.synexia.chromellm.standalone.JniSyntheticContractTestMain \
  /tmp/chromellm-jni-test/libchromellm_llama_jni.so
 ```
+
+The CTest case builds synthetic archives solely for the real CMake compile/link checks. It checks sibling discovery, explicit overrides, ordinary lookup fallback and monolithic-library compatibility, then builds the existing synthetic JNI fixture without external library options. These probe archives contain no model implementation and are never used for inference.
 
 Repeat the same Java command with `CHROMELLM_TEST_NO_WEBGPU=1` in its environment to exercise rejection of an unavailable provider.
 

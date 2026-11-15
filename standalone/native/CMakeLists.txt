@@ -98,9 +98,13 @@ else()
   if(CHROMELLM_LLAMA_EXPORTS_GGML)
     set(CHROMELLM_GGML_LIBRARIES "")
   else()
+    # Prefer matching sibling libraries before ordinary discovery. Explicit cache
+    # overrides still take precedence, and installations with separate paths still work.
     get_filename_component(LLAMA_LIBRARY_DIR "${LLAMA_LIBRARY}" DIRECTORY)
-    find_library(GGML_LIBRARY NAMES ggml HINTS "${LLAMA_LIBRARY_DIR}" REQUIRED)
-    find_library(GGML_BASE_LIBRARY NAMES ggml-base HINTS "${LLAMA_LIBRARY_DIR}" REQUIRED)
+    find_library(GGML_LIBRARY NAMES ggml HINTS "${LLAMA_LIBRARY_DIR}" NO_DEFAULT_PATH)
+    find_library(GGML_BASE_LIBRARY NAMES ggml-base HINTS "${LLAMA_LIBRARY_DIR}" NO_DEFAULT_PATH)
+    find_library(GGML_LIBRARY NAMES ggml REQUIRED)
+    find_library(GGML_BASE_LIBRARY NAMES ggml-base REQUIRED)
     set(CHROMELLM_GGML_LIBRARIES ${GGML_LIBRARY} ${GGML_BASE_LIBRARY})
     set(CMAKE_REQUIRED_LIBRARIES ${LLAMA_LIBRARY} ${CHROMELLM_GGML_LIBRARIES})
     chromellm_check_ggml_link(CHROMELLM_SPLIT_GGML_LINKS)
@@ -114,3 +118,24 @@ endif()
 add_library(chromellm_llama_jni SHARED llama_jni.cpp)
 target_include_directories(chromellm_llama_jni PRIVATE ${JNI_INCLUDE_DIRS} ${LLAMA_INCLUDE_DIR} ${GGML_INCLUDE_DIR})
 target_link_libraries(chromellm_llama_jni PRIVATE ${LLAMA_LIBRARY} ${CHROMELLM_GGML_LIBRARIES})
+
+if(CHROMELLM_SYNTHETIC_TEST)
+  include(CTest)
+  if(BUILD_TESTING)
+    add_test(NAME external-library-discovery
+      COMMAND ${CMAKE_COMMAND}
+        "-DCHROMELLM_NATIVE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DCHROMELLM_TEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/library-discovery-test"
+        "-DCHROMELLM_TEST_GENERATOR=${CMAKE_GENERATOR}"
+        "-DCHROMELLM_TEST_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DCHROMELLM_TEST_GENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+        "-DCHROMELLM_TEST_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DCHROMELLM_TEST_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DCHROMELLM_TEST_JAVA_INCLUDE_PATH=${JAVA_INCLUDE_PATH}"
+        "-DCHROMELLM_TEST_JAVA_INCLUDE_PATH2=${JAVA_INCLUDE_PATH2}"
+        "-DCHROMELLM_TEST_JAVA_AWT_INCLUDE_PATH=${JAVA_AWT_INCLUDE_PATH}"
+        "-DCHROMELLM_TEST_JAVA_AWT_LIBRARY=${JAVA_AWT_LIBRARY}"
+        "-DCHROMELLM_TEST_JAVA_JVM_LIBRARY=${JAVA_JVM_LIBRARY}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/library_discovery/CMakeLists.txt")
+  endif()
+endif()
