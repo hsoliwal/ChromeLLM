@@ -35,8 +35,10 @@ public final class StandaloneMain {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
-        validateAgentMode(options);
+        // Chrome setup modes name the conflicting agent option before agent, goal,
+        // workspace, token or provider setup is considered.
         validateChromeModes(options);
+        validateAgentMode(options);
         if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
             Path goalFile = Path.of(required(options, "--prompt-file"));
             AgentSession.Limits limits = agentLimits(options);

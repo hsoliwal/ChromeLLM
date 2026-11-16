@@ -186,6 +186,8 @@ checks. Cross-platform compatibility is established by each platform's runtime j
 The ordinary `mvn -f standalone/pom.xml verify` runs Java and fixed browser-script
 contracts using JDK 21, Maven and Node.js 22, without native or model provisioning.
 Dependency resolution follows Maven's normal online/offline policy.
+Its Java contract suite also verifies the fork-source pin and inference recipe;
+no native library or model is required by those offline test fixtures.
 
 | Profile | Work performed |
 | --- | --- |
@@ -232,8 +234,8 @@ mvn -B -ntp -f standalone/pom.xml -Pdawn-binary verify
 
 A Vulkan driver is required. Mesa Lavapipe can be selected with
 `VK_ICD_FILENAMES` for a software-driver test. Software Vulkan results are not
-physical-GPU performance measurements. `dawn-binary`, `real-model`, and `smart-build`
-honor Maven `-o`. The retained `native-dawn` source-file installer has its own cache
+physical-GPU performance measurements. `dawn-binary`, `real-model`, `real-model-test`
+and `smart-build` honor Maven `-o`. The retained `native-dawn` source-file installer has its own cache
 policy. Ordinary JDK proxy/trust-store settings can be supplied in `MAVEN_OPTS`.
 
 ## GitHub runtime qualification and releases
