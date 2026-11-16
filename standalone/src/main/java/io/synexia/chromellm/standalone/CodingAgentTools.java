@@ -18,10 +18,13 @@ import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -51,6 +54,9 @@ final class CodingAgentTools implements AutoCloseable {
     private final HttpClient client;
     private final List<AgentSession.Tool> tools;
     private final Set<CompletableFuture<?>> active = new HashSet<>();
+    private final boolean atomPatternFirst;
+    private final Map<String, SourceObservation> observations = new LinkedHashMap<>();
+    private record SourceObservation(String sourceHash, String root) { }
     private boolean closed;
 
     CodingAgentTools(URI endpoint, String token) {
@@ -58,6 +64,11 @@ final class CodingAgentTools implements AutoCloseable {
         if (token == null || !token.matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("Coding agent token must contain 64 lowercase hexadecimal characters");
         }
+        String ordering = System.getProperty("chromellm.agent.atomPatternFirst", "false");
+        if (!ordering.equals("true") && !ordering.equals("false")) {
+            throw new IllegalArgumentException("chromellm.agent.atomPatternFirst must be true or false");
+        }
+        this.atomPatternFirst = ordering.equals("true");
         this.origin = "http://127.0.0.1:" + endpoint.getPort();
         this.endpoint = URI.create(origin + "/");
         this.token = token;
@@ -83,10 +94,11 @@ final class CodingAgentTools implements AutoCloseable {
         List<AgentSession.Tool> result = new ArrayList<>();
         result.add(emptyTool("repository_status", "Read repository service and index status.", "/api/status"));
         result.add(emptyTool("repository_files", "List admitted Java source paths and the inventory truncation flag.", "/api/files"));
-        result.add(new AgentSession.Tool("source_read", "Read a Java source snapshot with its content hash.",
+        result.add(new AgentSession.Tool("source_read", "Read a Java source snapshot with its content hash."
+                + (atomPatternFirst ? " The operator requires a source-bound canonical structural atom observation before preview; physical extraction and semantic pattern recipes remain separate." : ""),
                 schema(Map.of("path", stringSchema(1024)), List.of("path")), (arguments, remaining) -> {
                     fields(arguments, Set.of("path"), Set.of("path"));
-                    return request("GET", "/api/file", Map.of("path", path(arguments)), remaining, 0);
+                    return sourceRead(path(arguments), remaining);
                 }));
         Map<String, Object> searchProperties = new LinkedHashMap<>();
         searchProperties.put("query", stringSchema(256));
@@ -156,8 +168,9 @@ final class CodingAgentTools implements AutoCloseable {
         preview.put("after_fixture", stringSchema(65536));
         preview.put("rationale", Map.of("type", "string", "maxLength", 4096));
         result.add(new AgentSession.Tool("candidate_preview",
-                "Create an isolated candidate with diff, structural lint and compiler checks. Read the returned gate results; tests and recipe proof remain separate.",
-                schema(preview, List.copyOf(preview.keySet())), (arguments, remaining) -> {
+                "Create an isolated candidate with diff, structural lint and compiler checks. Read the returned gate results; tests and recipe proof remain separate."
+                        + (atomPatternFirst ? " Requires this session's successful source_read for the exact path and source hash." : ""),
+                schema(preview, List.copyOf(preview.keySet())), sessionScoped((arguments, remaining) -> {
                     fields(arguments, PREVIEW_FIELDS, PREVIEW_FIELDS);
                     Map<String, String> form = new LinkedHashMap<>();
                     form.put("path", path(arguments));
@@ -170,9 +183,77 @@ final class CodingAgentTools implements AutoCloseable {
                     form.put("before_fixture", text(arguments, "before_fixture", 65536, false));
                     form.put("after_fixture", text(arguments, "after_fixture", 65536, false));
                     form.put("rationale", text(arguments, "rationale", 4096, true));
-                    return request("POST", "/api/preview", form, remaining, 512 * 1024);
-                }));
+                    String observation = null;
+                    if (atomPatternFirst) {
+                        synchronized (active) {
+                            SourceObservation prior = observations.get(form.get("path"));
+                            if (prior == null || prior.root() == null || !hash.equals(prior.sourceHash())) {
+                                throw new IOException("Read a canonical atom-pattern observation for this exact source before preview");
+                            }
+                            observation = prior.root();
+                        }
+                    }
+                    return request("POST", "/api/preview", form, remaining, 512 * 1024, observation);
+                })));
         return List.copyOf(result);
+    }
+
+    private AgentSession.Handler sessionScoped(AgentSession.Handler delegate) {
+        if (!atomPatternFirst) return delegate;
+        return new AgentSession.Handler() {
+            @Override public void beginSession() {
+                synchronized (active) { observations.clear(); }
+            }
+            @Override public String execute(Map<String, Object> arguments, Duration remaining)
+                    throws IOException, InterruptedException, TimeoutException {
+                return delegate.execute(arguments, remaining);
+            }
+        };
+    }
+
+    private String sourceRead(String path, Duration timeout) throws IOException, InterruptedException, TimeoutException {
+        if (!atomPatternFirst) return request("GET", "/api/file", Map.of("path", path), timeout, 0);
+        SourceObservation pending = new SourceObservation(null, null);
+        synchronized (active) {
+            if (closed) throw new IOException("Coding agent tools are closed");
+            observations.remove(path);
+            if (observations.size() == 100) observations.remove(observations.keySet().iterator().next());
+            observations.put(path, pending);
+        }
+        try {
+            String result = request("GET", "/api/file", Map.of("path", path, "observation", "atom-pattern"), timeout, 0);
+            Map<?, ?> response = (Map<?, ?>) McpJson.parse(result);
+            if (!(response.get("source") instanceof String source) || !(response.get("sha256") instanceof String sourceHash)
+                    || !path.equals(response.get("path")) || !sourceHash.matches("[0-9a-f]{64}")
+                    || !sourceHash.equals(sourceHash(source))
+                    || !(response.get("atomPatternObservation") instanceof Map<?, ?> observation)
+                    || !"synexia.atom-pattern.observation.v1".equals(observation.get("schema"))
+                    || !"COMPLETE".equals(observation.get("status"))
+                    || !path.equals(observation.get("path")) || !sourceHash.equals(observation.get("source_sha256"))
+                    || !Boolean.TRUE.equals(observation.get("lossless"))
+                    || !"TYPE_AND_MEMBER_STRUCTURE".equals(observation.get("structuralScope"))
+                    || !Boolean.FALSE.equals(observation.get("physicalExtractionExecuted"))
+                    || !(observation.get("compositionRoot") instanceof String compositionRoot)
+                    || !compositionRoot.matches("[0-9a-f]{64}")
+                    || !(observation.get("observationRoot") instanceof String root) || !root.matches("[0-9a-f]{64}")) {
+                throw new IOException("Canonical atom-pattern observation is unavailable or does not match the source");
+            }
+            synchronized (active) {
+                if (closed || observations.get(path) != pending) {
+                    throw new IOException("Canonical atom-pattern observation was superseded or tools closed");
+                }
+                observations.put(path, new SourceObservation(sourceHash, root));
+            }
+            return result;
+        } catch (IOException | InterruptedException | TimeoutException failure) {
+            synchronized (active) { if (observations.get(path) == pending) observations.remove(path); }
+            throw failure;
+        }
+    }
+
+    private static String sourceHash(String source) {
+        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source.getBytes(StandardCharsets.UTF_8))); }
+        catch (NoSuchAlgorithmException unavailable) { throw new IllegalStateException(unavailable); }
     }
 
     private AgentSession.Tool emptyTool(String name, String description, String route) {
@@ -291,6 +372,11 @@ final class CodingAgentTools implements AutoCloseable {
 
     private String request(String method, String route, Map<String, String> fields, Duration timeout, int maxFormBytes)
             throws IOException, InterruptedException, TimeoutException {
+        return request(method, route, fields, timeout, maxFormBytes, null);
+    }
+
+    private String request(String method, String route, Map<String, String> fields, Duration timeout, int maxFormBytes,
+                           String observation) throws IOException, InterruptedException, TimeoutException {
         interrupted();
         if (timeout == null || timeout.isNegative() || timeout.isZero()) throw new IllegalArgumentException("Coding agent deadline must be positive");
         long budget;
@@ -308,6 +394,7 @@ final class CodingAgentTools implements AutoCloseable {
         HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint.resolve(route + query))
                 .timeout(Duration.ofNanos(remaining(deadline))).header("Accept", "application/json")
                 .header("X-M3-Token", token);
+        if (observation != null) builder.header("X-M3-Atom-Pattern-Observation", observation);
         if (method.equals("POST")) {
             builder.header("Origin", origin).header("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
                     .POST(HttpRequest.BodyPublishers.ofString(encoded.toString(), StandardCharsets.UTF_8));
@@ -369,6 +456,7 @@ final class CodingAgentTools implements AutoCloseable {
             closed = true;
             pending = List.copyOf(active);
             active.clear();
+            observations.clear();
         }
         for (CompletableFuture<?> future : pending) future.cancel(true);
         client.shutdownNow();

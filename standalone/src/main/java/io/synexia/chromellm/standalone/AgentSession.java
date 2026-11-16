@@ -54,6 +54,8 @@ final class AgentSession {
 
     @FunctionalInterface
     interface Handler {
+        /** Clear optional invocation-local admission state before the first model decision. */
+        default void beginSession() { }
         /** Validate the declared schema before work; observe the shared remaining deadline. */
         String execute(Map<String, Object> arguments, Duration remaining)
                 throws IOException, InterruptedException, TimeoutException;
@@ -159,6 +161,7 @@ final class AgentSession {
     /** Each invocation has independent bounded state. Backend and handlers must honor deadlines. */
     Result run(String goal) throws IOException, InterruptedException, TimeoutException {
         validateGoal(goal, limits);
+        tools.values().forEach(tool -> tool.handler().beginSession());
         long deadline = System.nanoTime() + limits.timeout().toNanos();
         String backendId = backend.id();
         if (backendId == null || backendId.isBlank()) throw new FailureException(Failure.BACKEND_IDENTITY);

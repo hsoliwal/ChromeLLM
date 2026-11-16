@@ -36,6 +36,8 @@ public final class CodingAgentToolsContractTestMain {
     public static void main(String[] args) throws Exception {
         configuration();
         protocolAndSchemas();
+        atomPatternOrdering();
+        mcpAtomPatternIsolation();
         responseAdmission();
         deadlinesAndCancellation();
         directConnection();
@@ -222,6 +224,137 @@ public final class CodingAgentToolsContractTestMain {
         }
     }
 
+    /** Synthetic transport envelopes exercise admission; the service tests use the real extractor. */
+    private static void atomPatternOrdering() throws Exception {
+        String property = "chromellm.agent.atomPatternFirst";
+        String previous = System.getProperty(property);
+        try {
+            System.setProperty(property, "true");
+            try (Fixture service = new Fixture(); CodingAgentTools tools = new CodingAgentTools(service.endpoint(), TOKEN)) {
+                Map<String, Object> candidate = new LinkedHashMap<>(candidate());
+                String source = "class Example {}\n";
+                String hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(source.getBytes(StandardCharsets.UTF_8)));
+                String root = "a".repeat(64);
+                candidate.put("source_sha256", hash);
+                rejectBeforeNetwork(service, () -> call(tools, "candidate_preview", candidate));
+                Map<String, Object> observation = new LinkedHashMap<>();
+                observation.put("schema", "synexia.atom-pattern.observation.v1");
+                observation.put("status", "COMPLETE");
+                observation.put("path", "src/Example.java");
+                observation.put("source_sha256", hash);
+                observation.put("observationRoot", root);
+                observation.put("compositionRoot", "b".repeat(64));
+                observation.put("lossless", true);
+                observation.put("structuralScope", "TYPE_AND_MEMBER_STRUCTURE");
+                observation.put("physicalExtractionExecuted", false);
+                Map<String, Object> response = new LinkedHashMap<>();
+                response.put("path", "src/Example.java"); response.put("sha256", hash); response.put("source", source);
+                response.put("atomPatternObservation", observation);
+                service.handler.set(exchange -> send(exchange, 200, McpJson.encode(response, 16384).getBytes(StandardCharsets.UTF_8)));
+                call(tools, "source_read", Map.of("path", "src/Example.java"));
+                assertRequest(service, "GET", "/api/file", Map.of("path", "src/Example.java", "observation", "atom-pattern"), false);
+                check(service.last.get().observation() == null, "source read must not submit a claimed observation");
+                service.handler.set(exchange -> send(exchange, 200, "{}".getBytes(StandardCharsets.UTF_8)));
+                call(tools, "candidate_preview", candidate);
+                check(root.equals(service.last.get().observation()), "preview did not bind the retained observation");
+                call(tools, "candidate_preview", candidate);
+                check(root.equals(service.last.get().observation()), "repeated preview lost its observation binding");
+                Map<String, Object> stale = new LinkedHashMap<>(candidate);
+                stale.put("source_sha256", "0".repeat(64));
+                rejectBeforeNetwork(service, () -> call(tools, "candidate_preview", stale));
+                Map<String, Object> otherPath = new LinkedHashMap<>(candidate);
+                otherPath.put("path", "src/Other.java");
+                rejectBeforeNetwork(service, () -> call(tools, "candidate_preview", otherPath));
+                for (String invalid : List.of("{}", McpJson.encode(Map.of("path", "src/Example.java", "sha256", hash,
+                        "source", source, "atomPatternObservation", Map.of("status", "UNSUPPORTED_PARSE")), 16384))) {
+                    service.handler.set(exchange -> send(exchange, 200, invalid.getBytes(StandardCharsets.UTF_8)));
+                    reject(IOException.class, () -> call(tools, "source_read", Map.of("path", "src/Example.java")));
+                    rejectBeforeNetwork(service, () -> call(tools, "candidate_preview", candidate));
+                }
+                response.put("source", source + "// changed\n");
+                service.handler.set(exchange -> send(exchange, 200, McpJson.encode(response, 16384).getBytes(StandardCharsets.UTF_8)));
+                reject(IOException.class, () -> call(tools, "source_read", Map.of("path", "src/Example.java")));
+                rejectBeforeNetwork(service, () -> call(tools, "candidate_preview", candidate));
+                response.put("source", source);
+                call(tools, "source_read", Map.of("path", "src/Example.java"));
+                service.handler.set(exchange -> send(exchange, 503, "{}".getBytes(StandardCharsets.UTF_8)));
+                reject(IOException.class, () -> call(tools, "source_read", Map.of("path", "src/Example.java")));
+                rejectBeforeNetwork(service, () -> call(tools, "candidate_preview", candidate));
+            }
+            for (String invalid : List.of("TRUE", "1", "yes", "")) {
+                System.setProperty(property, invalid);
+                reject(IllegalArgumentException.class, () -> new CodingAgentTools(URI.create("http://127.0.0.1:8080"), TOKEN));
+            }
+            System.setProperty(property, "false");
+            try (Fixture service = new Fixture(); CodingAgentTools tools = new CodingAgentTools(service.endpoint(), TOKEN)) {
+                call(tools, "candidate_preview", candidate());
+                check(service.last.get().observation() == null, "legacy preview changed its authority contract");
+                call(tools, "source_read", Map.of("path", "src/Example.java"));
+                check(service.last.get().values().equals(Map.of("path", "src/Example.java")), "legacy source read opted in");
+            }
+        } finally {
+            if (previous == null) System.clearProperty(property); else System.setProperty(property, previous);
+        }
+    }
+
+    private static void mcpAtomPatternIsolation() throws Exception {
+        String key = "chromellm.agent.atomPatternFirst", previous = System.getProperty(key);
+        System.setProperty(key, "true");
+        try {
+            for (boolean firstRunFails : List.of(false, true)) {
+                try (Fixture service = new Fixture(); CodingAgentTools tools = new CodingAgentTools(service.endpoint(), TOKEN)) {
+                    String source = "class Example {}\n";
+                    String hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(source.getBytes(StandardCharsets.UTF_8)));
+                    Map<String, Object> candidate = new LinkedHashMap<>(candidate()); candidate.put("source_sha256", hash);
+                    Map<String, Object> observation = Map.of("schema", "synexia.atom-pattern.observation.v1",
+                            "status", "COMPLETE", "path", "src/Example.java", "source_sha256", hash,
+                            "observationRoot", "a".repeat(64), "compositionRoot", "b".repeat(64), "lossless", true,
+                            "structuralScope", "TYPE_AND_MEMBER_STRUCTURE", "physicalExtractionExecuted", false);
+                    String read = McpJson.encode(Map.of("path", "src/Example.java", "sha256", hash, "source", source,
+                            "atomPatternObservation", observation), 16384);
+                    service.handler.set(exchange -> send(exchange, 200, (exchange.getRequestURI().getPath().equals("/api/file")
+                            ? read : "{}").getBytes(StandardCharsets.UTF_8)));
+                    List<String> script = List.of(
+                            McpJson.encode(Map.of("type", "tool", "name", "source_read", "arguments", Map.of("path", "src/Example.java")), 16384),
+                            firstRunFails ? "{}" : "{\"type\":\"final\",\"answer\":\"first source observed\"}",
+                            McpJson.encode(Map.of("type", "tool", "name", "candidate_preview", "arguments", candidate), 16384),
+                            "{\"type\":\"final\",\"answer\":\"unexpected cross-run preview\"}");
+                    AtomicInteger calls = new AtomicInteger();
+                    ModelBackend backend = new ModelBackend() {
+                        @Override public String id() { return "mcp-atom-order-fixture"; }
+                        @Override public ModelResponse infer(ModelRequest request) {
+                            try {
+                                String promptHash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                                        .digest(request.prompt().getBytes(StandardCharsets.UTF_8)));
+                                return new ModelResponse(script.get(calls.getAndIncrement()), id(), promptHash);
+                            } catch (java.security.NoSuchAlgorithmException impossible) { throw new AssertionError(impossible); }
+                        }
+                    };
+                    String input = McpJson.encode(Map.of("jsonrpc", "2.0", "id", 1, "method", "initialize", "params",
+                            Map.of("protocolVersion", McpStdioServer.VERSION, "capabilities", Map.of(), "clientInfo", Map.of())), 16384)
+                            + "\n{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n";
+                    for (int id : List.of(2, 3)) input += McpJson.encode(Map.of("jsonrpc", "2.0", "id", id,
+                            "method", "tools/call", "params", Map.of("name", "run_agent", "arguments",
+                                    Map.of("goal", "Independent run " + id))), 16384) + "\n";
+                    java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+                    McpStdioServer.serve(backend, new java.io.ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
+                            output, tools.tools(), new AgentSession.Limits(4, 512, 65536, 16384, Duration.ofSeconds(10)));
+                    List<String> replies = output.toString(StandardCharsets.UTF_8).lines().toList();
+                    check(replies.size() == 3, "two-run MCP fixture did not complete");
+                    Map<?, ?> first = (Map<?, ?>) ((Map<?, ?>) McpJson.parse(replies.get(1))).get("result");
+                    Map<?, ?> second = (Map<?, ?>) ((Map<?, ?>) McpJson.parse(replies.get(2))).get("result");
+                    check(Boolean.valueOf(firstRunFails).equals(first.get("isError")), "first run did not establish the tested completion state");
+                    check(Boolean.TRUE.equals(second.get("isError")), "MCP run reused an earlier run's source observation");
+                    check(service.requests.get() == 1 && calls.get() == 3, "cross-run preview reached the HTTP service or continued inference");
+                }
+            }
+        } finally {
+            if (previous == null) System.clearProperty(key); else System.setProperty(key, previous);
+        }
+    }
+
     @SuppressWarnings("try") // Closing an active request is the behavior under test.
     private static void deadlinesAndCancellation() throws Exception {
         try (Fixture service = new Fixture(); CodingAgentTools tools = new CodingAgentTools(service.endpoint(), TOKEN)) {
@@ -357,7 +490,7 @@ public final class CodingAgentToolsContractTestMain {
     }
     @FunctionalInterface private interface Handler { void handle(HttpExchange exchange) throws IOException; }
     private record Seen(String method, String path, String rawQuery, String token, String origin,
-                        String contentType, Map<String, String> values) { }
+                        String contentType, Map<String, String> values, String observation) { }
     private static final class Fixture implements AutoCloseable {
         final AtomicInteger requests = new AtomicInteger();
         final AtomicReference<Seen> last = new AtomicReference<>();
@@ -383,7 +516,8 @@ public final class CodingAgentToolsContractTestMain {
                     }
                     last.set(new Seen(exchange.getRequestMethod(), exchange.getRequestURI().getPath(), exchange.getRequestURI().getRawQuery(),
                             exchange.getRequestHeaders().getFirst("X-M3-Token"), exchange.getRequestHeaders().getFirst("Origin"),
-                            exchange.getRequestHeaders().getFirst("Content-Type"), values));
+                            exchange.getRequestHeaders().getFirst("Content-Type"), values,
+                            exchange.getRequestHeaders().getFirst("X-M3-Atom-Pattern-Observation")));
                     handler.get().handle(exchange);
                 } finally { exchange.close(); }
             });

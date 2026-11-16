@@ -1,0 +1,69 @@
+{
+  "schema": "m3.qualified-product-handoff.v1",
+  "status": "QUALIFIED_REVIEW_CANDIDATE",
+  "canonical_repository": "hsoliwal/com.synexia",
+  "canonical_candidate_remote_revision": "4550726922e7c4dd616e3105427e2957c1969d7a",
+  "canonical_pull_request": 17694,
+  "canonical_qualified_owner_revision": "d57f51e7ec09325197bcbd039907117021ad78cd",
+  "canonical_qualification_path": "synexia-openrewrite-recipes/crates/m3-atom-pattern-chrome-20261115/qualification/resume-770637e8/receipt.json",
+  "canonical_qualification_sha256": "732c7acca277ae73ec61a99310534abbaa900a4901a69201ef4be92f91f7b38d",
+  "target_repository": "hsoliwal/ChromeLLM",
+  "target_base_revision": "770637e806e298dc01273f9e1b0f87420cfd0dd5",
+  "target_base_tree": "8a15fe0cb987edcdd87fbe6c12393b80573b4170",
+  "qualified_recipe_families": [
+    "m3-atom-pattern-chrome-public-java-20261115",
+    "m3-atom-pattern-chrome-public-text-20261115"
+  ],
+  "files": [
+    {
+      "path": "standalone/src/main/java/io/synexia/chromellm/standalone/AgentSession.java",
+      "kind": "QUALIFIED_PRODUCT",
+      "before_git_blob": "77312159b8f652ea18c7f97126abc35aed073987",
+      "before_sha256": "9bc978ef3a7f84e776ee92aee3d1f7485c17c8f5d42decbc0acd203a05674622",
+      "after_git_blob": "8b95d5242a3a06111657eb7d053a0f453c529253",
+      "after_sha256": "7db30b3b932ac80043b0ea9d066fe59970ff1fd449f78afd150c252d572bcb2d",
+      "bytes": 16274
+    },
+    {
+      "path": "standalone/src/main/java/io/synexia/chromellm/standalone/CodingAgentTools.java",
+      "kind": "QUALIFIED_PRODUCT",
+      "before_git_blob": "62ed9af3edefba94a79d542b29d82bf45031d212",
+      "before_sha256": "d916f38e937653b3e26dba01477b57c15858c184343af65f2e34fb619914b3f3",
+      "after_git_blob": "abf6b48b9f21ea90ebc1033a56c4e410b5dbb22f",
+      "after_sha256": "ce6daaea4b97bf514cd19f9ca75c3e08ee89e7b73e4c7fd6715bd1980c7bf8ee",
+      "bytes": 29897
+    },
+    {
+      "path": "standalone/src/test/java/io/synexia/chromellm/standalone/CodingAgentToolsContractTestMain.java",
+      "kind": "QUALIFIED_PRODUCT",
+      "before_git_blob": "d2abdee13926cafbc6e6fbd0d28635273ecc0368",
+      "before_sha256": "8ce725f7623d339f97e2d5c419b9e7e276890992cbbbc0374f3858567a85de03",
+      "after_git_blob": "74392ac7d0c7ee4d717db28885138d88e6804abf",
+      "after_sha256": "96e5c913f77185fe87c80c616776cfe53caac08570bf51f4a0a7d937ad4330c7",
+      "bytes": 38060
+    },
+    {
+      "path": "standalone/AGENT.md",
+      "kind": "QUALIFIED_PRODUCT",
+      "before_git_blob": "f524a259113370e366b45be2809aa46dfe6be6b8",
+      "before_sha256": "a5c0117bb1f164f156535f73c2791ed73feff607dd904106e557b3c292a81b82",
+      "after_git_blob": "0b698607370f6c788abeb25ac8bdeac9e263a926",
+      "after_sha256": "3ae7f1c36c505d83ad69662ee20aae5c3e3eca5c721001ee64e3c0293b0519c2",
+      "bytes": 10747
+    }
+  ],
+  "actual_openrewrite_replay_tests": 45,
+  "fresh_current_main_java_sources_compiled": 32,
+  "fresh_target_assertion_checks": {
+    "http": 530,
+    "session": 141,
+    "cli_mcp": 85,
+    "mcp_stdio": 1093
+  },
+  "independent_review": "Cross-run MCP observation retention corrected and regression-tested before materialization.",
+  "live_model_inference": "NOT_RUN",
+  "physical_method_extraction": "NOT_EXECUTED",
+  "semantic_pattern_recipes_in_preview_observation": "NOT_EXECUTED",
+  "private_recipe_sources_in_public_patch": false,
+  "promotion_authority": false
+}
