@@ -1,4 +1,5 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <!-- Synexia modification: reconcile current native profiles and add bounded Smart Build diagnostics. -->
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.synexia.chromellm</groupId>
   <artifactId>chromellm-standalone</artifactId>
@@ -21,6 +22,8 @@
     <chromellm.fork.prefix/>
     <chromellm.fork.configuration>Release</chromellm.fork.configuration>
     <chromellm.smart.recipe/>
+    <chromellm.smart.workspace>${project.basedir}</chromellm.smart.workspace>
+    <chromellm.smart.outputDirectory>${chromellm.smart.workspace}/target</chromellm.smart.outputDirectory>
     <chromellm.cmake.executable>cmake</chromellm.cmake.executable>
     <chromellm.ctest.executable>ctest</chromellm.ctest.executable>
     <chromellm.fork.dawnDir/>
@@ -156,6 +159,17 @@
             </goals>
             <configuration>
               <mainClass>io.synexia.chromellm.standalone.SmartBuildContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>smart-build-context-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.SmartBuildContextContractTestMain</mainClass>
               <classpathScope>test</classpathScope>
             </configuration>
           </execution>
@@ -522,8 +536,8 @@
                   <mainClass>io.synexia.chromellm.standalone.SmartBuildMain</mainClass>
                   <arguments>
                     <argument>${chromellm.smart.recipe}</argument>
-                    <argument>${project.basedir}</argument>
-                    <argument>${project.build.directory}</argument>
+                    <argument>${chromellm.smart.workspace}</argument>
+                    <argument>${chromellm.smart.outputDirectory}</argument>
                     <argument>--offline=${settings.offline}</argument>
                   </arguments>
                   <systemProperties>
