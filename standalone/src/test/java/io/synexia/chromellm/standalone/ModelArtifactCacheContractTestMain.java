@@ -350,6 +350,27 @@ public final class ModelArtifactCacheContractTestMain {
                 && request.headers().firstValue("Accept-Encoding").orElseThrow().equals("identity")),
                 "request deadline or identity encoding missing");
 
+        URI release = URI.create("https://github.com/owner/repo/releases/download/tag/artifact.bin");
+        String genericTarget = "https://cdn.example.invalid/native.bin";
+        TrackedStream releaseRedirect = new TrackedStream(new byte[0]);
+        FakeTransport releaseBound = new FakeTransport(response(302,
+                Map.of("Location", List.of(genericTarget)), releaseRedirect));
+        rejectIo(() -> ModelArtifactCache.fetch(release, fixture.length, releaseBound, Duration.ofSeconds(5)));
+        check(releaseBound.requests.size() == 1 && releaseBound.closes.get() == 1
+                        && releaseRedirect.closes.get() == 1,
+                "bounded native release seam escaped GitHub storage or leaked resources");
+        TrackedStream genericRedirect = new TrackedStream(new byte[0]);
+        TrackedStream genericBody = new TrackedStream(fixture);
+        FakeTransport genericBound = new FakeTransport(
+                response(302, Map.of("Location", List.of(genericTarget)), genericRedirect),
+                response(200, Map.of(), genericBody));
+        try (InputStream input = ModelArtifactCache.fetch(release, genericBound, Duration.ofSeconds(5), fixture.length)) {
+            check(java.util.Arrays.equals(input.readAllBytes(), fixture), "generic bounded redirect bytes changed");
+        }
+        check(genericBound.requests.size() == 2 && genericBound.closes.get() == 1
+                        && genericRedirect.closes.get() == 1 && genericBody.closes.get() == 1,
+                "legacy generic bounded seam lost redirects or leaked resources");
+
         TrackedStream oversized = new TrackedStream(fixture);
         FakeTransport bounded = new FakeTransport(response(200,
                 Map.of("Content-Length", List.of(Integer.toString(fixture.length))), oversized));

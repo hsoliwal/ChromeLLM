@@ -25,9 +25,10 @@ import java.util.Set;
 public final class SmartBuildMain {
     private static final int MAX_RECIPE_BYTES = 64 * 1024;
     private static final Set<String> KEYS = Set.of("promptFile", "backend", "llamaBin", "jniLib",
-            "model", "modelUrl", "modelSha256", "modelCacheDir", "modelFollowRedirects",
-            "modelDownloadTimeoutSeconds", "modelMaxBytes", "contextTokens", "threads",
-            "gpuLayers", "computeBackend", "deviceBackend", "device", "maxTokens", "timeoutSeconds");
+            "model", "modelUrl", "modelSha256", "modelCacheDir", "contextTokens", "threads",
+            "gpuLayers", "computeBackend", "deviceBackend", "device", "maxTokens", "timeoutSeconds",
+            "jniUrl", "jniSha256", "jniBytes", "jniCacheDir", "modelBytes", "offline",
+            "modelFollowRedirects", "modelDownloadTimeoutSeconds", "modelMaxBytes");
 
     @FunctionalInterface
     interface ProviderFactory {
@@ -44,6 +45,7 @@ public final class SmartBuildMain {
         if ((args.length != 3 && args.length != 4) || args[0].isBlank()) {
             throw new IllegalArgumentException("expected recipe, standalone root, Maven target directory, and optional offline flag");
         }
+        // Maven supplies settings.offline explicitly; older three-argument callers use the property.
         String offline = args.length == 4 ? args[3] : System.getProperty("chromellm.offline", "false");
         if (offline.startsWith("--offline=")) offline = offline.substring("--offline=".length());
         else if (offline.startsWith("offline=")) offline = offline.substring("offline=".length());
@@ -62,10 +64,9 @@ public final class SmartBuildMain {
     static Path run(Path recipe, Path workspace, Path buildDirectory,
                     Map<String, String> environment, ProviderFactory providerFactory, boolean offline) throws Exception {
         Path root = workspace.toRealPath();
-        // Reject the destination before cache preparation, prompt reads or provider initialization.
+        // Admission precedes provider construction, cache writes and network acquisition.
         Path outputRoot = validateOutputRoot(root, buildDirectory);
-        Path target = outputRoot.getParent();
-        NativeBuildArtifacts.buildDirectory(root, target);
+        Path target = NativeBuildArtifacts.buildDirectory(root, outputRoot.getParent());
         Path recipePath = confined(root, recipe, "recipe");
         byte[] recipeBytes;
         try (InputStream input = Files.newInputStream(recipePath)) {
@@ -111,68 +112,70 @@ public final class SmartBuildMain {
                 Map.entry("llamaBin", "--llama-bin"), Map.entry("jniLib", "--jni-lib"),
                 Map.entry("model", "--model"), Map.entry("modelUrl", "--model-url"),
                 Map.entry("modelSha256", "--model-sha256"), Map.entry("modelCacheDir", "--model-cache-dir"),
-                Map.entry("modelFollowRedirects", "--model-follow-redirects"),
-                Map.entry("modelDownloadTimeoutSeconds", "--model-download-timeout-seconds"),
-                Map.entry("modelMaxBytes", "--model-max-bytes"),
                 Map.entry("contextTokens", "--context-tokens"), Map.entry("threads", "--threads"),
                 Map.entry("gpuLayers", "--gpu-layers"), Map.entry("computeBackend", "--compute-backend"),
-                Map.entry("deviceBackend", "--device-backend"), Map.entry("device", "--device"))
+                Map.entry("deviceBackend", "--device-backend"), Map.entry("device", "--device"),
+                Map.entry("jniUrl", "--jni-url"), Map.entry("jniSha256", "--jni-sha256"),
+                Map.entry("jniBytes", "--jni-bytes"), Map.entry("jniCacheDir", "--jni-cache-dir"),
+                Map.entry("modelBytes", "--model-bytes"),
+                Map.entry("modelFollowRedirects", "--model-follow-redirects"),
+                Map.entry("modelDownloadTimeoutSeconds", "--model-download-timeout-seconds"),
+                Map.entry("modelMaxBytes", "--model-max-bytes"))
                 .entrySet()) {
             String value = config.getProperty(entry.getKey());
             if (value != null && !value.isBlank()) options.put(entry.getValue(), value);
         }
         // Recipe paths resolve against the standalone project, independent of Maven's launch directory.
-        for (String key : java.util.List.of("--llama-bin", "--jni-lib", "--model", "--model-cache-dir")) {
+        for (String key : java.util.List.of("--llama-bin", "--jni-lib", "--model", "--model-cache-dir", "--jni-cache-dir")) {
             String value = options.get(key);
             if (value != null) options.put(key, root.resolve(value).normalize().toString());
         }
         Path managedModelCache = null;
         if (options.containsKey("--model-url") || options.containsKey("--model-sha256")) {
-            // Maven owns its target directory. Create an absent cache only under target;
-            // an explicitly supplied external cache retains the existing caller-owned contract.
             Path cache = options.containsKey("--model-cache-dir")
-                    ? Path.of(options.get("--model-cache-dir")).toAbsolutePath().normalize() : target.resolve("model-cache");
-            if (cache.startsWith(target)) {
-                managedModelCache = cache;
-                options.put("--model-cache-dir", cache.toString());
-            } else if (!options.containsKey("--model-cache-dir")) {
-                options.put("--model-cache-dir", cache.toString());
-            }
+                    ? Path.of(options.get("--model-cache-dir")) : target.resolve("model-cache");
+            options.put("--model-cache-dir", cache.toString());
+            // Maven prepares its own target cache before inference. Existing model-only
+            // recipes prepare external caches after option admission, before the provider opens.
+            if (cache.startsWith(target)) managedModelCache = cache;
         }
-        if (options.containsKey("--model-url") || options.containsKey("--model-sha256")) {
-            StandaloneMain.backend(Map.copyOf(options), environment).close();
+        String recipeOffline = config.getProperty("offline", "false");
+        if (!recipeOffline.equals("true") && !recipeOffline.equals("false")) {
+            throw new IllegalArgumentException("offline requires true or false");
         }
-        if (!offline && managedModelCache == null && options.containsKey("--model-url")) {
-            // Preserve explicit external-cache preparation after option admission.
-            Path cache = Path.of(options.get("--model-cache-dir"));
-            prepareModelCache(cache);
-        }
-        if (offline && options.containsKey("--model-url")) {
-            String redirects = options.getOrDefault("--model-follow-redirects", "false");
-            if (!redirects.equals("true") && !redirects.equals("false")) {
-                throw new IllegalArgumentException("modelFollowRedirects requires true or false");
+        offline = offline || Boolean.parseBoolean(recipeOffline);
+        options.put("--offline", Boolean.toString(offline));
+        if (options.keySet().stream().anyMatch(Set.of("--model-url", "--model-sha256", "--model-cache-dir",
+                "--model-bytes", "--model-follow-redirects", "--model-download-timeout-seconds", "--model-max-bytes",
+                "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir")::contains)) {
+            // Validate the complete provider selection before inspecting either cache. No network
+            // or native initialization occurs while opening and closing an artifact-backed provider.
+            try (ModelBackend validated = StandaloneMain.backend(Map.copyOf(options), environment)) {
+                if (!(validated instanceof LazyModelBackend)) throw new IOException("artifact provider was not lazy");
             }
-            ModelArtifactCache artifact = new ModelArtifactCache(required(config, "modelUrl"),
-                    required(config, "modelSha256"), Path.of(options.get("--model-cache-dir")),
-                    redirects.equals("true"),
-                    Duration.ofSeconds(Long.parseLong(options.getOrDefault("--model-download-timeout-seconds", "3600"))),
-                    Long.parseLong(options.getOrDefault("--model-max-bytes", Long.toString(ModelArtifactCache.MAX_BYTES))));
-            // Offline resolution may verify existing cache entries but creates no directory.
-            if (managedModelCache != null) validateManagedCache(target, managedModelCache);
-            Path model = artifact.resolveWithOfflinePolicy(true);
-            for (String key : Set.of("--model-url", "--model-sha256", "--model-cache-dir",
-                    "--model-follow-redirects", "--model-download-timeout-seconds", "--model-max-bytes")) {
-                options.remove(key);
+            // Existing model-only recipes prepare their external cache before opening a provider.
+            // Paired raw-JNI recipes retain both cache directories under the lazy artifact owner.
+            if (!offline && managedModelCache == null && options.containsKey("--model-url")
+                    && !options.containsKey("--jni-url")) {
+                prepareModelCache(Path.of(options.get("--model-cache-dir")));
             }
-            options.put("--model", model.toString());
+            if (offline) {
+                if (managedModelCache != null) validateManagedCache(target, managedModelCache);
+                for (String kind : java.util.List.of("model", "jni")) {
+                    if (options.containsKey("--" + kind + "-url")) {
+                        Path verified = StandaloneMain.artifact(options, kind, kind.equals("jni"))
+                                .resolveWithOfflinePolicy(true);
+                        StandaloneMain.removeArtifactOptions(options, kind);
+                        options.put(kind.equals("jni") ? "--jni-lib" : "--model", verified.toString());
+                    }
+                }
+            }
         }
         // The selected provider and all options are admitted by the pre-existing engine contract.
         byte[] candidate;
         String provider;
         try (ModelBackend model = providerFactory.open(Map.copyOf(options), environment)) {
-            if (managedModelCache != null && !offline) {
-                createManagedCache(target, managedModelCache);
-            }
+            if (managedModelCache != null && !offline) createManagedCache(target, managedModelCache);
             ModelResponse result = model.infer(request);
             if (!model.id().equals(result.backendId())
                     || !MessageDigest.isEqual(inputHash, HexFormat.of().parseHex(result.promptSha256()))) {
@@ -210,13 +213,12 @@ public final class SmartBuildMain {
         }
     }
 
-
     private static void createManagedCache(Path target, Path cache) throws IOException {
         Path current = target;
         for (Path part : target.relativize(cache)) {
             current = current.resolve(part);
             try { Files.createDirectory(current); }
-            catch (FileAlreadyExistsException existing) { /* check without following links below */ }
+            catch (FileAlreadyExistsException existing) { /* Check without following links below. */ }
             if (!Files.isDirectory(current, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(current)) {
                 throw new IOException("smart-build model cache must stay inside Maven target");
             }

@@ -45,6 +45,7 @@
     <chromellm.native.classifier>${chromellm.native.os}-${chromellm.native.arch}</chromellm.native.classifier>
     <chromellm.native.artifactClassifier>${chromellm.native.classifier}-${chromellm.native.backend}</chromellm.native.artifactClassifier>
     <chromellm.smart.nativeArtifact>${project.build.directory}/${project.build.finalName}-${chromellm.native.artifactClassifier}.jar</chromellm.smart.nativeArtifact>
+    <chromellm.fork.distributableCpu>OFF</chromellm.fork.distributableCpu>
     <chromellm.native.distribution>OFF</chromellm.native.distribution>
   </properties>
   <build>
@@ -246,6 +247,116 @@
               <classpathScope>test</classpathScope>
             </configuration>
           </execution>
+          <execution>
+            <id>model-artifact-cache-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.ModelArtifactCacheContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>model-acquisition-lifecycle-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.ModelAcquisitionLifecycleTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>stdio-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.StdioProtocolContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>tiered-inference-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.TieredInferenceTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>mcp-stdio-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.McpStdioServerContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>agent-plan-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.AgentPlanContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>provisioned-backend-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.ProvisionedBackendContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>agent-engine-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.AgentEngineContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>workspace-tools-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.WorkspaceToolsContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>agent-transport-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.AgentTransportContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>
@@ -271,6 +382,23 @@
             <artifactId>maven-enforcer-plugin</artifactId>
             <version>3.6.3</version>
             <executions>
+              <execution>
+                <id>require-pinned-fork-build</id>
+                <phase>validate</phase>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <requireProperty>
+                      <property>chromellm.native.mode</property>
+                      <regex>^pinned-fork$</regex>
+                      <message>fork-native cannot be combined with native-fork or native-synthetic</message>
+                      <regexMessage>fork-native cannot be combined with native-fork or native-synthetic</regexMessage>
+                    </requireProperty>
+                  </rules>
+                </configuration>
+              </execution>
               <execution>
                 <id>require-pinned-fork-only</id>
                 <phase>validate</phase>
@@ -348,6 +476,8 @@
                     <argument>-DCHROMELLM_NATIVE_DISTRIBUTION=${chromellm.native.distribution}</argument>
                     <argument>-DCHROMELLM_NATIVE_CLASSIFIER=${chromellm.native.classifier}</argument>
                     <argument>-DCHROMELLM_NATIVE_NOTICES=${chromellm.native.notices}</argument>
+                    <argument>-DCHROMELLM_LLAMA_COMMIT=${chromellm.fork.commit}</argument>
+                    <argument>-DCHROMELLM_DISTRIBUTABLE_CPU=${chromellm.fork.distributableCpu}</argument>
                   </arguments>
                 </configuration>
               </execution>
@@ -1358,6 +1488,59 @@
             <artifactId>exec-maven-plugin</artifactId>
             <version>3.5.0</version>
             <executions>
+              <execution>
+                <id>native-synthetic-configure</id>
+                <phase>generate-resources</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>${chromellm.cmake.executable}</executable>
+                  <arguments>
+                    <argument>-S</argument>
+                    <argument>${project.basedir}/native</argument>
+                    <argument>-B</argument>
+                    <argument>${project.build.directory}/native-synthetic</argument>
+                    <argument>-DCHROMELLM_SYNTHETIC_TEST=ON</argument>
+                    <argument>-DCMAKE_BUILD_TYPE=Release</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+              <execution>
+                <id>native-synthetic-build</id>
+                <phase>process-resources</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>${chromellm.cmake.executable}</executable>
+                  <arguments>
+                    <argument>--build</argument>
+                    <argument>${project.build.directory}/native-synthetic</argument>
+                    <argument>--config</argument>
+                    <argument>Release</argument>
+                    <argument>--parallel</argument>
+                    <argument>2</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+              <execution>
+                <id>native-synthetic-ctest</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>${chromellm.ctest.executable}</executable>
+                  <arguments>
+                    <argument>--test-dir</argument>
+                    <argument>${project.build.directory}/native-synthetic</argument>
+                    <argument>-C</argument>
+                    <argument>Release</argument>
+                    <argument>--output-on-failure</argument>
+                  </arguments>
+                </configuration>
+              </execution>
               <execution>
                 <id>configure-native-test-fixture</id>
                 <phase>generate-resources</phase>

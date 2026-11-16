@@ -54,6 +54,7 @@ final class ModelArtifactCache {
         InputStream open(URI uri) throws IOException, InterruptedException;
     }
 
+    /** Test the real redirect policy without opening sockets or fetching licensed model data. */
     @FunctionalInterface
     interface ResponseSender {
         HttpResponse<InputStream> send(HttpRequest request) throws IOException, InterruptedException;
@@ -72,6 +73,7 @@ final class ModelArtifactCache {
     private final long maxBytes;
     private final long expectedBytes;
     private final String suffix;
+    private final boolean createDirectory;
     private final Duration acquisitionTimeout;
     private final boolean offline;
     private volatile Attempt latest;
@@ -81,31 +83,50 @@ final class ModelArtifactCache {
         this(url, sha256, directory, MAX_BYTES, false);
     }
 
-    /** Explicit download policy shares the existing acquisition and cleanup owner. */
+    ModelArtifactCache(String url, String sha256, Path directory, long maxBytes, boolean offline) {
+        this(url, sha256, directory, uri -> fetch(uri, maxBytes),
+                maxBytes, ACQUISITION_TIMEOUT, offline);
+    }
+
+    /** Explicit model policy shares the existing acquisition deadline and cancellation owner. */
     ModelArtifactCache(String url, String sha256, Path directory, boolean followRedirects,
                        Duration timeout, long maxBytes) {
         this(url, sha256, directory, downloader(followRedirects, timeout, maxBytes), maxBytes, timeout);
     }
 
-    /** Legacy native archive constructor; bounded models use the five-argument overload. */
-    ModelArtifactCache(String url, String sha256, Path directory, long expectedBytes) {
-        this(url, sha256, directory, uri -> fetchRelease(uri, expectedBytes),
-                expectedBytes, ACQUISITION_TIMEOUT, expectedBytes, ".bin", false);
+    /** A caller-selected cache may be created lazily; offline acquisition never creates it. */
+    static ModelArtifactCache artifact(String url, String sha256, Path directory,
+                                       long expectedBytes, String suffix) {
+        long maxBytes = expectedBytes < 0 ? MAX_BYTES : expectedBytes;
+        return new ModelArtifactCache(url, sha256, directory, uri -> fetch(uri, maxBytes),
+                maxBytes, ACQUISITION_TIMEOUT, expectedBytes, suffix, false, true);
     }
 
-    ModelArtifactCache(String url, String sha256, Path directory, long maxBytes, boolean offline) {
-        this(url, sha256, directory, uri -> fetch(uri, maxBytes), maxBytes, ACQUISITION_TIMEOUT, offline);
+    /** Model policy and an optional exact size pin retain the same lazy cache lifecycle. */
+    static ModelArtifactCache artifact(String url, String sha256, Path directory, long expectedBytes,
+                                       boolean followRedirects, Duration timeout, long maxBytes) {
+        requirePolicy(timeout, maxBytes);
+        long bound = expectedBytes > 0 ? Math.min(expectedBytes, maxBytes) : maxBytes;
+        return new ModelArtifactCache(url, sha256, directory,
+                downloader(followRedirects, timeout, bound), bound, timeout,
+                expectedBytes, ".gguf", false, true);
     }
 
     /** Native archives/binaries require both an exact byte count and a SHA-256 pin. */
+    ModelArtifactCache(String url, String sha256, Path directory, long expectedBytes) {
+        this(url, sha256, directory, uri -> fetchRelease(uri, expectedBytes), expectedBytes, expectedBytes, ".bin");
+    }
+
+    /** Published native bundles retain the restricted GitHub release redirect policy. */
     static ModelArtifactCache binaryArtifact(String url, String sha256, Path directory, long expectedBytes) {
-        return new ModelArtifactCache(url, sha256, directory, uri -> fetchRelease(uri, expectedBytes),
-                expectedBytes, ACQUISITION_TIMEOUT, expectedBytes, ".bin", false);
+        return new ModelArtifactCache(url, sha256, directory,
+                uri -> fetchRelease(uri, expectedBytes), expectedBytes,
+                ACQUISITION_TIMEOUT, expectedBytes, ".bin", false);
     }
 
     ModelArtifactCache(String rawUrl, String rawSha256, Path cache, Downloader downloader,
                        long maxBytes, long expectedBytes, String suffix) {
-        this(rawUrl, rawSha256, cache, downloader, maxBytes, ACQUISITION_TIMEOUT, expectedBytes, suffix, false);
+        this(rawUrl, rawSha256, cache, downloader, maxBytes, ACQUISITION_TIMEOUT, expectedBytes, suffix);
     }
 
     /** Package-private transport seam; synthetic tests do not acquire licensed model data. */
@@ -129,7 +150,20 @@ final class ModelArtifactCache {
     }
 
     private ModelArtifactCache(String rawUrl, String rawSha256, Path cache, Downloader downloader,
-                               long maxBytes, Duration acquisitionTimeout, long expectedBytes, String suffix, boolean offline) {
+                               long maxBytes, Duration acquisitionTimeout, long expectedBytes, String suffix) {
+        this(rawUrl, rawSha256, cache, downloader, maxBytes, acquisitionTimeout, expectedBytes, suffix, false);
+    }
+
+    private ModelArtifactCache(String rawUrl, String rawSha256, Path cache, Downloader downloader,
+                               long maxBytes, Duration acquisitionTimeout, long expectedBytes, String suffix,
+                               boolean offline) {
+        this(rawUrl, rawSha256, cache, downloader, maxBytes, acquisitionTimeout,
+                expectedBytes, suffix, offline, false);
+    }
+
+    private ModelArtifactCache(String rawUrl, String rawSha256, Path cache, Downloader downloader,
+                               long maxBytes, Duration acquisitionTimeout, long expectedBytes, String suffix,
+                               boolean offline, boolean createDirectory) {
         this.url = validateUrl(URI.create(Objects.requireNonNull(rawUrl, "url")));
         if (rawSha256 == null || !rawSha256.matches("[0-9a-fA-F]{64}")) {
             throw new IllegalArgumentException("model SHA-256 must contain 64 hex digits");
@@ -151,6 +185,7 @@ final class ModelArtifactCache {
         }
         this.expectedBytes = expectedBytes;
         this.suffix = suffix;
+        this.createDirectory = createDirectory;
         this.acquisitionTimeout = Objects.requireNonNull(acquisitionTimeout, "acquisition timeout");
         if (acquisitionTimeout.isZero() || acquisitionTimeout.isNegative()
                 || acquisitionTimeout.compareTo(ACQUISITION_TIMEOUT) > 0) {
@@ -201,11 +236,18 @@ final class ModelArtifactCache {
     private Path acquire(Attempt attempt, boolean offline) throws IOException, InterruptedException {
         try {
             attempt.check();
+            if (createDirectory && !offline) {
+                Files.createDirectories(directory);
+            }
             if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
-                    || !Files.isWritable(directory)) {
+                    || (!offline && !Files.isWritable(directory))) {
                 throw new IOException("model cache directory must exist and be writable");
             }
-            Path target = directory.toRealPath().resolve(sha256 + suffix);
+            Path canonicalDirectory = directory.toRealPath();
+            if (createDirectory && !canonicalDirectory.equals(directory)) {
+                throw new IOException("artifact cache must not traverse symlinks");
+            }
+            Path target = canonicalDirectory.resolve(sha256 + suffix);
             Gate gate = retain(target);
             boolean locked = false;
             try {
@@ -394,70 +436,39 @@ final class ModelArtifactCache {
         }
     }
 
-    private static Downloader downloader(boolean redirects, Duration timeout, long maxBytes) {
-        requirePolicy(timeout, maxBytes);
-        return uri -> fetch(uri, redirects, timeout, maxBytes, HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(20)).build());
-    }
-
-    /** Explicit bounded HTTPS policy; this overload owns the supplied client and body. */
-    static InputStream fetch(URI initial, boolean redirects, Duration timeout, long maxBytes,
-                             HttpClient client) throws IOException, InterruptedException {
-        Objects.requireNonNull(client, "HTTP client");
-        try {
-            requirePolicy(timeout, maxBytes);
-            if (client.followRedirects() != HttpClient.Redirect.NEVER) {
-                throw new IllegalArgumentException("model HTTP client must leave redirects to the checked policy");
-            }
-        } catch (RuntimeException invalid) {
-            client.shutdownNow();
-            throw invalid;
-        }
-        int limit = redirects ? MAX_REDIRECTS : githubRelease(initial) ? 3 : 0;
-        return fetch(initial, transport(client), timeout, !redirects, maxBytes, limit);
-    }
-
-    private static void requirePolicy(Duration timeout, long maxBytes) {
-        Objects.requireNonNull(timeout, "download timeout");
-        if (timeout.isZero() || timeout.isNegative() || timeout.compareTo(Duration.ofHours(1)) > 0) {
-            throw new IllegalArgumentException("model download timeout must be positive and at most one hour");
-        }
-        if (maxBytes < 1 || maxBytes > MAX_BYTES) throw new IllegalArgumentException("invalid artifact byte bound");
-    }
-
     private static InputStream fetch(URI url, long maxBytes) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(20)).build();
-        return fetch(url, transport(client), ACQUISITION_TIMEOUT, false, maxBytes);
+        return downloader(true, ACQUISITION_TIMEOUT, maxBytes).open(url);
     }
 
     private static InputStream fetchRelease(URI url, long maxBytes) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(20)).build();
-        return fetch(url, transport(client), ACQUISITION_TIMEOUT, githubRelease(url), maxBytes);
+        return downloader(!githubRelease(url), ACQUISITION_TIMEOUT, maxBytes).open(url);
     }
 
+    private static Downloader downloader(boolean redirects, Duration timeout, long maxBytes) {
+        requirePolicy(timeout, maxBytes);
+        return url -> fetch(url, redirects, timeout, maxBytes, HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(20)).build());
+    }
+
+    /** HTTP compatibility seam; all requests share the owned transport and body lifecycle. */
     static InputStream fetch(URI url, HttpClient client) throws IOException, InterruptedException {
-        return fetch(url, transport(client), ACQUISITION_TIMEOUT, false, MAX_BYTES);
+        return fetch(url, true, ACQUISITION_TIMEOUT, MAX_BYTES, client);
     }
 
+    /** Release-only policy is separate from the legacy, explicitly bounded HTTPS seam. */
     static InputStream fetchRelease(URI url, HttpClient client) throws IOException, InterruptedException {
-        return fetch(url, transport(client), ACQUISITION_TIMEOUT, true, MAX_BYTES);
+        return fetch(url, false, ACQUISITION_TIMEOUT, MAX_BYTES, client);
     }
 
-    static InputStream fetch(URI url, long maxBytes, ResponseSender sender)
+    /** Owns the client and response. Without opt-in, only pinned GitHub release redirects are allowed. */
+    static InputStream fetch(URI url, boolean redirects, Duration timeout, long maxBytes, HttpClient client)
             throws IOException, InterruptedException {
-        Objects.requireNonNull(sender, "response sender");
-        return fetch(url, new Transport() {
-            @Override public HttpResponse<InputStream> send(HttpRequest request)
-                    throws IOException, InterruptedException { return sender.send(request); }
-            @Override public void close() { /* The sender owns no client resources. */ }
-        }, ACQUISITION_TIMEOUT, false, maxBytes);
-    }
-
-    private static Transport transport(HttpClient client) {
         Objects.requireNonNull(client, "HTTP client");
-        return new Transport() {
+        if (client.followRedirects() != HttpClient.Redirect.NEVER) {
+            client.shutdownNow();
+            throw new IllegalArgumentException("model HTTP client must leave redirects to the checked policy");
+        }
+        return fetch(url, maxBytes, new Transport() {
             @Override public HttpResponse<InputStream> send(HttpRequest request)
                     throws IOException, InterruptedException {
                 return client.send(request, HttpResponse.BodyHandlers.ofInputStream());
@@ -466,45 +477,38 @@ final class ModelArtifactCache {
                 // close() waits indefinitely for outstanding operations; abort them on cancellation.
                 client.shutdownNow();
             }
-        };
+        }, timeout, redirects);
     }
 
     static InputStream fetch(URI initialUrl, Transport transport, Duration timeout)
             throws IOException, InterruptedException {
-        return fetch(initialUrl, transport, timeout, false, MAX_BYTES);
+        return fetch(initialUrl, MAX_BYTES, transport, timeout, true);
     }
 
     static InputStream fetch(URI initialUrl, long maxBytes, Transport transport, Duration timeout)
             throws IOException, InterruptedException {
-        return fetch(initialUrl, transport, timeout, githubRelease(initialUrl), maxBytes);
+        return fetch(initialUrl, maxBytes, transport, timeout, !githubRelease(initialUrl));
     }
 
     static InputStream fetch(URI initialUrl, Transport transport, Duration timeout, long maxBytes)
             throws IOException, InterruptedException {
-        return fetch(initialUrl, transport, timeout, false, maxBytes);
+        return fetch(initialUrl, maxBytes, transport, timeout, true);
     }
 
-    private static InputStream fetch(URI initialUrl, Transport transport, Duration timeout,
-                                     boolean releaseOnly, long maxBytes) throws IOException, InterruptedException {
-        return fetch(initialUrl, transport, timeout, releaseOnly, maxBytes, releaseOnly ? 3 : MAX_REDIRECTS);
-    }
-
-    private static InputStream fetch(URI initialUrl, Transport transport, Duration timeout,
-                                     boolean releaseOnly, long maxBytes, int redirectLimit)
-            throws IOException, InterruptedException {
+    private static InputStream fetch(URI initialUrl, long maxBytes, Transport transport, Duration timeout,
+                                     boolean followRedirects) throws IOException, InterruptedException {
         Objects.requireNonNull(transport, "transport");
-        if (maxBytes < 1 || maxBytes > MAX_BYTES) {
-            transport.close();
-            throw new IllegalArgumentException("invalid artifact byte bound");
-        }
+        try { requirePolicy(timeout, maxBytes); }
+        catch (RuntimeException failure) { transport.close(); throw failure; }
         DownloadLifetime lifetime = new DownloadLifetime(transport, timeout);
         try {
             URI current = validateUrl(initialUrl);
+            int limit = followRedirects ? MAX_REDIRECTS : githubRelease(initialUrl) ? 3 : 0;
             HashSet<URI> visited = new HashSet<>();
             for (int redirects = 0; ; redirects++) {
                 if (Thread.currentThread().isInterrupted()) throw new InterruptedException("model acquisition interrupted");
-                if (!visited.add(current)) throw new IOException("artifact redirect cycle (loop)");
                 lifetime.check();
+                if (!visited.add(current)) throw new IOException("model download redirect cycle (loop)");
                 HttpRequest request = HttpRequest.newBuilder(current).timeout(lifetime.remaining())
                         .header("Accept-Encoding", "identity").GET().build();
                 HttpResponse<InputStream> response = transport.send(request);
@@ -512,27 +516,26 @@ final class ModelArtifactCache {
                 lifetime.attach(input);
                 int status = response.statusCode();
                 if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
-                    lifetime.releaseBody();
-                    if (redirects >= redirectLimit
-                            || (releaseOnly && !githubRelease(initialUrl))) {
-                        if (redirectLimit == 0) throw new IOException("model download returned HTTP " + status + " or exceeded its redirect limit");
-                        throw new IOException(redirectLimit == MAX_REDIRECTS
-                                ? "artifact redirect limit exceeded: five HTTPS redirects"
-                                : "artifact redirect limit or GitHub release policy exceeded");
+                    if (redirects >= limit) {
+                        if (followRedirects) throw new IOException("model download exceeded five HTTPS redirects");
+                        throw new IOException("model download returned HTTP " + status + " or exceeded its release redirect limit");
                     }
                     var locations = response.headers().allValues("Location");
                     if (locations.size() != 1 || locations.getFirst().isBlank()) {
-                        throw new IOException("artifact redirect needs one Location header");
+                        throw new IOException("artifact redirect needs one nonblank Location header");
                     }
-                    try { current = validateUrl(current.resolve(locations.getFirst())); }
+                    URI next;
+                    try { next = validateUrl(current.resolve(locations.getFirst())); }
                     catch (IllegalArgumentException invalid) {
-                        // Do not expose a malformed signed Location value through an exception cause.
-                        throw new IOException("artifact redirect must preserve HTTPS; redirects must remain HTTPS without credentials or fragment");
+                        // A malformed signed Location must not appear in a build log or exception cause.
+                        throw new IOException("artifact redirect must remain HTTPS without credentials or fragment");
                     }
-                    if (releaseOnly && (!httpsDefaultPort(current) || (!githubRelease(current)
-                            && !"release-assets.githubusercontent.com".equalsIgnoreCase(current.getHost())))) {
+                    if (!followRedirects && (!httpsDefaultPort(next) || (!githubRelease(next)
+                            && !"release-assets.githubusercontent.com".equalsIgnoreCase(next.getHost())))) {
                         throw new IOException("artifact redirect is outside GitHub release storage");
                     }
+                    lifetime.releaseBody();
+                    current = next;
                     continue;
                 }
                 if (status != 200) throw new IOException("artifact download returned HTTP " + status);
@@ -568,6 +571,26 @@ final class ModelArtifactCache {
             try { lifetime.close(); } catch (IOException cleanup) { failure.addSuppressed(cleanup); }
             throw failure;
         }
+    }
+
+    private static void requirePolicy(Duration timeout, long maxBytes) {
+        if (timeout == null || timeout.isNegative() || timeout.isZero()
+                || timeout.compareTo(ACQUISITION_TIMEOUT) > 0) {
+            throw new IllegalArgumentException("invalid artifact download timeout");
+        }
+        if (maxBytes < 1 || maxBytes > MAX_BYTES) throw new IllegalArgumentException("invalid artifact byte bound");
+    }
+
+    private static boolean githubRelease(URI url) {
+        return httpsDefaultPort(url) && "github.com".equalsIgnoreCase(url.getHost())
+                && url.getRawPath() != null
+                && url.getRawPath().matches("/[^/]+/[^/]+/releases/download/[^/]+/[^/]+");
+    }
+
+    private static boolean httpsDefaultPort(URI url) {
+        return "https".equalsIgnoreCase(url.getScheme()) && url.getHost() != null
+                && url.getRawUserInfo() == null && url.getRawFragment() == null
+                && (url.getPort() == -1 || url.getPort() == 443);
     }
 
     private static URI validateUrl(URI url) {
@@ -644,16 +667,14 @@ final class ModelArtifactCache {
         }
     }
 
-    private static boolean githubRelease(URI url) {
-        return httpsDefaultPort(url) && "github.com".equalsIgnoreCase(url.getHost())
-                && url.getRawPath() != null
-                && url.getRawPath().matches("/[^/]+/[^/]+/releases/download/[^/]+/[^/]+");
-    }
-
-    private static boolean httpsDefaultPort(URI url) {
-        return "https".equalsIgnoreCase(url.getScheme()) && url.getHost() != null
-                && url.getRawUserInfo() == null && url.getRawFragment() == null
-                && (url.getPort() == -1 || url.getPort() == 443);
+    static InputStream fetch(URI url, long maxBytes, ResponseSender sender)
+            throws IOException, InterruptedException {
+        Objects.requireNonNull(sender, "response sender");
+        return fetch(url, maxBytes, new Transport() {
+            @Override public HttpResponse<InputStream> send(HttpRequest request)
+                    throws IOException, InterruptedException { return sender.send(request); }
+            @Override public void close() { /* The sender owns no client resources. */ }
+        }, ACQUISITION_TIMEOUT, true);
     }
 
     private static void verifyHeaders(HttpResponse<InputStream> response, long maxBytes) throws IOException {
@@ -668,7 +689,7 @@ final class ModelArtifactCache {
                 long length = Long.parseLong(lengths.getFirst());
                 if (length < 0 || length > maxBytes) throw new IOException("model artifact size exceeds byte bound");
             } catch (NumberFormatException malformed) {
-                throw new IOException("model artifact has invalid size (content length)");
+                throw new IOException("model artifact has invalid content length or size");
             }
         }
     }

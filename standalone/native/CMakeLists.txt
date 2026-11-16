@@ -2,11 +2,61 @@ cmake_minimum_required(VERSION 3.20)
 project(chromellm_llama_jni LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-find_package(JNI REQUIRED)
+# The bridge uses JNI headers and the running JVM, never AWT. Older CMake
+# versions do not expose FindJNI components and retain full-JDK discovery.
+if(CMAKE_VERSION VERSION_LESS "3.24")
+  find_package(JNI REQUIRED)
+else()
+  find_package(JNI REQUIRED COMPONENTS JVM)
+endif()
 find_package(Threads REQUIRED)
 option(CHROMELLM_SYNTHETIC_TEST "Build test-only fake llama API (never for distribution)" OFF)
 set(CHROMELLM_LLAMA_SOURCE_DIR "" CACHE PATH "Operator-supplied llama.cpp checkout to build with the JNI bridge")
 option(CHROMELLM_WEBGPU "Build the supplied llama.cpp checkout with its native Dawn/WebGPU provider" OFF)
+option(CHROMELLM_DISTRIBUTABLE_CPU "Link a standalone CPU JNI artifact for verified lazy acquisition" OFF)
+set(CHROMELLM_LLAMA_COMMIT "" CACHE STRING "Exact llama.cpp source commit required for a distributable CPU artifact")
+if(CHROMELLM_DISTRIBUTABLE_CPU)
+  if(CHROMELLM_SYNTHETIC_TEST OR CHROMELLM_WEBGPU OR NOT CHROMELLM_LLAMA_SOURCE_DIR)
+    message(FATAL_ERROR "Distributable CPU JNI requires real source and excludes synthetic or WebGPU providers")
+  endif()
+  string(LENGTH "${CHROMELLM_LLAMA_COMMIT}" CHROMELLM_LLAMA_COMMIT_LENGTH)
+  if(NOT CHROMELLM_LLAMA_COMMIT_LENGTH EQUAL 40 OR NOT CHROMELLM_LLAMA_COMMIT MATCHES "^[0-9a-fA-F]+$")
+    message(FATAL_ERROR "CHROMELLM_LLAMA_COMMIT must pin a full 40-hex source commit")
+  endif()
+  find_package(Git REQUIRED)
+  execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${CHROMELLM_LLAMA_SOURCE_DIR}" rev-parse --verify HEAD
+    RESULT_VARIABLE CHROMELLM_GIT_RESULT OUTPUT_VARIABLE CHROMELLM_ACTUAL_LLAMA_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET TIMEOUT 30)
+  string(TOLOWER "${CHROMELLM_LLAMA_COMMIT}" CHROMELLM_LLAMA_COMMIT)
+  if(NOT CHROMELLM_GIT_RESULT EQUAL 0 OR NOT CHROMELLM_ACTUAL_LLAMA_COMMIT STREQUAL CHROMELLM_LLAMA_COMMIT)
+    message(FATAL_ERROR "Distributable JNI source does not match its exact commit pin")
+  endif()
+  execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${CHROMELLM_LLAMA_SOURCE_DIR}" status --porcelain --untracked-files=all
+    RESULT_VARIABLE CHROMELLM_GIT_RESULT OUTPUT_VARIABLE CHROMELLM_LLAMA_CHANGES
+    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET TIMEOUT 30)
+  if(NOT CHROMELLM_GIT_RESULT EQUAL 0 OR NOT CHROMELLM_LLAMA_CHANGES STREQUAL "")
+    message(FATAL_ERROR "Distributable JNI requires an unmodified pinned source checkout")
+  endif()
+  # Keep llama/GGML in one JNI library. GGML_STATIC adds -static to shared links,
+  # so static component libraries use BUILD_SHARED_LIBS=OFF instead.
+  set(BUILD_SHARED_LIBS OFF CACHE BOOL "Link llama/GGML into the JNI library" FORCE)
+  set(LLAMA_USE_SYSTEM_GGML OFF CACHE BOOL "Use the pinned GGML sources" FORCE)
+  set(GGML_CPU ON CACHE BOOL "Required CPU backend" FORCE)
+  foreach(FEATURE STATIC NATIVE BACKEND_DL CPU_ALL_VARIANTS OPENMP BLAS ACCELERATE
+      CUDA HIP MUSA VULKAN WEBGPU METAL RPC SYCL CANN ZDNN OPENCL HEXAGON ZENDNN
+      CPU_HBM CPU_KLEIDIAI SSE42 AVX AVX2 BMI2 AVX_VNNI FMA F16C
+      AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16 AMX_TILE AMX_INT8 AMX_BF16)
+    set(GGML_${FEATURE} OFF CACHE BOOL "Baseline CPU distribution" FORCE)
+  endforeach()
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+    set(GGML_CPU_ARM_ARCH "armv8-a" CACHE STRING "Portable ARM baseline" FORCE)
+  endif()
+  # All static objects and the bridge use the same CRT on Windows.
+  if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  endif()
+endif()
+
 option(CHROMELLM_NATIVE_DISTRIBUTION "Stage and attach a real source-built runtime" OFF)
 set(CHROMELLM_NATIVE_CLASSIFIER "" CACHE STRING "Explicit host os-architecture classifier")
 if(CHROMELLM_NATIVE_DISTRIBUTION)
@@ -107,7 +157,10 @@ elseif(CHROMELLM_LLAMA_SOURCE_DIR)
   set(LLAMA_BUILD_TESTS OFF CACHE BOOL "Build llama.cpp tests" FORCE)
   set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "Build llama.cpp examples" FORCE)
   set(LLAMA_BUILD_SERVER OFF CACHE BOOL "Build llama.cpp server" FORCE)
+  set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "Build llama.cpp tools" FORCE)
   set(LLAMA_CURL OFF CACHE BOOL "Enable llama.cpp downloads" FORCE)
+  set(LLAMA_HTTPLIB OFF CACHE BOOL "Enable llama.cpp HTTP downloads" FORCE)
+  set(LLAMA_OPENSSL OFF CACHE BOOL "Enable llama.cpp HTTPS downloads" FORCE)
   # Maven's opt-in native-dawn profile stages a pinned release outside donor source.
   # A blank prefix preserves existing operator-managed Dawn discovery.
   if(CHROMELLM_WEBGPU AND CHROMELLM_DAWN_PREFIX AND NOT CHROMELLM_DAWN_PREFIX STREQUAL "NONE")
@@ -216,6 +269,31 @@ if(MSVC)
   target_compile_options(chromellm_llama_jni PRIVATE /utf-8)
 endif()
 chromellm_install_native_runtime(chromellm_llama_jni)
+
+if(CHROMELLM_DISTRIBUTABLE_CPU)
+  # Retain only OS libraries as dynamic dependencies. No llama/GGML sibling
+  # library, backend search directory or download is required at System.load.
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_options(chromellm_llama_jni PRIVATE -static-libgcc -static-libstdc++ "-Wl,--exclude-libs,ALL")
+  endif()
+  add_custom_target(chromellm_runtime_package
+    COMMAND "${CMAKE_COMMAND}"
+      "-DRUNTIME_LIBRARY=$<TARGET_FILE:chromellm_llama_jni>"
+      "-DRUNTIME_DESTINATION=${CMAKE_CURRENT_BINARY_DIR}/runtime-package"
+      "-DLLAMA_SOURCE=${CHROMELLM_LLAMA_SOURCE_DIR}"
+      "-DLLAMA_COMMIT=${CHROMELLM_LLAMA_COMMIT}"
+      "-DBRIDGE_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/llama_jni.cpp"
+      "-DNATIVE_BUILD_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt"
+      "-DCHROMELLM_LICENSE=${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
+      "-DTARGET_SYSTEM=${CMAKE_SYSTEM_NAME}"
+      "-DTARGET_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}"
+      "-DCXX_COMPILER_ID=${CMAKE_CXX_COMPILER_ID}"
+      "-DCXX_COMPILER_VERSION=${CMAKE_CXX_COMPILER_VERSION}"
+      "-DNATIVE_LINKER=${CMAKE_LINKER}"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/package_runtime.cmake"
+    DEPENDS chromellm_llama_jni
+    VERBATIM)
+endif()
 
 if(CHROMELLM_SYNTHETIC_TEST)
   include(CTest)

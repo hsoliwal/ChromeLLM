@@ -167,17 +167,17 @@ public final class ModelArtifactHttpContractTestMain {
         releaseRefusal(RELEASE, 200, Map.of("Content-Length", List.of("68719476737")));
         releaseRefusal(RELEASE, 200, Map.of("Content-Length", List.of("not-a-number")));
 
-        List<TrackedStream> cycleBodies = new ArrayList<>();
-        List<HttpResponse<InputStream>> cycle = new ArrayList<>();
+        List<TrackedStream> releaseCycleBodies = new ArrayList<>();
+        List<HttpResponse<InputStream>> releaseCycle = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             TrackedStream body = new TrackedStream("redirect");
-            cycleBodies.add(body);
-            cycle.add(response(302, Map.of("Location", List.of(ASSET.toString())), body));
+            releaseCycleBodies.add(body);
+            releaseCycle.add(response(302, Map.of("Location", List.of(ASSET.toString())), body));
         }
-        ScriptedClient cycleClient = new ScriptedClient(cycle);
-        expectIo(() -> ModelArtifactCache.fetchRelease(RELEASE, cycleClient));
-        check(cycleClient.requests.size() <= 4, "redirect chain is not bounded");
-        check(cycleBodies.subList(0, cycleClient.requests.size()).stream().allMatch(b -> b.closed),
+        ScriptedClient releaseCycleClient = new ScriptedClient(releaseCycle);
+        expectIo(() -> ModelArtifactCache.fetchRelease(RELEASE, releaseCycleClient));
+        check(releaseCycleClient.requests.size() <= 4, "redirect chain is not bounded");
+        check(releaseCycleBodies.subList(0, releaseCycleClient.requests.size()).stream().allMatch(b -> b.closed),
                 "redirect-limit refusal leaked a response");
 
         TrackedStream direct = new TrackedStream("direct");

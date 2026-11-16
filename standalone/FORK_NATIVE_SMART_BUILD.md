@@ -1,321 +1,285 @@
-# Fork-native Maven smart build contract
+# Native Maven Smart Build
 
-ChromeLLM is a standalone Java 21/JNI product assembled from qualified **source forks**.
-The long-term donor map follows Chromium's published
-`Client -> Broker -> AssetProvider -> Service` on-device-model architecture.
-This first executable Maven slice builds the actual fork-native
-`hsoliwal/synexia-llmcpp` JNI bridge and optionally invokes its model runtime.
-It does not call Chrome's browser APIs, start Chromium, or silently replace
-a model runtime with a hosted provider.
+ChromeLLM can build an explicitly pinned native source checkout, or download a
+compatible JNI runtime and model when inference is first requested. It also retains
+the platform native JAR build, Maven download, and packaged-runtime loader. Maven uses
+the existing Java 21/JNI provider for these routes. The generated advice remains a
+reviewable artifact; the original Maven compiler and test results stay authoritative.
+The reusable [build-advice action](BUILD_AI_ACTION.md) provides separate pre-build
+and post-build phases around a repository's existing build command, with explicit
+provider selection, verified JAR input and bounded diagnostic packets.
 
-## Forks and boundaries
+## Choose the inputs
 
-- `hsoliwal/ChromeLLM`: Java 21 API, JNI bridge, fixed build lifecycle.
-- `hsoliwal/synexia-llmcpp`: the independently checked-out llama.cpp/GGML native
-  source to compile via ChromeLLM's existing CMake integration; the checkout must
-  be at the **full operator-supplied 40-hex commit** and have no modified or untracked files.
-- `hsoliwal/dawn`: optional, separately built WebGPU dependency found by CMake
-  using `CMAKE_PREFIX_PATH`; it is not a browser dependency. The explicit
-  `dawn-binary` and `native-dawn` provisioning profiles are described below.
-- Chromium's `optimization_guide/core/model_execution` provides an architectural
-  reference for manifest-driven assets, usage-triggered acquisition, and
-  brokering. It is **not** copied verbatim into this change and Chromium
-  component-updater/ChromeML proprietary assets are not assumed distributable.
+| Input | Existing local input | Lazy downloaded input |
+| --- | --- | --- |
+| JNI runtime | `jniLib` in the Smart Build properties | `jniUrl`, `jniSha256`, `jniBytes`, `jniCacheDir` |
+| GGUF model | `model` | `modelUrl`, `modelSha256`, optional `modelBytes`, `modelCacheDir` |
+| CLI provider | `backend=cli` and `llamaBin` | Model download is supported; CLI binary download is not provided |
 
-Every donor has its own upstream license/NOTICE/ABI obligations. Do not claim
-first-party authorship of donor code.
+Each downloaded artifact has an independent identity. Use a raw `.so`, `.dll`, or
+`.dylib` from the platform's tested runtime bundle for `jniUrl`. The lazy loader does
+not unpack archives or find missing native dependencies. Model and native bytes are
+verified before the provider opens. Local paths and downloaded artifacts can be
+combined, but each input must have exactly one selection.
 
-## Maven profiles
+If neither `jniLib` nor the native URL quartet is selected, JNI discovers the
+matching installed native classifier JAR through `NativeLibraryLoader`. That loader
+verifies the package manifest and dependency closure before extracting and loading
+its native files. It performs no network download. The `smart-native-download`
+profile supplies that JAR through Maven's resolver; the raw `jniUrl` quartet supplies
+one independently pinned self-contained library through the lazy artifact owner.
 
-The default `mvn -f standalone/pom.xml verify` remains Java-only and performs
-no model acquisition or native compilation.
-Maven plugin dependencies must already be cached to run with `-o`.
-Its Java contract suite also verifies the fork-source pin and inference recipe;
-no native library or model is required by those offline test fixtures.
+Constructing a URL-backed provider does not create caches, download files, or initialize a
+model. First inference acquires the configured inputs, and later calls reuse the
+loaded provider. A new process verifies cached bytes again. Maven `-o` permits only
+verified cache hits and refuses missing or corrupt inputs without network access.
+See [the acquisition and lifetime contract](LAZY_MODEL_CONTRACT.md) for deadlines,
+redirect checks, cancellation, concurrency and cleanup.
 
-The existing `native-fork` and `native-synthetic` profiles remain available.
-Choose `fork-native` when the build must validate a complete Git commit pin before
-CMake runs. Maven rejects any pair of native build profiles during `validate`,
-before native configuration. Select one native build profile; `smart-build` can accompany
-the selected native profile when its recipe explicitly names that profile's output.
+## Download both runtime and model from Maven
 
-`-Pfork-native` verifies a pinned *local source fork* before invoking CMake.
-Required properties:
-`chromellm.fork.source`, `chromellm.fork.commit`. Optional:
-`chromellm.fork.webgpu` (default `OFF`),
-`chromellm.fork.prefix` (Dawn install prefix, default empty),
-`chromellm.fork.dawnDir` (exact Dawn CMake package directory, default empty),
-`chromellm.fork.configuration` (default `Release`).
-Output stays in `standalone/target/fork-native`. CMake neither checks out
-nor downloads donor source, and changing a tracked file or HEAD causes failure
-before native configuration. Dirty or untracked donor files are never
-silently removed or staged: the build fails closed.
-
-`-Psmart-build` invokes the compiled Java inference API during Maven's
-`verify` phase only when `chromellm.smart.recipe` identifies an existing
-UTF-8 `.properties` recipe inside the standalone project. A profile must be
-selected explicitly. The recipe is not read in ordinary Maven builds.
-
-Recipe keys:
-
-```properties
-promptFile=src/test/resources/build-prompt.txt
-backend=jni
-jniLib=/absolute/path/to/libchromellm_llama_jni.so
-model=/absolute/path/to/licensed.gguf
-maxTokens=256
-timeoutSeconds=120
-```
-
-Alternatively use `backend=cli` and `llamaBin`; or use `modelUrl`,
-`modelSha256`, and `modelCacheDir` **instead** of `model`. The JDK
-backend parser validates each combination and does not silently fall back.
-Select an installed JNI/CLI binary or build it with `fork-native`. Select the
-model by local path or an explicit pinned URL; Maven can acquire the latter.
-Model acquisition starts on the first inference through the existing lazy provider,
-with the bounded acquisition and shutdown behavior in
-[`LAZY_MODEL_CONTRACT.md`](LAZY_MODEL_CONTRACT.md). Reading the recipe and selecting
-the provider do not fetch weights or initialize a native model.
-The selected JNI/CLI runtime is supplied or built from the pinned source. Model bytes
-may be acquired through the explicit checksum-pinned URL or the `real-model-test` profile.
-`modelUrl` is an explicit, checksum-pinned HTTPS artifact, not a Chrome-managed
-proprietary model component.
-
-## Invoke from Maven (no browser)
-
-Build the pinned **source fork** with the existing JNI CMake integration:
-
-```sh
-mvn -B -ntp -f standalone/pom.xml -Pfork-native verify \
-  -Dchromellm.fork.source=/approved/src/synexia-llmcpp \
-  -Dchromellm.fork.commit=650ac3739d993e1d425f2d5db3c4205b3606cc30 \
-  -Dchromellm.fork.webgpu=OFF
-```
-
-The commit above is an observed historical fork revision, not an assertion that
-the operator's current checkout is at that revision. Choose and pin the
-checked-out commit. To enable the separately built Dawn fork, use
-`-Dchromellm.fork.webgpu=ON -Dchromellm.fork.prefix=/approved/dawn/install`
-and, where needed, `-Dchromellm.fork.dawnDir=/approved/dawn/install/lib64/cmake/Dawn`.
-If Dawn, compiler, or native dependencies are missing, CMake fails; there is
-no automatic browser, GPU or provider substitution.
-
-For a combined pinned-source build and tested Dawn binary, use
-`-Pfork-native,dawn-binary` with the same source and commit properties. The
-`dawn-binary` profile supplies its verified Dawn SDK to CMake and runs an actual
-Vulkan/WGSL compute and readback test.
-
-The separate `native-dawn` installer supports both `native-fork` and
-commit-validated `fork-native`. Select `-Pfork-native,native-dawn` to provision
-Dawn and pass its verified prefix into the pinned source build. The profile
-enables both WebGPU properties; an explicit OFF override, synthetic mode, or
-simultaneous `dawn-binary` selection is refused before native writes.
-
-## Download and test the published model
-
-For a small CPU smoke test, choose a writable cache directory and put this
-recipe in `standalone/examples/smart-build-release.properties`. Set `jniLib`
-to the library built for your platform and `modelCacheDir` to the chosen
-directory. Smart Build creates it when online and refuses a missing cache offline:
+Edit `standalone/examples/smart-build-native-download.properties`. Fill in the
+JNI URL, SHA-256 and exact byte count from a tested native release's
+`runtime-manifest.properties`. Select the asset for your operating system and CPU
+architecture. The sample model identity is already pinned to the published small
+CPU smoke-test model.
 
 ```properties
 promptFile=examples/smart-build-prompt.txt
 backend=jni
-jniLib=/absolute/path/to/libchromellm_llama_jni.so
+jniUrl=HTTPS_URL_OF_PLATFORM_JNI_LIBRARY
+jniSha256=SHA256_FROM_RUNTIME_MANIFEST
+jniBytes=EXACT_BYTES_FROM_RUNTIME_MANIFEST
+jniCacheDir=target/native-cache
 modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/weights.bin
 modelSha256=8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684
-modelCacheDir=/absolute/path/to/model-cache
+modelBytes=105454144
+modelCacheDir=target/model-cache
 computeBackend=cpu
 gpuLayers=0
 contextTokens=512
 threads=2
-maxTokens=48
-timeoutSeconds=90
+maxTokens=32
+timeoutSeconds=120
 ```
 
-Run `mvn -B -ntp -f standalone/pom.xml -Psmart-build verify
--Dchromellm.smart.recipe=examples/smart-build-release.properties` on one line.
-The first inference downloads and verifies the model; later runs verify and
-reuse the cache. A corrupt cache entry fails SHA-256 validation before native
-model loading or candidate publication. The bounded HTTPS redirect and offline
-rules are documented in [LAZY_MODEL_CONTRACT.md](LAZY_MODEL_CONTRACT.md).
+Run from the repository root:
 
-The published `weights.bin` is the unchanged 105,454,144-byte SmolLM2-135M-Instruct
-Q4_K_M GGUF v3 model, despite the filename extension. Its
-[Apache-2.0 license](https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/LICENSE)
-and [source notice](https://github.com/hsoliwal/ChromeLLM/releases/download/model-smollm2-135m-q4km-8030f045/NOTICE.txt)
-accompany the release. This small model is an execution fixture, with no claim
-about generated-code quality.
+```sh
+mvn -B -ntp -f standalone/pom.xml -Psmart-build verify \
+  -Dchromellm.smart.recipe=examples/smart-build-native-download.properties
 
-The `real-cpu-smart-build` GitHub job starts with an empty model cache, builds
-the current JNI bridge from an exact public llama.cpp revision, and downloads
-the release through Maven's production Java resolver. It then checks actual
-inference, verified cache reuse with an unreachable URL, same-size corruption
-refusal, output receipts, deterministic CPU repetition and native close under
-`-Xcheck:jni`. The independent `native-binaries` job exercises the downloaded
-Dawn compute binary and the `real-model` Maven profile described below.
-Physical GPU execution requires its own qualification.
+mvn -o -B -ntp -f standalone/pom.xml -Psmart-build verify \
+  -Dchromellm.smart.recipe=examples/smart-build-native-download.properties
+```
 
-The `native-synthetic` profile cannot be combined with either `native-fork`
-or `fork-native`. Choose one native build mode per Maven invocation.
-The optional `native-dawn` profile also refuses synthetic mode. Add `smart-build`
-to the selected native profiles when you want the configured inference recipe
-to run after the native build; choose the compute backend explicitly in that recipe.
+The first run downloads missing inputs. The second reuses reverified caches in a
+fresh Maven process. Maven's own plugins and Java dependencies must also be cached
+before `-o` can run. Maven offline mode overrides `offline=false` in the properties.
+The Maven profile passes `${settings.offline}` as the explicit fourth runtime
+argument; legacy three-argument callers use the `chromellm.offline` system property.
+Relative prompt and cache paths resolve from `standalone/`; online acquisition
+creates a missing configured cache directory. Configuration errors are rejected
+before any download. Existing corrupt cache entries are refused rather than replaced.
 
-## Maven model acquisition and offline reuse
+The native release workflow is an opt-in publishing operation. A source change or a
+local package build alone does not create a downloadable release. Until a tested
+runtime release is published, use a reviewed HTTPS host for the packaged library or
+select the locally built library with `jniLib`.
 
-The `real-model-test` profile downloads and tests the published, pinned model during
-integration-test. It creates the configured cache directory and verifies every hit.
-The `smart-build` profile accepts the same model URL/SHA/cache triple; Maven `-o`
-requires a verified cached artifact before initializing the selected provider.
-See [MAVEN_MODEL_TEST.md](MAVEN_MODEL_TEST.md) for the combined command and pins.
+Legacy model recipes without the three policy fields retain checked generic HTTPS
+redirects with a five-hop bound. Supplying `modelFollowRedirects`,
+`modelDownloadTimeoutSeconds`, or `modelMaxBytes` selects explicit policy, where
+`modelFollowRedirects=false` is the default. Under that policy, GitHub release
+download URLs may follow up to three redirects within approved GitHub release
+endpoints; other HTTPS redirects require `modelFollowRedirects=true`.
+`modelDownloadTimeoutSeconds` bounds the entire acquisition
+(1–3600, default 3600), and `modelMaxBytes` bounds downloaded and cached model bytes
+(at most 64 GiB). `modelBytes`, when supplied, also pins the exact length.
+For URL recipes, `modelCacheDir` defaults to `target/model-cache`. Maven prepares
+caches beneath its verified target after provider validation and just before
+inference. Recipes using an existing CLI or local/packaged JNI runtime prepare
+explicit external model caches after option validation and symlink-ancestor checks,
+before opening the provider. Recipes using a raw JNI URL retain their external model
+and native cache directories under the lazy acquisition owner. Offline execution
+creates no cache directories.
 
-## Packaged runtime and binary download
+## Build or download packaged native Maven artifacts
 
-The additive `native` profile builds and attaches platform/backend Maven artifacts.
-`smart-native-download` resolves an already-published matching native classifier
-through the configured Maven repositories, without a source build. Select it with
-`smart-build` to download the native binary and run the explicit model recipe:
+The `native` profile builds and attaches platform/backend native classifier JARs.
+The separate `smart-native-download` profile resolves an already-published matching
+classifier through the configured Maven repositories, without a native source build:
 
 ```sh
 mvn -B -ntp -f standalone/pom.xml -Psmart-native-download,smart-build \
   -Dchromellm.smart.recipe=examples/smart-build-packaged-smoke.properties verify
 ```
 
-A package must first be installed or published to a configured repository. To use
-a GitHub Actions download, select `-Psmart-build` and pass
-`-Dchromellm.smart.nativeArtifact=/absolute/path/to/native-classifier.jar`.
-To build locally and immediately infer, select `-Pnative,smart-build` instead.
-See [the Maven artifact workflow](README.md#build-and-consume-native-maven-artifacts)
-for source pins, dependency notices, classifiers, and the clean CI consumer.
+The package must first be installed or published to a configured repository.
+`chromellm.smart.nativeVersion` selects its version; the default is the current
+project version. Maven copies the resolved JAR to
+`target/smart-runtime/chromellm-native.jar`, and Smart Build includes the selected
+`${chromellm.smart.nativeArtifact}` on its runtime classpath. Maven's repository
+offline rules apply to this resolution, independently of lazy artifact acquisition.
 
-## Artifact and safety contract
+An existing classifier JAR, including one downloaded from GitHub Actions, can be
+selected explicitly:
 
-The smart recipe reads a bounded UTF-8 prompt inside the standalone project.
-The inferred candidate is written **only under** `standalone/target/smart-build/`
-using an exclusive, atomically published artifact name keyed by recipe and
-prompt SHA-256. A separate receipt records recipe SHA-256, prompt SHA-256,
-candidate SHA-256, and backend identity; no prompt content or credentials are
-logged to the Maven console.
-The output location is validated before artifact acquisition or provider opening.
-Existing artifact comparisons read at most the expected bounded content size plus
-one byte; an oversized prior artifact is rejected without loading it into memory.
+```sh
+mvn -B -ntp -f standalone/pom.xml -Psmart-build \
+  -Dchromellm.smart.nativeArtifact=/absolute/path/to/chromellm-native.jar \
+  -Dchromellm.smart.recipe=examples/smart-build-packaged-smoke.properties verify
+```
 
-On replay, identical artifacts are retained; a divergent model response for
-the same recipe and prompt hard-fails instead of silently replacing a prior
-candidate. Inference is not assumed deterministic: sampling/driver/provider
-differences require review and a new identified run, not an equivalence claim.
-This stage **never applies generated source changes**. Promotion requires
-separate explicit approval, patch review, lint, compilation, tests, and runtime
-verification.
+Use `-Pnative,smart-build` to build and consume the matching package locally.
+The package resource manifest, native installer, dependency notices, classifiers,
+CTest packaging fixtures and clean consumer remain described in
+[the native Maven artifact workflow](README.md#build-and-consume-native-maven-artifacts).
+The packaged loader uses `${user.home}/.cache/chromellm/native` unless
+`chromellm.native.cache` selects another extraction cache. Raw URL caches remain
+explicit `jniCacheDir` and `modelCacheDir` selections.
 
-This is a source-fork Maven builder, not a Maven wrapper around a live browser.
-Chromium broker/asset-provider behavioral parity, Google proprietary model
-compatibility, and CPU/GPU performance require separate source-level
-qualification. A passing JNI synthetic test is not proof of real model execution.
+## Build a pinned native source checkout
 
+The `fork-native` profile validates an independently checked-out source repository
+before CMake runs. Provide its absolute path and exact full 40-hex commit:
 
-## Maven downloads and tests binary inputs
+```sh
+mvn -B -ntp -f standalone/pom.xml -Pfork-native verify \
+  -Dchromellm.fork.source=/approved/src/llama.cpp \
+  -Dchromellm.fork.commit=FULL_40_HEX_COMMIT \
+  -Dchromellm.fork.webgpu=OFF
+```
 
-The explicit `dawn-binary` and `real-model` profiles use the same pinned binary
-inputs as the native CI. Java streams each missing artifact into a temporary
-file, follows at most five HTTPS redirects, verifies SHA-256 and length, then
-publishes it in a content-addressed cache. Every cache hit is verified again.
-Maven `-o` permits verified cache reuse and refuses a missing binary.
+The source must have no modified or untracked files. CMake does not download,
+change, or clean the donor checkout. Public CI uses `ggml-org/llama.cpp` commit
+`889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b`. An independently pinned
+`hsoliwal/synexia-llmcpp` checkout remains supported; private source access is an
+explicit operator input.
+
+Output stays under `standalone/target/fork-native`. Optional source-build properties
+are `chromellm.fork.webgpu` (default `OFF`), `chromellm.fork.prefix`,
+`chromellm.fork.dawnDir`, and `chromellm.fork.configuration` (default `Release`).
+For an installed Dawn package, use `chromellm.fork.webgpu=ON` and its CMake prefix or
+exact `DawnConfig.cmake` directory. Missing dependencies fail the build.
+
+To build a CPU runtime suitable for lazy acquisition, additionally set
+`-Dchromellm.fork.distributableCpu=ON`, then stage it:
+
+```sh
+cmake --build standalone/target/fork-native --config Release \
+  --target chromellm_runtime_package --parallel 2
+```
+
+The package contains one JNI library with llama/GGML statically linked, exact digest
+and length, dependency audit, source identities, and required license/notice files.
+It disables host-specific instruction selection and dynamic GGML providers. This
+option excludes synthetic and WebGPU builds. GNU/Linux packages also include the
+GCC runtime license and exception texts. Check `glibc.minimum` in
+`runtime.properties`; a library built on a newer Linux system may require newer
+system libraries than a CI release. Windows and macOS have their own dependency
+checks. Cross-platform compatibility is established by each platform's runtime job.
+
+## Maven profile combinations
+
+The ordinary `mvn -f standalone/pom.xml verify` runs Java and fixed browser-script
+contracts using JDK 21, Maven and Node.js 22, without native or model provisioning.
+Dependency resolution follows Maven's normal online/offline policy.
 
 | Profile | Work performed |
 | --- | --- |
-| `dawn-binary` | Download the native fork CI's Linux x86_64 Dawn v2.0.0 binary; verify both ZIP and nested TAR; extract a fresh installation; build and run an actual Vulkan/WGSL compute and readback test. |
-| `real-model` | Download the pinned Apache-2.0 SmolLM2 model; run the real JNI provider, selected-device and response-identity smoke test with `-Xcheck:jni`. |
-| `smart-build` | Resolve an explicitly configured `modelUrl` lazily when inference is requested. Relative recipe paths resolve against `standalone/`; missing cache directories are created when online. |
+| `native-synthetic` | Build the test-only JNI fixture and run CTest; never a distributable runtime |
+| `native-fork` | Build a local source checkout through the existing native entry point |
+| `fork-native` | Require a clean exact source commit, then build its native runtime |
+| `native` | Build and attach the selected platform/backend native classifier JAR |
+| `native-dist` | Attach a native runtime ZIP from a real `native-fork` or `fork-native` build, with an explicit classifier and reviewed notices |
+| `smart-native-download` | Resolve an installed or published native classifier JAR through Maven repositories |
+| `smart-build` | Run an explicitly selected inference properties file during `verify` |
+| `real-model` | Acquire the pinned model and run the selected JNI real-model smoke test |
+| `real-model-test` | Run the real GGUF contract suite with explicit native/model pins and Maven offline policy |
+| `dawn-binary` | Download and verify the Linux x86_64 Dawn archive and its nested TAR; run Vulkan/WGSL compute and readback |
+| `native-dawn` | Retain the Linux x86_64/macOS arm64 Dawn installer and sealed installation |
 
-The default cache for these two binary profiles is `${user.home}/.cache/chromellm`;
-set `-Dchromellm.artifact.cache=/path/to/cache` to change it. The smart-build recipe
-continues to specify its own `modelCacheDir`. No native or model download occurs
-in the default Java-only build. Ordinary JDK HTTPS proxy and trust-store settings
-apply to the Java downloader; configure them in `MAVEN_OPTS` when required.
+Choose only one native build profile. `smart-build` can accompany that profile when
+the properties select its local JNI library or packaged artifact. Choose only one Dawn
+installer. Use `fork-native,dawn-binary` for the pinned source build with the binary
+Dawn provider. `native-dawn` supports `native-fork`, `fork-native`, and the `native`
+artifact build. It enables the corresponding WebGPU settings and passes the
+verified Dawn prefix before CMake configuration. Synthetic mode, conflicting Dawn
+installers, and explicit contradictory WebGPU settings are refused before native
+writes. To use an already installed Dawn package with `fork-native`, pass its prefix
+explicitly. The separate `native-dist` ZIP retains its explicit classifier and
+reviewed-notices requirements and refuses synthetic or prebuilt-library mode. See
+[NATIVE_MAVEN_BUILD.md](NATIVE_MAVEN_BUILD.md) for the original installer contract.
 
-Download and execute the Dawn package on Linux x86_64 with a Vulkan driver:
+The additional `real-model-test` contract suite and its `chromellm.real.*` properties
+are documented in [MAVEN_MODEL_TEST.md](MAVEN_MODEL_TEST.md).
+
+For CPU source build plus model download and inference:
 
 ```sh
-mvn -f standalone/pom.xml -Pdawn-binary verify
-```
-
-For a hosted CPU machine, select Mesa Lavapipe through `VK_ICD_FILENAMES`.
-The test requests Vulkan and verifies four computed words; it fails when no
-matching adapter is available. Software Vulkan results are not discrete-GPU
-performance measurements. The automatic binary profile is Linux x86_64 only;
-other platforms retain the existing native source and installed-library profiles.
-
-Compile your pinned native fork, download the real model, and test JNI:
-
-```sh
-mvn -f standalone/pom.xml -Pfork-native,real-model verify \
-  -Dchromellm.fork.source=/absolute/path/to/synexia-llmcpp \
+mvn -B -ntp -f standalone/pom.xml -Pfork-native,real-model verify \
+  -Dchromellm.fork.source=/approved/src/llama.cpp \
   -Dchromellm.fork.commit=FULL_40_HEX_COMMIT
 ```
 
-Add `dawn-binary` to the profile list to build that fork with the downloaded
-Dawn provider and require WebGPU inference. Maven passes the package's explicit
-`lib64/cmake/Dawn` directory to CMake, including on hosts that do not search
-`lib64` through `CMAKE_PREFIX_PATH`. A compatible native source checkout, Java 21,
-CMake and a C++ compiler are required; the model binary is separate from the JNI
-runtime. The runtime is built from the selected source because this repository
-does not currently publish a compatible native runtime release.
-
-To request smart-build advice with a lazily downloaded model on Linux:
+For Dawn's downloaded compute test on Linux x86_64:
 
 ```sh
-mvn -f standalone/pom.xml -Pfork-native,smart-build verify \
-  -Dchromellm.fork.source=/absolute/path/to/synexia-llmcpp \
-  -Dchromellm.fork.commit=FULL_40_HEX_COMMIT \
-  -Dchromellm.smart.recipe=examples/smart-build-download.properties
+mvn -B -ntp -f standalone/pom.xml -Pdawn-binary verify
 ```
 
-The sample selects CPU inference. For WebGPU, use the downloaded or installed
-Dawn provider and set `computeBackend=webgpu` with a positive `gpuLayers` in your
-recipe. The smart build validates its output directory before opening a model.
-Maven's compiler and test exit codes remain authoritative; generated advice is
-written only to the existing `target/smart-build` output.
+A Vulkan driver is required. Mesa Lavapipe can be selected with
+`VK_ICD_FILENAMES` for a software-driver test. Software Vulkan results are not
+physical-GPU performance measurements. `dawn-binary`, `real-model`, and `smart-build`
+honor Maven `-o`. The retained `native-dawn` source-file installer has its own cache
+policy. Ordinary JDK proxy/trust-store settings can be supplied in `MAVEN_OPTS`.
 
-### Binary identities and upstream sources
+## GitHub runtime qualification and releases
 
-- Model: [ChromeLLM release](https://github.com/hsoliwal/ChromeLLM/releases/tag/model-smollm2-135m-q4km-8030f045),
-  `weights.bin`, 105,454,144 bytes,
-  SHA-256 `8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684`.
-  The release retains its Apache-2.0 LICENSE and NOTICE. This is the same GGUF
-  used by the historical real-inference workflow.
-- Dawn: [native WebGPU CI binaries v2.0.0](https://github.com/reeselevine/dawn/releases/tag/v2.0.0),
-  revision `5e9a4865b1635796ccc77dd30057f2b4002a1355`, Linux ZIP, 9,978,094 bytes,
-  SHA-256 `a5a87d9513e1fc109c355628baebe6b85fe7aa258f8ed2d2cf71ddc902e778bb`.
-  Its nested TAR is independently verified before extraction. Package copyright
-  and license files remain in the installed tree.
-- The `native-binaries` job in `standalone-core.yml` executes the downloaded Dawn
-  compute test and a real-model JNI test. The public CI source is the exact
-  `ggml-org/llama.cpp` revision `889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b`
-  already used by the repository's historical real-model workflow. This public
-  source lane does not require access to private native forks; local Maven use
-  can select the independently pinned fork checkout.
+The `native-runtime` matrix builds Linux x86_64, Windows x86_64 and macOS arm64
+CPU packages from an exact native source commit. Each job checks dependency closure,
+serves the new JNI library through a local HTTPS endpoint, downloads the published
+model, and executes the production Maven Smart Build path. It then stops the native
+server and runs a fresh Maven `-o` invocation against the caches. Missing native
+cache and same-size native corruption must fail; model integrity, backend receipts,
+repeat inference and close are checked by the existing real-model contracts.
 
-## Dawn provisioning profiles
+The matrix uploads runtime bundles and test logs as Actions artifacts. A manual run
+with `publish_runtime=true` publishes a commit-named prerelease only after the Java,
+synthetic JNI, and all CPU matrix jobs pass. It includes raw native assets for
+`jniUrl`, complete ZIP bundles with notices and platform requirements, the tested
+Java JAR, and `runtime-manifest.properties`. Native source repository/commit can be
+selected explicitly; private sources require the configured `NATIVE_SOURCE_TOKEN`.
+The separate Dawn test and opt-in installed-Chrome test retain their own jobs.
+CPU success makes no claim about WebGPU execution or generated-code quality.
 
-Choose one Dawn provisioning profile per Maven invocation. Maven rejects
-`native-dawn,dawn-binary` during validation, before either installer runs.
+## Review-only outputs and source identities
 
-| Profile | Supported downloaded binary | Build entry point | Verification provided |
-| --- | --- | --- | --- |
-| `native-dawn` | Linux x86_64 and macOS arm64 | `-Pnative-dawn generate-sources`; combine with `native-fork` for its source build | SHA-256-pinned ZIP, sealed installed tree and CMake package discovery under `target/native-deps/dawn` |
-| `dawn-binary` | Linux x86_64 | `-Pdawn-binary verify`; combine with `fork-native` for its pinned source build | Exact-size/SHA-256 ZIP and inner archive, plus actual Vulkan WGSL compute/readback under `target/dawn-sdk` |
+Smart Build accepts a bounded UTF-8 prompt inside the standalone project. It writes
+candidates only under `standalone/target/smart-build/`, using exclusive atomic
+publication keyed by recipe and prompt SHA-256. Receipts identify recipe, prompt,
+candidate, and actual backend. Output validation happens before model or native
+acquisition. Console logs omit prompt content and credentials.
 
-The `native-dawn` source-file installer and its Linux/macOS workflow remain
-available. Its `native-fork` integration uses `chromellm.native.source` and
-`chromellm.native.dawn.prefix`. The `fork-native,dawn-binary` path uses
-`chromellm.fork.source`, a full `chromellm.fork.commit`, and the independently
-verified runtime tests documented above. Maven rejects multiple native source
-builds, both Dawn installers together, and either installer paired with the other
-source profile; each supported pairing provisions Dawn before its CMake configuration.
+Identical replay output is retained; divergent model output for the same input
+identity fails instead of replacing an existing candidate. Source changes require
+the normal review and compile/test process. The public Java factory
+`StandaloneMain.openBackend(String... args)` exposes the same provider to an
+embedding Maven plugin, which owns and closes its returned `ModelBackend`.
 
-Maven's offline setting is enforced by `dawn-binary`, `real-model`, `real-model-test` and
-`smart-build`. The `native-dawn` source-file installer controls acquisition
-independently of Maven's offline setting, so use an already verified installer
-cache when running that profile without network access.
+The published model is SmolLM2-135M-Instruct Q4_K_M, 105,454,144 bytes, SHA-256
+`8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684`.
+Its [release](https://github.com/hsoliwal/ChromeLLM/releases/tag/model-smollm2-135m-q4km-8030f045)
+includes Apache-2.0 LICENSE and source NOTICE. It is a small execution fixture.
+The existing Dawn binary pin is the
+[v2.0.0 native WebGPU CI package](https://github.com/reeselevine/dawn/releases/tag/v2.0.0),
+revision `5e9a4865b1635796ccc77dd30057f2b4002a1355`, Linux ZIP 9,978,094 bytes,
+SHA-256 `a5a87d9513e1fc109c355628baebe6b85fe7aa258f8ed2d2cf71ddc902e778bb`.
+The nested archive and installed licenses remain verified separately.
+
+ChromeLLM, native forks, Dawn, and model assets retain their respective
+license/NOTICE obligations. Chromium's published broker/asset-provider design is
+an architectural reference; no proprietary Chrome model component is supplied or
+assumed redistributable by this integration.

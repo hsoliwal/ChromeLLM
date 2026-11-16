@@ -1,109 +1,156 @@
-# ChromeLLM lazy local model contract (opt-in)
+# Lazy native runtime and model acquisition
 
-The standalone Java/JNI runtime stays browser-free. Legacy `--model` and tier-specific
-paths remain authoritative. A local CLI or JNI invocation may instead supply all
-three options `--model-url`, `--model-sha256`, and `--model-cache-dir`; these are
-exclusive with `--model`, `--tier`, and all tier-specific paths. The cache directory
-must already exist and be writable for the direct CLI; acquisition never creates an
-implicit user-home cache. The explicitly selected Maven binary profiles and smart-build
-entrypoint prepare their documented cache directories. The opt-in `real-model-test`
-profile creates its explicitly configured directory, defaulting to
-`${settings.localRepository}/io/synexia/chromellm/models`. Hosted Gemini rejects these options.
+ChromeLLM can acquire the configured JNI library and model on first inference. The
+same provider is used by the command line, `SmartBuildMain`, and the public Java
+factory `StandaloneMain.openBackend(String... args)`. Constructing or closing an
+unprepared provider performs no network, cache, or native-library work.
 
-`--model-url` must be an explicitly supplied HTTPS URL, without user-info or fragment.
-`--model-sha256` is a 64-hex-character digest of the entire licensed GGUF artifact.
-The lazy provider fetches the model no earlier than the first inference request and
-never at argument parse time. An explicitly selected Maven `real-model` profile may
-provision its pinned test model before verification. The explicit `real-model-test`
-profile resolves its pinned model during `integration-test`, then executes real JNI
-inference. The CLI executable or JNI bridge
-remains separately installed or built from the selected native source.
-The caller must review model redistribution, export, and use rights.
+## Artifact selection
 
-The implementation stores verified model bytes as `<sha256>.gguf` in the specified
-cache. Every cache hit is SHA-256 checked, a corrupt cache entry fails closed,
-and an incomplete or mismatched download is removed without replacing existing
-unowned paths. Missing artifacts use HTTPS GET.
+Existing `--jni-lib`, `--model`, and tier-specific local paths remain supported.
+For a remote model, supply `--model-url`, `--model-sha256`, and
+`--model-cache-dir`. An optional `--model-bytes` adds an exact length check.
+Model URL options are exclusive with local model and tier selections.
 
-Pinned native binary acquisition distinguishes an explicit URL of the form
-`https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>` on the default
-HTTPS port may follow up to three HTTPS redirects within GitHub release-download
-endpoints and `release-assets.githubusercontent.com`, also on the default HTTPS
-port. General model acquisition and other explicit HTTPS origins retain up to five
-validated HTTPS redirects. The native-binary GitHub release lane retains its
-three-hop endpoint allowlist; both lanes use the same bounded lifecycle engine.
-Every hop rejects downgrades, user-info and fragments; redirect cycles and blank or
-ambiguous locations fail. Redirects carry no cookies or authorization. Redirected
-responses are closed before the next request, and the full pinned SHA-256 is checked
-after transfer. Transfer size is bounded to 64 GiB, or the smaller caller-supplied
-bound; transient failures have no automatic retry or provider fallback. Files are staged in the same directory and published via an
-exclusive hard link only on successful verification. The cache owner itself does
-not create directories or silently repair corrupt artifacts. Maven offline mode
-revalidates existing binary inputs and refuses cache misses before opening the downloader.
+For a remote JNI library, select `--backend jni` and supply all four of
+`--jni-url`, `--jni-sha256`, `--jni-bytes`, and `--jni-cache-dir`.
+These options are exclusive with `--jni-lib`. The artifact must be a complete,
+platform-compatible shared JNI library; archive extraction and discovery of additional
+native dependencies are not part of this loader. Its non-system dependencies must
+already be linked or packaged by the native build. Model and JNI artifacts have
+independent digests and version identities.
 
-The artifact is acquired before native or subprocess model initialization. The
-request's inference timeout applies to inference after successful acquisition.
-Acquisition has a separate one-hour deadline covering coordination, cache verification,
-connection establishment and the complete streamed response. The waiting caller returns
-with an HTTP timeout error if that deadline expires. Interruption cancels only that caller's
-attempt. Cancellation interrupts its worker and closes its active stream asynchronously;
-staging cleanup follows when the worker unwinds. An uncooperative transport or filesystem
-can delay cleanup. Cancellation that wins the final publication-admission check prevents
-publication. An already-admitted, verified hard-link publication may finish after cancellation;
-that artifact may remain cached, but no new provider is opened for the cancelled request.
-Filesystem operations never hold the cancellation monitor. Cleanup failures are suppressed
-under the original acquisition or inference failure rather than replacing it.
+JNI without `--jni-lib` or the native URL quartet uses the matching installed
+platform native JAR through `NativeLibraryLoader`. That existing packaged loader
+verifies the resource manifest and every bundled dependency before loading, and
+does not download native code. Its extraction cache defaults to
+`${user.home}/.cache/chromellm/native` and can be selected with
+`-Dchromellm.native.cache`. Packaged discovery and extraction for a remote model
+remain deferred until first inference. The raw URL path continues to use its
+explicit `--jni-cache-dir` and never treats a downloaded archive as a native JAR.
 
-Within one JVM, acquisitions for the same canonical cache path and digest serialize their
-cache recheck, transfer and publication. A waiting caller reuses the verified result and
-can cancel without interrupting the owning caller. Different digests proceed independently.
-Only active callers retain coordination gates. Separate JVMs may still transfer concurrently;
-exclusive hard-link publication and digest verification continue to prevent overwrites.
+URLs must use HTTPS without credentials or fragments. SHA-256 pins contain 64 hex
+digits. Length pins must be positive and bounded to 64 GiB. Partial descriptors,
+contradictory local/remote selections, invalid compute policies, and invalid numeric
+parameters are rejected before acquisition. Hosted Gemini and installed-Chrome
+providers reject these native acquisition options.
 
-Preparation snapshots are immutable observations with a state and processed-byte count.
-The states distinguish unprepared, waiting, verifying, downloading, available artifact,
-initializing provider, ready provider, failure, cancellation and closure. Byte counts apply
-to the current verification or download phase and can restart at a phase change. Reading
-a snapshot performs no disk, network or native work. The snapshot describes the most recently
-started attempt; an older cancelled worker cannot overwrite a newer attempt's status.
+The explicitly configured cache directory is created on first online acquisition if
+necessary. No implicit user-home location is chosen for URL artifacts. Direct internal
+cache callers retain their existing requirement to provide an existing directory.
+Verified models are stored as `<sha256>.gguf`; raw native artifacts use
+`<sha256>.bin`. No downloaded binary is loaded until every configured artifact has
+passed its size and digest checks.
 
-Closing a lazy backend marks it closed and wakes queued callers immediately. Preparation
-is interrupted without waiting for download or native-open completion. A provider returned
-after closure is released once and receives no inference call. An already-admitted inference
-retains its provider until it unwinds; native handles are never disposed concurrently with
-that call. Close does not delete verified cache contents. Model downloads still require the
-configured HTTPS URL and digest; this capability does not establish standalone support for
-Chrome-managed Gemini Nano artifacts.
+## Online, cached, and offline execution
 
-The optional MCP JSON-RPC stdio transport exposes the same native lifecycle. Its
-`backend_status` tool retains the provider-ID text and adds a structured preparation
-snapshot for lazy local backends. The server processes requests sequentially; this is a
-snapshot response, not asynchronous progress notifications. WebMCP remains a separate,
-optional browser adapter. The existing CLM1 stdio transport and public Java/JNI contracts
-remain independent of a browser. This stage qualifies model acquisition and lifecycle
-management in the existing providers. Extracting Chrome's runtime through the forks into
-portable, Maven-built Java/JNI outputs remains the larger goal; the current GGUF provider
-is one intermediate implementation. Model-specific runtime integration, resumable transfer
-and physical Dawn/GPU qualification require their own acceptance evidence.
+`--offline true` permits only reverified cache hits. It performs no network operation
+and creates no missing cache directory. An absent, corrupt, non-regular, or
+size-mismatched entry is refused. Online execution also refuses corrupt existing
+entries instead of silently replacing them. A successful initialized provider reuses
+its model and native session across serial requests. A new provider checks the cached
+bytes again before opening its session.
 
-## Explicit download policy and packaged JNI
+For `SmartBuildMain`, the properties keys are `jniUrl`, `jniSha256`, `jniBytes`,
+`jniCacheDir`, `modelUrl`, `modelSha256`, `modelBytes`, `modelCacheDir`, and `offline`.
+The model policy keys are `modelFollowRedirects`, `modelDownloadTimeoutSeconds`,
+and `modelMaxBytes`. For URL recipes, `modelCacheDir` defaults to `target/model-cache`.
+Maven creates a managed cache beneath its verified target directory after provider
+validation, immediately before inference. For a recipe using an existing CLI or
+local/packaged JNI runtime and an explicit external model cache, Smart Build validates
+all options and the cache's existing ancestors before creating the directory and
+opening the provider. Symlink ancestors are refused before writes. Recipes with a
+raw JNI URL retain their external model and native cache directories under the
+artifact owner's first-inference lifecycle.
+Offline execution creates none of these cache directories.
+The existing `jniLib` and `model` keys remain valid. Relative paths resolve from the
+standalone project. Maven's offline setting takes precedence over `offline=false` in
+a recipe. Offline Smart Build preflights both caches before opening its provider.
+The target directory is validated before cache or provider work. Results remain
+review-only candidates under the existing Maven `target/smart-build` directory.
+The original three-argument entry point and the newer optional fourth offline
+argument (`true`, `false`, `--offline=true`, `--offline=false`, `offline=true`, or
+`offline=false`) remain supported.
+When present, the fourth argument is the authoritative Maven offline setting.
+Three-argument callers retain the legacy `chromellm.offline` system-property policy.
+A recipe with `offline=true` further restricts either invocation.
+Canonical workspace-ancestor aliases are accepted; target/output symlinks are refused.
 
-JNI may use the matching installed native classifier JAR when `--jni-lib` is omitted.
-The lazy provider verifies the model before initializing that packaged runtime.
-The new optional fields `--model-follow-redirects`, `--model-download-timeout-seconds`
-and `--model-max-bytes` select an explicit acquisition policy. The timeout is 1–3600
-seconds and the byte bound is positive and no larger than the existing 64 GiB limit.
-With explicit policy, `--model-follow-redirects false` allows only the three-hop
-GitHub-release lane; other redirects refuse. `true` admits up to five validated
-HTTPS redirects. Legacy recipes without these new fields retain the earlier
-qualified redirect behavior. Every path shares one deadline, response-close and
-artifact-pinning implementation; signed redirect values do not enter error causes.
+The explicit Maven `real-model` and `real-model-test` profiles retain their real
+GGUF CPU inference gates. The latter resolves the pinned model during integration-test
+in its explicitly configured directory, defaulting to
+`${settings.localRepository}/io/synexia/chromellm/models`. These gates verify the
+artifact and perform real JNI inference; ordinary offline verification does not
+acquire licensed weights or load that native model.
 
-Maven recipes use `modelFollowRedirects`, `modelDownloadTimeoutSeconds` and
-`modelMaxBytes` for the same controls. They may omit `modelCacheDir` to choose
-`target/model-cache`; a missing managed directory is created only after provider
-admission and remains inside the validated Maven target without symlink traversal.
-Explicit external caches retain their prior admission/preparation behavior. Offline
-resolution never creates either cache and rechecks the pinned bytes before provider
-initialization. See `examples/smart-build-packaged-smoke.properties` for the small
-packaged-runtime download recipe.
+The public Java factory accepts provider options only. A caller supplies the prompt,
+token limit, and inference timeout through `ModelRequest`, and closes the returned
+`ModelBackend` after use. The factory uses the same selection and acquisition owners
+as the command line; it does not run Maven, edit source, or introduce a second runtime.
+
+## Transfer and publication
+
+Legacy model selections without the three model-policy fields retain up to five
+validated HTTPS redirects, including CDN origins. Supplying
+`--model-follow-redirects`, `--model-download-timeout-seconds`, or `--model-max-bytes`
+selects explicit policy: redirects default to false, and only a GitHub release URL
+of the form `https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>` may
+follow at most three redirects among GitHub release URLs and
+`release-assets.githubusercontent.com`, using the default HTTPS port.
+`--model-follow-redirects true` permits up to five validated HTTPS redirects.
+The native binary provisioning factory applies the three-hop release policy to
+GitHub release origins and retains checked generic HTTPS redirects for other
+explicit origins. Raw `--jni-url` acquisition and the legacy generic HTTP seams
+retain the five-hop HTTPS policy. All paths share one transport and body-lifetime
+owner.
+
+Downgrades, credentials, fragments, cycles, and blank or ambiguous redirect locations
+are refused; requests forward no cookies or authorization. The digest covers the final
+bytes. Content encoding must be identity. Intermediate responses and the final
+HTTP client/stream are closed. The HTTP-client compatibility seam uses that same
+owned transport and deadline. The response-sender test seam retains the incoming
+cycle, ambiguous-location, encoding, and size refusal contracts without opening sockets.
+
+Files are staged in the destination directory and published through an exclusive
+hard link after verification. Failed or incomplete transfers remove their staging
+file without replacing existing paths. Transfer limits are checked while streaming;
+exact length and digest are checked again before native/model initialization.
+Transient failures have no automatic retry or provider fallback.
+
+Within a JVM, callers acquiring the same canonical cache path and digest serialize
+cache recheck, transfer, and publication. Waiting callers reuse the verified result
+and can cancel independently. Different identities proceed independently. Only active
+acquisitions retain coordination gates. Separate JVMs may transfer concurrently;
+exclusive publication and verification still prevent overwrites.
+
+## Deadlines, cancellation, and lifetime
+
+Each artifact acquisition defaults to a one-hour deadline covering coordination, cache
+verification, connection establishment, redirects, and the complete response body.
+Models can select a smaller whole-acquisition deadline through
+`--model-download-timeout-seconds` (1–3600) and a smaller byte bound through
+`--model-max-bytes` (1–64 GiB). Cached models are subject to that byte bound too.
+An optional exact model size pin further restricts the streamed and cached length.
+The inference timeout applies after successful acquisition. A timed-out waiter returns
+an HTTP timeout error. Interruption cancels its acquisition worker and closes its
+active stream asynchronously; staging cleanup follows worker completion. An
+uncooperative transport or filesystem may delay cleanup. Cancellation before the final
+publication admission prevents publication. An already-admitted verified publication
+may finish afterward, but no provider opens for that cancelled request.
+
+Preparation snapshots expose state and processed-byte count without I/O. With two
+artifacts the count sums their latest observations and may restart during re-verification.
+The state follows the current artifact, then provider initialization and readiness.
+A cancelled older attempt cannot replace a newer attempt's progress.
+
+Closing a lazy backend marks it closed and wakes queued callers immediately.
+Acquisition of either artifact is interrupted without waiting for completion. A
+provider returned after closure is released once and receives no inference. An
+already-admitted inference retains its provider until it unwinds; native handles are
+never disposed concurrently with that call. Cleanup failures remain suppressed under
+the primary failure. Close retains verified cache contents.
+
+The optional MCP `backend_status` tool exposes the same lifecycle snapshot. CLM1,
+MCP, and ordinary Java calls continue to use the existing native provider. Actual
+model inference, binary compatibility, and physical Dawn/GPU execution require their
+respective runtime tests; byte acquisition alone does not establish those outcomes.
