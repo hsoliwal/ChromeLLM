@@ -183,8 +183,8 @@ checks. Cross-platform compatibility is established by each platform's runtime j
 
 ## Maven profile combinations
 
-The ordinary `mvn -f standalone/pom.xml verify` runs Java and fixed browser-script
-contracts using JDK 21, Maven and Node.js 22, without native or model provisioning.
+The ordinary `mvn -f standalone/pom.xml verify` runs Java contracts using JDK 21
+and Maven, without native or model provisioning. Node.js is not required.
 Dependency resolution follows Maven's normal online/offline policy.
 Its Java contract suite also verifies the fork-source pin and inference recipe;
 no native library or model is required by those offline test fixtures.

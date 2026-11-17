@@ -1,6 +1,6 @@
 # ChromeLLM standalone Java 21 inference
 
-The module has no third-party Java runtime dependency. It uses the JDK modules `java.base`, `java.net.http` and `jdk.httpserver`. Select the local llama.cpp CLI/JNI or hosted Gemini API provider explicitly. The module has no browser code; Dawn is an optional native compute dependency for local WebGPU inference.
+The module has no third-party Java runtime dependency. It uses the JDK modules `java.base` and `java.net.http`. Select the local llama.cpp CLI/JNI or hosted Gemini API provider explicitly. The module has no browser code; Dawn is an optional native compute dependency for local WebGPU inference.
 
 For optional analysis around a project build, use the reusable
 [pre-build and post-build GitHub Action](BUILD_AI_ACTION.md). It invokes this
@@ -94,7 +94,7 @@ runtime and its native dependencies into a resource staging directory, and
 attaches a platform/backend JAR to the normal Java artifact. It uses the existing
 llama.cpp provider and its Dawn/WebGPU integration. Model files are separate.
 
-Use a full JDK 21, Node.js 22 for the fixed script contract tests, CMake 3.22 or newer, and a compatible C/C++ toolchain. A Dawn
+Use a full JDK 21, CMake 3.22 or newer, and a compatible C/C++ toolchain. A Dawn
 source build also needs Python 3, a C++20 compiler, and the platform prerequisites
 documented by the pinned Dawn checkout. The ordinary command remains:
 
