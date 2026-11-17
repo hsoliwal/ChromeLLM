@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 
 /** Browser-free llama.cpp CLI adapter. The executable and licensed GGUF model are external. */
 public final class LlamaCppCliBackend implements ModelBackend {
@@ -28,6 +29,14 @@ public final class LlamaCppCliBackend implements ModelBackend {
     private static final String BACKEND_ID = "llama.cpp-cli";
     private static final long SCRATCH_DELETE_SECONDS = 5;
     private static final long SCRATCH_DELETE_RETRY_MILLIS = 20;
+    /** llama-cli (the chat CLI since llama.cpp b6xxx) still prints a banner and echoes the prompt. */
+    private static final List<String> CHAT_CLI_FLAGS =
+            List.of("--no-display-prompt", "--no-show-timings", "--simple-io", "--single-turn");
+    /** llama-completion is the classic one-shot tool; it rejects --no-show-timings. */
+    private static final List<String> COMPLETION_FLAGS = List.of("--no-display-prompt", "--simple-io", "--single-turn");
+    private static final Pattern ANSI_ESCAPE = Pattern.compile("\u001B\\[[0-?]*[ -/]*[@-~]");
+    private static final String END_OF_TEXT = "[end of text]";
+    private static final String ECHO_MARK = "> ";
     private final List<String> launcher;
     private final Path model;
     private final Path scratch;
@@ -104,7 +113,8 @@ public final class LlamaCppCliBackend implements ModelBackend {
             String text = StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT)
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(output)).toString().strip();
+                    .decode(ByteBuffer.wrap(output)).toString();
+            text = reply(text, request.prompt());
             if (text.isEmpty()) {
                 throw new IOException("llama.cpp CLI produced no candidate text");
             }
@@ -209,8 +219,8 @@ public final class LlamaCppCliBackend implements ModelBackend {
     private Process startProcess(ModelRequest request, Path prompt) throws IOException {
         List<String> args = new ArrayList<>(launcher);
         args.addAll(List.of("-m", model.toString(), "-f", prompt.toString(), "-n",
-                Integer.toString(request.maxTokens()), "--no-display-prompt", "--no-show-timings",
-                "--simple-io", "--single-turn"));
+                Integer.toString(request.maxTokens())));
+        args.addAll(completionTool(launcher) ? COMPLETION_FLAGS : CHAT_CLI_FLAGS);
         if (device != null) args.addAll(List.of("--device", device));
         if (gpuLayers >= 0) args.addAll(List.of("-ngl", Integer.toString(gpuLayers)));
         return new ProcessBuilder(args)
@@ -218,6 +228,28 @@ public final class LlamaCppCliBackend implements ModelBackend {
                 // an unbounded file or leaving a second pipe that can block a chatty child.
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start();
+    }
+
+    /** True when the launcher's executable is llama-completion (any directory, optional .exe). */
+    static boolean completionTool(List<String> launcher) {
+        Path name = Path.of(launcher.get(launcher.size() - 1)).getFileName();
+        String file = name == null ? "" : name.toString().toLowerCase(java.util.Locale.ROOT);
+        return file.equals("llama-completion") || file.equals("llama-completion.exe");
+    }
+
+    /**
+     * The model's reply from raw stdout: ANSI escapes removed, CRLF normalised, everything up to and including
+     * the chat CLI's echoed prompt ("> " + prompt) dropped, and llama.cpp's trailing "[end of text]" removed.
+     * Output without an echo (llama-completion) keeps all of its text.
+     */
+    static String reply(String raw, String prompt) {
+        String text = ANSI_ESCAPE.matcher(raw).replaceAll("").replace("\r\n", "\n");
+        String echo = ECHO_MARK + prompt.replace("\r\n", "\n").strip();
+        int at = text.indexOf(echo); // the first echo: a reply that quotes the prompt keeps its quote
+        if (at >= 0) text = text.substring(at + echo.length());
+        text = text.strip();
+        if (text.endsWith(END_OF_TEXT)) text = text.substring(0, text.length() - END_OF_TEXT.length());
+        return text.strip();
     }
 
     private static byte[] awaitProcess(Process process, long deadline)

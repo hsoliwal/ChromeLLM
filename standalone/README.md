@@ -24,6 +24,10 @@ java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
   --prompt-file /path/to/request.txt
 ```
 
+For `--llama-bin`, prefer `llama-completion` (llama.cpp's one-shot tool): it prints only the reply. The chat
+`llama-cli` of current llama.cpp releases also prints a banner and echoes the prompt; the cli backend removes
+both, together with ANSI colour codes and the trailing `[end of text]` marker.
+
 Provide **all three** of `--model-url`, `--model-sha256`, and `--model-cache-dir`.
 They exclude `--model`, `--tier`, and tier-model paths; hosted Gemini rejects them.
 Model downloads follow at most five HTTPS redirects, with no credentials or fragments.

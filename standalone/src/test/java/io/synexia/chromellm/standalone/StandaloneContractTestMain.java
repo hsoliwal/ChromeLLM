@@ -64,6 +64,7 @@ public final class StandaloneContractTestMain {
                 cleanupFailure(backend, temp, true);
                 cleanupFailure(backend, temp, false);
                 outputContracts(backend, temp);
+                replyContracts();
             }
             reject(() -> new LlamaCppCliBackend(launcher, model, temp, "--unsafe", 16));
             reject(() -> new LlamaCppCliBackend(launcher, model, temp, "WebGPU0", -2));
@@ -364,6 +365,26 @@ public final class StandaloneContractTestMain {
             }
         }
         if (failure != null) throw failure;
+    }
+
+    /** The chat CLI's banner, colours and prompt echo never reach the reply; llama-completion's text is kept. */
+    private static void replyContracts() {
+        String prompt = "Maven build failed:\nGive one short fix.";
+        String chatCli = "\r\n\r\nLoading model... \r\n\r\n\u2584\u2584 \u2584\u2584\r\nbuild      : b12465\r\n\r\n"
+                + "available commands:\r\n  /exit or Ctrl+C     stop or exit\r\n\r\n\u001B[1m\u001B[32m\r\n"
+                + "> Maven build failed:\r\nGive one short fix.\r\n\u001B[0mRename Strng to String.\r\n\r\n";
+        check(LlamaCppCliBackend.reply(chatCli, prompt).equals("Rename Strng to String."), "chat CLI reply");
+        check(LlamaCppCliBackend.reply("\r\n\r\nRename it.\r\n [end of text]\r\n\r\n", prompt).equals("Rename it."),
+                "completion reply");
+        check(LlamaCppCliBackend.reply("> a quoted line\nanswer", prompt).equals("> a quoted line\nanswer"),
+                "a reply without an echo keeps its quote");
+        String quoting = "> " + prompt + "\nYou wrote:\n> " + prompt + "\nFix it.";
+        check(LlamaCppCliBackend.reply(quoting, prompt).equals("You wrote:\n> " + prompt + "\nFix it."),
+                "only the first echo is dropped");
+        check(LlamaCppCliBackend.completionTool(List.of("C:/llama/b12465/llama-completion.exe")), "completion exe");
+        check(LlamaCppCliBackend.completionTool(List.of("/opt/llama/llama-completion")), "completion binary");
+        check(!LlamaCppCliBackend.completionTool(List.of("/opt/llama/llama-cli")), "chat CLI");
+        check(!LlamaCppCliBackend.completionTool(List.of("java", "-cp", "x", "Fake")), "test launcher");
     }
 
     private static void check(boolean condition) {
