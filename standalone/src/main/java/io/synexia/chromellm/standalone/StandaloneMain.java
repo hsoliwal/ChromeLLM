@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Explicit provider selection for local, hosted or installed-Chrome inference and bounded stdio sessions. */
+/** Explicit provider selection for local, hosted or chat-bridge inference and bounded stdio sessions. */
 public final class StandaloneMain {
     private StandaloneMain() { }
 
@@ -26,7 +26,7 @@ public final class StandaloneMain {
     public static ModelBackend openBackend(String... args) throws Exception {
         Map<String, String> options = parse(args);
         rejectOptions(options, "--prompt-file", "--stdio", "--mcp-stdio", "--list-devices",
-                "--chrome-status", "--chrome-prepare", "--max-tokens", "--timeout-seconds",
+                "--max-tokens", "--timeout-seconds",
                 "--agent", "--workspace", "--agent-endpoint", "--agent-token-env",
                 "--agent-max-steps", "--agent-max-calls", "--agent-max-context-bytes",
                 "--agent-max-tool-result-bytes");
@@ -35,9 +35,6 @@ public final class StandaloneMain {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> options = parse(args);
-        // Chrome setup modes name the conflicting agent option before agent, goal,
-        // workspace, token or provider setup is considered.
-        validateChromeModes(options);
         validateAgentMode(options);
         if (flag(options, "--agent") && options.containsKey("--agent-endpoint")) {
             Path goalFile = Path.of(required(options, "--prompt-file"));
@@ -55,16 +52,6 @@ public final class StandaloneMain {
         }
         Path workspace = agentWorkspace(options);
         List<AgentTool> workspaceTools = workspace == null ? null : new WorkspaceTools(workspace).tools();
-        if (flag(options, "--chrome-status") || flag(options, "--chrome-prepare")) {
-            Duration timeout = setupTimeout(options);
-            try (ModelBackend selected = backend(options, System.getenv())) {
-                ChromeAiBackend chrome = (ChromeAiBackend) selected;
-                Map<String, Object> result = flag(options, "--chrome-status")
-                        ? chrome.status(timeout) : chrome.prepare(timeout);
-                System.out.println(McpJson.encode(result, 64 * 1024));
-            }
-            return;
-        }
         if (flag(options, "--mcp-stdio")) {
             if (flag(options, "--stdio") || flag(options, "--list-devices")
                     || options.containsKey("--prompt-file")) {
@@ -143,8 +130,7 @@ public final class StandaloneMain {
                 || options.containsKey("--agent-max-context-bytes")
                 || options.containsKey("--agent-max-tool-result-bytes");
         boolean configured = options.keySet().stream().anyMatch(key -> key.startsWith("--agent-"));
-        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices")
-                || flag(options, "--chrome-status") || flag(options, "--chrome-prepare"))) {
+        if (agent && (mcp || flag(options, "--stdio") || flag(options, "--list-devices"))) {
             throw new IllegalArgumentException("agent execution requires its own exclusive session mode");
         }
         if (agent && workspace && endpoint) {
@@ -219,12 +205,11 @@ public final class StandaloneMain {
 
     static ModelBackend backend(Map<String, String> options, Map<String, String> environment) throws Exception {
         String provider = options.getOrDefault("--backend", "cli");
-        validateChromeModes(options);
         boolean offline = flag(options, "--offline");
         if (!"jni".equals(provider)) {
             rejectOptions(options, "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir");
         }
-        if ("chrome".equals(provider) || "gemini".equals(provider) || "bridge".equals(provider)) {
+        if ("gemini".equals(provider) || "bridge".equals(provider)) {
             rejectOptions(options, "--model-bytes", "--offline", "--model-follow-redirects",
                     "--model-download-timeout-seconds", "--model-max-bytes");
         }
@@ -239,15 +224,6 @@ public final class StandaloneMain {
             return new ChatBridgeBackend(
                     URI.create(options.getOrDefault("--bridge-url", ChatBridgeBackend.DEFAULT_SERVICE.toString())),
                     options.getOrDefault("--model", ChatBridgeBackend.DEFAULT_MODEL), bridgeToken(options));
-        }
-        if ("chrome".equals(provider)) {
-            rejectOptions(options, "--model", "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
-                    "--gpu-layers", "--compute-backend", "--device-backend", "--device", "--tier",
-                    "--fast-model", "--reasoning-model", "--frontier-model", "--model-url",
-                    "--model-sha256", "--model-cache-dir", "--thinking-level", "--api-key-env", "--list-devices");
-            return new ChromeAiBackend(chromeExecutable(options, environment),
-                    Path.of(required(options, "--chrome-profile")),
-                    flag(options, "--chrome-headless"), flag(options, "--chrome-download"));
         }
         if ("gemini".equals(provider)) {
             rejectOptions(options, "--model-url", "--model-sha256", "--model-cache-dir");
@@ -298,7 +274,7 @@ public final class StandaloneMain {
                 yield new LlamaCppJniBackend(jniLibrary(options), model, context, threads, layers,
                         options.getOrDefault("--compute-backend", "auto"));
             }
-            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni, gemini, chrome or bridge)");
+            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni, gemini or bridge)");
         };
     }
 
@@ -317,63 +293,6 @@ public final class StandaloneMain {
     private static Path jniLibrary(Map<String, String> options) throws IOException {
         return options.containsKey("--jni-lib") ? Path.of(required(options, "--jni-lib"))
                 : NativeLibraryLoader.libraryPath();
-    }
-
-    private static void validateChromeModes(Map<String, String> options) {
-        if (!"chrome".equals(options.get("--backend"))) {
-            rejectOptions(options, "--chrome-bin", "--chrome-profile", "--chrome-headless",
-                    "--chrome-download", "--chrome-status", "--chrome-prepare");
-            return;
-        }
-        boolean status = flag(options, "--chrome-status");
-        boolean prepare = flag(options, "--chrome-prepare");
-        if (status && prepare) throw new IllegalArgumentException("Chrome status and preparation are exclusive modes");
-        if (status || prepare) {
-            rejectOptions(options, "--prompt-file", "--stdio", "--mcp-stdio", "--list-devices", "--max-tokens",
-                    "--agent", "--workspace", "--agent-endpoint", "--agent-token-env", "--agent-max-steps",
-                    "--agent-max-calls", "--agent-max-context-bytes", "--agent-max-tool-result-bytes");
-        }
-    }
-
-    private static Duration setupTimeout(Map<String, String> options) {
-        long seconds = Long.parseLong(options.getOrDefault("--timeout-seconds", "120"));
-        if (seconds < 1 || seconds > 3600) throw new IllegalArgumentException("timeout must be in [1, 3600] seconds");
-        return Duration.ofSeconds(seconds);
-    }
-
-    /** Discovery selects an executable only; it never attaches to an existing browser or profile. */
-    private static Path chromeExecutable(Map<String, String> options, Map<String, String> environment) {
-        String selected = options.containsKey("--chrome-bin") ? required(options, "--chrome-bin")
-                : environment.get("CHROME_BIN");
-        if (selected != null && !selected.isBlank()) return executable(Path.of(selected));
-        java.util.ArrayList<Path> candidates = new java.util.ArrayList<>();
-        String os = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT);
-        if (os.contains("win")) {
-            for (String variable : java.util.List.of("PROGRAMFILES", "ProgramFiles", "PROGRAMFILES(X86)",
-                    "ProgramFiles(x86)", "LOCALAPPDATA")) {
-                String folder = environment.get(variable);
-                if (folder != null && !folder.isBlank()) candidates.add(Path.of(folder, "Google", "Chrome", "Application", "chrome.exe"));
-            }
-        } else if (os.contains("mac")) {
-            candidates.add(Path.of("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"));
-            candidates.add(Path.of("/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"));
-            candidates.add(Path.of("/Applications/Chromium.app/Contents/MacOS/Chromium"));
-        } else {
-            for (String path : java.util.List.of("/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
-                    "/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium")) candidates.add(Path.of(path));
-        }
-        for (Path candidate : candidates) {
-            if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) return candidate.toAbsolutePath().normalize();
-        }
-        throw new IllegalArgumentException("Installed Chrome was not found; set --chrome-bin or CHROME_BIN to its executable");
-    }
-
-    private static Path executable(Path path) {
-        Path absolute = path.toAbsolutePath().normalize();
-        if (!Files.isRegularFile(absolute) || !Files.isExecutable(absolute)) {
-            throw new IllegalArgumentException("Chrome executable is not an executable regular file");
-        }
-        return absolute;
     }
 
     /** Acquire the configured model and/or native bridge once, when inference is first requested. */
@@ -568,8 +487,7 @@ public final class StandaloneMain {
                 "--reasoning-model", "--frontier-model", "--model-url", "--model-sha256",
                 "--model-cache-dir", "--mcp-stdio", "--agent", "--agent-endpoint", "--agent-token-env",
                 "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes",
-                "--workspace", "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
-                "--chrome-download", "--chrome-status", "--chrome-prepare",
+                "--workspace", "--agent-max-calls",
                 "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir", "--model-bytes", "--offline",
                 "--model-follow-redirects", "--model-download-timeout-seconds", "--model-max-bytes",
                 "--bridge-url", "--bridge-token-file");

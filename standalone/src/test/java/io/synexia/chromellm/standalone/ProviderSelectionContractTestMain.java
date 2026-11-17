@@ -18,18 +18,15 @@ public final class ProviderSelectionContractTestMain {
 
     public static void main(String[] args) throws Exception {
         check(StandaloneMain.parse(new String[0]).isEmpty());
-        check(StandaloneMain.parse(new String[] {"--backend", "chrome", "--chrome-status", "true",
-                "--chrome-profile", "dedicated-profile", "--chrome-headless", "true"})
-                .get("--backend").equals("chrome"));
-        reject(() -> StandaloneMain.main(new String[] {"--backend", "chrome",
-                "--chrome-status", "true", "--chrome-prepare", "true"}));
-        reject(() -> StandaloneMain.main(new String[] {"--backend", "cli", "--chrome-status", "true"}));
-        for (String incompatible : new String[] {"--prompt-file", "--stdio", "--mcp-stdio",
-                "--list-devices", "--max-tokens"}) {
-            reject(() -> StandaloneMain.main(new String[] {"--backend", "chrome",
-                    "--chrome-status", "true", incompatible, "true"}));
-            reject(() -> StandaloneMain.main(new String[] {"--backend", "chrome",
-                    "--chrome-prepare", "true", incompatible, "true"}));
+        // The browser provider is gone: its options are unknown and its name selects no backend.
+        for (String option : new String[] {"--chrome-bin", "--chrome-profile", "--chrome-headless",
+                "--chrome-download", "--chrome-status", "--chrome-prepare"}) {
+            try {
+                StandaloneMain.parse(new String[] {option, "true"});
+                throw new AssertionError("removed option accepted: " + option);
+            } catch (IllegalArgumentException refused) {
+                check(refused.getMessage().equals("unknown option " + option));
+            }
         }
         reject(() -> StandaloneMain.parse(new String[] {"--backend"}));
         reject(() -> StandaloneMain.parse(new String[] {"--backend", "cli", "--backend", "gemini"}));
@@ -69,7 +66,7 @@ public final class ProviderSelectionContractTestMain {
         Path executable = Path.of(System.getProperty("java.home"), "bin",
                 System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java");
         try {
-            chromeSelection(executable, temp);
+            chromeIsNotABackend(executable, temp);
             Files.writeString(prompt, "नमस्ते \uD83D\uDE42");
             check(StandaloneMain.readPrompt(prompt, true).equals("नमस्ते \uD83D\uDE42"));
             check(StandaloneMain.readPrompt(prompt, false).equals("नमस्ते \uD83D\uDE42"));
@@ -142,39 +139,17 @@ public final class ProviderSelectionContractTestMain {
         System.out.println("provider selection contract checks passed: " + checks);
     }
 
-    private static void chromeSelection(Path executable, Path temp) throws Exception {
-        Path profile = temp.resolve("dedicated-chrome");
-        Map<String, String> chrome = Map.of("--backend", "chrome", "--chrome-bin", executable.toString(),
-                "--chrome-profile", profile.toString());
-        try (ModelBackend backend = StandaloneMain.backend(chrome, Map.of())) {
-            check(backend.id().equals("chrome-built-in-ai"));
-            check(!Files.exists(profile)); // Provider selection is lazy and does not launch or provision.
+    private static void chromeIsNotABackend(Path executable, Path temp) throws Exception {
+        Path model = Files.writeString(temp.resolve("chrome-model.gguf"), "synthetic");
+        try {
+            StandaloneMain.backend(Map.of("--backend", "chrome", "--model", model.toString(),
+                    "--llama-bin", executable.toString()), Map.of()).close();
+            throw new AssertionError("chrome selected a backend");
+        } catch (IllegalArgumentException refused) {
+            check(refused.getMessage().contains("unknown backend (expected cli, jni, gemini or bridge)"));
+        } finally {
+            Files.deleteIfExists(model);
         }
-        try (ModelBackend backend = StandaloneMain.backend(Map.of("--backend", "chrome",
-                "--chrome-profile", profile.toString()), Map.of("CHROME_BIN", executable.toString()))) {
-            check(backend.id().equals("chrome-built-in-ai"));
-        }
-        for (String option : new String[] {"--model", "--llama-bin", "--jni-lib", "--context-tokens",
-                "--threads", "--gpu-layers", "--compute-backend", "--device-backend", "--device",
-                "--tier", "--fast-model", "--reasoning-model", "--frontier-model", "--model-url",
-                "--model-sha256", "--model-cache-dir", "--api-key-env", "--thinking-level", "--list-devices"}) {
-            Map<String, String> selected = new HashMap<>(chrome);
-            selected.put(option, "1");
-            rejectOption(option, () -> StandaloneMain.backend(selected, Map.of()));
-        }
-        for (String option : new String[] {"--chrome-bin", "--chrome-profile", "--chrome-headless",
-                "--chrome-download", "--chrome-status", "--chrome-prepare"}) {
-            rejectOption(option, () -> StandaloneMain.backend(Map.of("--backend", "gemini", option, "1"),
-                    Map.of("GEMINI_API_KEY", "test-key")));
-        }
-        for (String option : new String[] {"--chrome-headless", "--chrome-download"}) {
-            Map<String, String> selected = new HashMap<>(chrome);
-            selected.put(option, "yes");
-            reject(() -> StandaloneMain.backend(selected, Map.of()));
-        }
-        reject(() -> StandaloneMain.backend(Map.of("--backend", "chrome", "--chrome-bin", executable.toString()), Map.of()));
-        reject(() -> StandaloneMain.backend(Map.of("--backend", "chrome", "--chrome-profile", profile.toString(),
-                "--chrome-bin", ""), Map.of()));
     }
 
     private static void check(boolean condition) {

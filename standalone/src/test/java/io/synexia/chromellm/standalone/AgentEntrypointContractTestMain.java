@@ -19,7 +19,6 @@ public final class AgentEntrypointContractTestMain {
 
     public static void main(String[] args) throws Exception {
         commandLineAdmission();
-        chromeAgentModesAreRefusedBeforeSetup();
         goalPreflight();
         mcpDiscovery();
         mixedAgentCapabilities();
@@ -28,31 +27,6 @@ public final class AgentEntrypointContractTestMain {
         mcpFailureAndIsolation();
         fractionalRequestsDoNotTerminateSession();
         System.out.println("PASS agent CLI/MCP contracts: " + checks + " checks");
-    }
-
-    private static void chromeAgentModesAreRefusedBeforeSetup() throws Exception {
-        for (String mode : List.of("--chrome-status", "--chrome-prepare")) {
-            for (String[] authority : List.of(
-                    new String[] {"--workspace", "/unavailable-agent-workspace"},
-                    new String[] {"--agent-endpoint", "http://127.0.0.1:1",
-                            "--agent-token-env", "CHROMELLM_TEST_UNSET_AGENT_TOKEN"})) {
-                String[] args = new String[authority.length + 6];
-                args[0] = mode;
-                args[1] = "true";
-                args[2] = "--agent";
-                args[3] = "true";
-                args[4] = "--backend";
-                args[5] = "chrome";
-                System.arraycopy(authority, 0, args, 6, authority.length);
-                try {
-                    StandaloneMain.main(args);
-                    throw new AssertionError("Chrome setup accepted agent execution");
-                } catch (IllegalArgumentException refused) {
-                    // The mode conflict wins before goal, workspace, token or provider access.
-                    check(refused.getMessage().contains("--agent"));
-                }
-            }
-        }
     }
 
     private static void goalPreflight() throws Exception {

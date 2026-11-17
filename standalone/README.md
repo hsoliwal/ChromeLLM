@@ -1,77 +1,10 @@
 # ChromeLLM standalone Java 21 inference
 
-The module has no third-party Java runtime dependency. It uses the JDK modules `java.base`, `java.net.http` and `jdk.httpserver`. Select the local llama.cpp CLI/JNI, hosted Gemini API, or optional installed-Chrome built-in AI provider explicitly. The CLI/JNI providers run independently of Chrome; Dawn is an optional native compute dependency for local WebGPU inference.
+The module has no third-party Java runtime dependency. It uses the JDK modules `java.base`, `java.net.http` and `jdk.httpserver`. Select the local llama.cpp CLI/JNI, hosted Gemini API, or local chat-bridge provider explicitly. The module has no browser code; Dawn is an optional native compute dependency for local WebGPU inference.
 
 For optional analysis around a project build, use the reusable
 [pre-build and post-build GitHub Action](BUILD_AI_ACTION.md). It invokes this
 same Java CLI, records advice separately, and preserves the actual build result.
-
-## Installed Chrome built-in AI
-
-Select `--backend chrome` to let Java launch an installed Chrome executable with a dedicated profile and a small localhost page. Java owns the process, deadlines and request orchestration; the page invokes Chrome's `LanguageModel` API. The selected Chrome installation and its eligibility determine API availability. No browser, model weights or Chrome runtime library is bundled or downloaded by the Java launcher.
-
-The profile must be a new/empty directory on first use, or a directory already marked by ChromeLLM. Personal Chrome profiles, symbolic-link profiles and simultaneous use of one profile are refused. The profile is retained after shutdown so Chrome can reuse its own model assets on later jobs. An OS file lock remains held until the owned process exits. Each launch uses a new localhost port and document identity; Java never attaches to an existing personal tab or browser.
-
-Supply `--chrome-bin /absolute/path/to/chrome`, or set `CHROME_BIN`. If both are omitted, the CLI checks standard Chrome/Chromium installation paths for the current platform and reports a clear error when no executable is found. It does not install or modify the browser.
-
-### Availability and explicit preparation
-
-Availability does not create a model session, download weights or run a prompt:
-
-```sh
-java -cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
-  io.synexia.chromellm.standalone.StandaloneMain \
-  --backend chrome --chrome-profile "$HOME/.chromellm/chrome-ai-profile" \
-  --chrome-headless true --chrome-status true --timeout-seconds 60
-```
-
-Preparation is explicit. `--chrome-download true` authorizes Chrome-managed model provisioning. Java supplies a Chrome DevTools user-gesture request only for that authorized preparation; the page still checks Chrome's current activation and availability. Chrome may refuse provisioning because of API, hardware, policy, network or activation requirements. A headed bridge page also provides a **Prepare model** button for a trusted operator click.
-
-```sh
-java -cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
-  io.synexia.chromellm.standalone.StandaloneMain \
-  --backend chrome --chrome-profile "$HOME/.chromellm/chrome-ai-profile" \
-  --chrome-prepare true --chrome-download true --chrome-headless false \
-  --timeout-seconds 600
-```
-
-The setup modes emit a bounded JSON result. `--chrome-status` and `--chrome-prepare` are mutually exclusive and cannot be combined with prompts, stdio sessions, device listing, token limits or native-provider options. Chrome's state is authoritative: launching Chromium successfully does not establish that `LanguageModel` or an eligible model is available.
-
-### Inference and cancellation
-
-```sh
-java -cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
-  io.synexia.chromellm.standalone.StandaloneMain \
-  --backend chrome --chrome-profile "$HOME/.chromellm/chrome-ai-profile" \
-  --chrome-headless true --prompt-file prompt.txt --max-tokens 512 \
-  --timeout-seconds 180
-```
-
-Inference defaults to an already available model. Explicit `--chrome-download true` also permits preparation before inference; it never enables fallback to another provider. `--chrome-headless` defaults to `false` in the CLI. Headless model support depends on the selected browser and host.
-
-The request deadline includes launch, discovery, connection, preparation and inference. Interruption, cancellation or shutdown retires uncertain work and releases owned sessions; late results cannot satisfy a new request. Prompt and output bytes are bounded. Chrome does not expose a portable generation `maxTokens` option: after generation, the bridge measures the response with `measureContextUsage` and refuses a response above the requested budget. This is an admission bound on returned output, not a promise that generation stops at that token count.
-
-### Maven and a trusted GitHub runner
-
-Verification requires **JDK 21, Maven and Node.js 22**. Node runs the fixed JavaScript contract harness only; it is not a product runtime dependency.
-
-Default `mvn -f standalone/pom.xml verify` runs offline contract fixtures for process ownership, transport, lifecycle and provider selection. It does not launch an installed browser or download a model. The existing native Maven profiles remain available.
-
-The optional profiles invoke the same CLI. `CHROME_BIN` selects the executable. The default dedicated Maven profile path is `${user.home}/.chromellm/chrome-ai-profile`; override it when separate jobs need separate profiles.
-
-```sh
-mvn -f standalone/pom.xml -Pchrome-status verify
-mvn -f standalone/pom.xml -Pchrome-prepare \
-  -Dchromellm.chrome.allowDownload=true \
-  -Dchromellm.chrome.timeoutSeconds=600 verify
-mvn -f standalone/pom.xml -Pchrome-infer \
-  -Dchromellm.chrome.promptFile=/absolute/path/to/prompt.txt \
-  -Dchromellm.chrome.maxTokens=512 verify
-```
-
-Choose one Chrome profile per Maven invocation. `chromellm.chrome.profile`, `chromellm.chrome.headless`, `chromellm.chrome.timeoutSeconds`, `chromellm.chrome.allowDownload` and `chromellm.chrome.maxTokens` configure the corresponding CLI options. Status and inference default to headless; the preparation profile defaults to headed. Provisioning remains disabled unless explicitly enabled.
-
-The existing standalone workflow includes a manual `run_chrome_ai` job restricted to the repository's `main` branch and a Linux self-hosted runner labelled `chrome-ai`. Configure repository variables `CHROME_BIN` and `CHROMELLM_CHROME_PROFILE`, with a prepared and eligible model in that dedicated profile. Public pull-request events cannot schedule this job. It runs real availability and inference commands, uploads their logs, and fails on an unavailable model or inference error. Passing portable fixtures or having an installed browser does not count as a live model pass.
 
 ## A local chat-completions bridge
 
@@ -89,7 +22,7 @@ java -cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
 - `--bridge-token-file` names a file holding the bearer token (at most 4096 printable ASCII characters, surrounding whitespace ignored). Without it no `Authorization` header is sent.
 - `--model` defaults to `chrome-gemini-nano`.
 - The request is one non-streaming message with `max_tokens` from `--max-tokens`. The reply text is `choices[0].message.content`. A non-2xx status, an `error` object, no choices or blank text is an error. Error messages never carry the token, the response body or the transport cause. The response is read up to 4 MiB.
-- The backend never falls back to another provider. The model-download, llama.cpp, JNI, Gemini and Chrome options are refused with it.
+- The backend never falls back to another provider. The model-download, llama.cpp, JNI and Gemini options are refused with it.
 
 ## Opt-in lazy local model artifacts
 
@@ -149,7 +82,7 @@ Standalone mode now exposes an MCP-compatible stdio server separately from the l
 `ping`, and three bounded tools: `backend_status`, `infer_text`, and `plan_steps`.
 The planning tool returns candidate steps without executing them; its admission
 rules are documented in [AGENT_PLANNING_CONTRACT.md](AGENT_PLANNING_CONTRACT.md).
-The stdio transport does not require Node or a browser. The explicitly selected Chrome provider owns its separate localhost page and browser process.
+The stdio transport does not require Node or a browser.
 
 ```sh
 java --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
@@ -163,9 +96,8 @@ lazy-acquisition flags `--model-url`, `--model-sha256`, `--model-cache-dir`.
 MCP initialization and listing tools do not download or initialize a lazy model;
 `infer_text` initiates acquisition at first use.
 
-This endpoint is an MCP **server**, not browser WebMCP. Chrome WebMCP currently
-registers client-side page tools through `document.modelContext` and requires
-a separate browser integration. The existing CLM1 framing remains available,
+This endpoint is an MCP **server**; ChromeLLM has no browser-page (WebMCP)
+integration. The existing CLM1 framing remains available,
 unmodified. The protocol restrictions and error semantics are specified in
 [MCP_STDIO_CONTRACT.md](MCP_STDIO_CONTRACT.md).
 

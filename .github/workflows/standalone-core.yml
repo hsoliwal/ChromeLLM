@@ -2,11 +2,6 @@ name: Standalone inference
 on:
   workflow_dispatch:
     inputs:
-      run_chrome_ai:
-        description: Qualify Chrome AI before and after Maven on the trusted chrome-ai runner
-        type: boolean
-        required: true
-        default: false
       native_repository:
         description: Repository containing the native source (private sources require NATIVE_SOURCE_TOKEN)
         type: string
@@ -23,9 +18,9 @@ on:
         required: true
         default: false
   push:
-    paths: ['standalone/**', '.github/actions/build-ai/**', '.github/workflows/standalone-core.yml', '.github/workflows/build-with-ai.yml']
+    paths: ['standalone/**', '.github/actions/build-ai/**', '.github/workflows/standalone-core.yml']
   pull_request:
-    paths: ['standalone/**', '.github/actions/build-ai/**', '.github/workflows/standalone-core.yml', '.github/workflows/build-with-ai.yml']
+    paths: ['standalone/**', '.github/actions/build-ai/**', '.github/workflows/standalone-core.yml']
 permissions:
   contents: read
 
@@ -262,125 +257,6 @@ jobs:
             ${{ runner.temp }}/real-model-offline.log
           retention-days: 7
 
-  chrome-ai-live:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.run_chrome_ai }}
-    runs-on: [self-hosted, linux, chrome-ai]
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    concurrency:
-      group: ${{ github.repository }}-chrome-ai-live
-      cancel-in-progress: false
-    env:
-      CHROME_BIN: ${{ vars.CHROME_BIN }}
-      CHROMELLM_CHROME_PROFILE: ${{ vars.CHROMELLM_CHROME_PROFILE }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-          cache-dependency-path: standalone/pom.xml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Require an explicitly configured dedicated profile
-        run: |
-          test -n "$CHROMELLM_CHROME_PROFILE"
-          test -n "$CHROME_BIN"
-          test -x "$CHROME_BIN"
-      - name: Qualify and retain the provider independently of the analysed build
-        id: engine
-        run: |
-          set -euo pipefail
-          mvn -B -ntp -f standalone/pom.xml verify
-          engine_dir=$(mktemp -d "$RUNNER_TEMP/chromellm-engine.XXXXXX")
-          cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar "$engine_dir/engine.jar"
-          jar_sha256=$(sha256sum "$engine_dir/engine.jar")
-          jar_sha256=${jar_sha256%% *}
-          printf '%s\n' \
-            'Review the upcoming Maven verify build of ChromeLLM.' \
-            'Suggest concise checks for Java, native-provider and compatibility regressions.' \
-            'Treat this request as advisory. The compiler and tests determine build success.' \
-            "Source commit: $GITHUB_SHA" > "$engine_dir/pre-build.txt"
-          printf 'jar=%s\nsha256=%s\nprompt=%s\n' \
-            "$engine_dir/engine.jar" "$jar_sha256" "$engine_dir/pre-build.txt" >> "$GITHUB_OUTPUT"
-      - name: Read installed Chrome availability without provisioning
-        continue-on-error: true
-        env:
-          ENGINE_JAR: ${{ steps.engine.outputs.jar }}
-        run: |
-          set -o pipefail
-          java -cp "$ENGINE_JAR" io.synexia.chromellm.standalone.StandaloneMain \
-            --backend chrome --chrome-profile "$CHROMELLM_CHROME_PROFILE" \
-            --chrome-headless true --chrome-status true --timeout-seconds 60 \
-            2>&1 | tee "$RUNNER_TEMP/chrome-status.log"
-      - name: Chrome AI pre-build suggestions
-        id: pre
-        uses: ./.github/actions/build-ai
-        continue-on-error: true
-        timeout-minutes: 12
-        with:
-          phase: pre-build
-          jar: ${{ steps.engine.outputs.jar }}
-          jar-sha256: ${{ steps.engine.outputs.sha256 }}
-          prompt-file: ${{ steps.engine.outputs.prompt }}
-          chrome-bin: ${{ env.CHROME_BIN }}
-          chrome-profile: ${{ env.CHROMELLM_CHROME_PROFILE }}
-          allow-download: 'true'
-          timeout-seconds: '600'
-      - name: Build and verify with the authoritative Maven result
-        id: build
-        run: |
-          set -o pipefail
-          mvn -B -ntp -f standalone/pom.xml verify \
-            2>&1 | tee "$RUNNER_TEMP/chromellm-build.log"
-      - name: Chrome AI post-build diagnosis
-        id: post
-        if: >-
-          ${{ !cancelled() &&
-              (steps.build.outcome == 'success' || steps.build.outcome == 'failure') }}
-        uses: ./.github/actions/build-ai
-        continue-on-error: true
-        timeout-minutes: 5
-        with:
-          phase: post-build
-          jar: ${{ steps.engine.outputs.jar }}
-          jar-sha256: ${{ steps.engine.outputs.sha256 }}
-          build-outcome: ${{ steps.build.outcome }}
-          build-log: ${{ runner.temp }}/chromellm-build.log
-          chrome-bin: ${{ env.CHROME_BIN }}
-          chrome-profile: ${{ env.CHROMELLM_CHROME_PROFILE }}
-          allow-download: 'true'
-          timeout-seconds: '180'
-      - name: Require real inference evidence for this explicit live qualification
-        if: >-
-          ${{ !cancelled() &&
-              (steps.build.outcome == 'success' || steps.build.outcome == 'failure') }}
-        env:
-          PRE_STATUS: ${{ steps.pre.outputs.status }}
-          POST_STATUS: ${{ steps.post.outputs.status }}
-        run: |
-          test "$PRE_STATUS" = completed
-          test "$POST_STATUS" = completed
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: installed-chrome-build-advice
-          path: |
-            ${{ runner.temp }}/chrome-status.log
-            ${{ runner.temp }}/chromellm-build.log
-            ${{ steps.pre.outputs.report-dir }}
-            ${{ steps.post.outputs.report-dir }}
-          if-no-files-found: ignore
-          retention-days: 7
   native-binaries:
     runs-on: ubuntu-24.04
     timeout-minutes: 35

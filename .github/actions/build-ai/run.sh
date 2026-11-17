@@ -79,14 +79,12 @@ enabled=${BUILD_AI_ENABLED:-true}
 boolean enabled "$enabled"
 if [[ "$enabled" == false ]]; then status=disabled; exit 0; fi
 
-case "${BUILD_AI_PROVIDER:-chrome}" in
-  chrome|jni|cli) provider=${BUILD_AI_PROVIDER:-chrome} ;;
-  *) fail 'provider must be chrome, jni, or cli' ;;
+case "${BUILD_AI_PROVIDER:-cli}" in
+  jni|cli) provider=${BUILD_AI_PROVIDER:-cli} ;;
+  *) fail 'provider must be jni or cli' ;;
 esac
 allow_download=${BUILD_AI_ALLOW_DOWNLOAD:-true}
-headless=${BUILD_AI_HEADLESS:-true}
 boolean allow-download "$allow_download"
-boolean headless "$headless"
 max_tokens=$(integer max-tokens "${BUILD_AI_MAX_TOKENS:-512}" 1 32768)
 timeout_seconds=$(integer timeout-seconds "${BUILD_AI_TIMEOUT_SECONDS:-180}" 1 3600)
 max_input=$(integer max-input-bytes "${BUILD_AI_MAX_INPUT_BYTES:-65536}" 1024 1048576)
@@ -146,37 +144,26 @@ prompt_hash=$(digest "$packet")
 args=(-cp "$jar" io.synexia.chromellm.standalone.StandaloneMain
   --backend "$provider" --prompt-file "$packet" --max-tokens "$max_tokens"
   --timeout-seconds "$timeout_seconds")
-if [[ "$provider" == chrome ]]; then
-  [[ -n "${BUILD_AI_CHROME_PROFILE:-}" ]] || fail 'chrome-profile is required for the Chrome provider'
-  for native_option in BUILD_AI_MODEL BUILD_AI_MODEL_URL BUILD_AI_MODEL_SHA256 BUILD_AI_MODEL_CACHE_DIR BUILD_AI_JNI_LIBRARY BUILD_AI_LLAMA_BIN; do
-    [[ -z "${!native_option:-}" ]] || fail 'native options cannot be combined with the Chrome provider'
-  done
-  args+=(--chrome-profile "$BUILD_AI_CHROME_PROFILE" --chrome-headless "$headless"
-    --chrome-download "$allow_download")
-  if [[ -n "${BUILD_AI_CHROME_BIN:-}" ]]; then args+=(--chrome-bin "$BUILD_AI_CHROME_BIN"); fi
+if [[ "$provider" == jni ]]; then
+  regular_file jni-library "${BUILD_AI_JNI_LIBRARY:-}"
+  [[ -z "${BUILD_AI_LLAMA_BIN:-}" ]] || fail 'llama-bin requires the CLI provider'
+  args+=(--jni-lib "$BUILD_AI_JNI_LIBRARY")
 else
-  [[ -z "${BUILD_AI_CHROME_PROFILE:-}" && -z "${BUILD_AI_CHROME_BIN:-}" ]] || fail 'Chrome options cannot be combined with a native provider'
-  if [[ "$provider" == jni ]]; then
-    regular_file jni-library "${BUILD_AI_JNI_LIBRARY:-}"
-    [[ -z "${BUILD_AI_LLAMA_BIN:-}" ]] || fail 'llama-bin requires the CLI provider'
-    args+=(--jni-lib "$BUILD_AI_JNI_LIBRARY")
-  else
-    regular_file llama-bin "${BUILD_AI_LLAMA_BIN:-}"
-    [[ -x "$BUILD_AI_LLAMA_BIN" ]] || fail 'llama-bin must be executable'
-    [[ -z "${BUILD_AI_JNI_LIBRARY:-}" ]] || fail 'jni-library requires the JNI provider'
-    args+=(--llama-bin "$BUILD_AI_LLAMA_BIN")
-  fi
-  if [[ -n "${BUILD_AI_MODEL_URL:-}" ]]; then
-    [[ "$allow_download" == true ]] || fail 'native lazy acquisition requires allow-download; use an explicit model file for offline advice'
-    [[ -z "${BUILD_AI_MODEL:-}" ]] || fail 'model and model-url are exclusive'
-    [[ -n "${BUILD_AI_MODEL_SHA256:-}" && -n "${BUILD_AI_MODEL_CACHE_DIR:-}" ]] || fail 'model-url requires model-sha256 and model-cache-dir'
-    args+=(--model-url "$BUILD_AI_MODEL_URL" --model-sha256 "$BUILD_AI_MODEL_SHA256"
-      --model-cache-dir "$BUILD_AI_MODEL_CACHE_DIR")
-  else
-    [[ -z "${BUILD_AI_MODEL_SHA256:-}" && -z "${BUILD_AI_MODEL_CACHE_DIR:-}" ]] || fail 'model digest/cache options require model-url'
-    regular_file model "${BUILD_AI_MODEL:-}"
-    args+=(--model "$BUILD_AI_MODEL")
-  fi
+  regular_file llama-bin "${BUILD_AI_LLAMA_BIN:-}"
+  [[ -x "$BUILD_AI_LLAMA_BIN" ]] || fail 'llama-bin must be executable'
+  [[ -z "${BUILD_AI_JNI_LIBRARY:-}" ]] || fail 'jni-library requires the JNI provider'
+  args+=(--llama-bin "$BUILD_AI_LLAMA_BIN")
+fi
+if [[ -n "${BUILD_AI_MODEL_URL:-}" ]]; then
+  [[ "$allow_download" == true ]] || fail 'native lazy acquisition requires allow-download; use an explicit model file for offline advice'
+  [[ -z "${BUILD_AI_MODEL:-}" ]] || fail 'model and model-url are exclusive'
+  [[ -n "${BUILD_AI_MODEL_SHA256:-}" && -n "${BUILD_AI_MODEL_CACHE_DIR:-}" ]] || fail 'model-url requires model-sha256 and model-cache-dir'
+  args+=(--model-url "$BUILD_AI_MODEL_URL" --model-sha256 "$BUILD_AI_MODEL_SHA256"
+    --model-cache-dir "$BUILD_AI_MODEL_CACHE_DIR")
+else
+  [[ -z "${BUILD_AI_MODEL_SHA256:-}" && -z "${BUILD_AI_MODEL_CACHE_DIR:-}" ]] || fail 'model digest/cache options require model-url'
+  regular_file model "${BUILD_AI_MODEL:-}"
+  args+=(--model "$BUILD_AI_MODEL")
 fi
 
 # Bound even a misbehaving Java process. TERM permits the provider's owned cleanup;

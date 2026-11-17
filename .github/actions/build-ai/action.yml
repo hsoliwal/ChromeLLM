@@ -13,23 +13,16 @@ inputs:
   jar-sha256:
     description: Expected SHA-256 of the standalone JAR.
   provider:
-    description: Explicit chrome, jni, or cli provider; no automatic fallback.
-    default: chrome
+    description: Explicit jni or cli provider; no automatic fallback.
+    default: cli
   prompt-file:
     description: UTF-8 source/diagnostic packet; required for pre-build, optional instructions for post-build.
   build-log:
     description: Existing build log; required for post-build. Only a bounded complete-line tail is used.
   build-outcome:
     description: Actual success or failure from steps.build.outcome; required for post-build.
-  chrome-bin:
-    description: Installed Chrome executable. Empty uses ChromeLLM discovery.
-  chrome-profile:
-    description: Dedicated ChromeLLM profile, retained for model reuse.
-  headless:
-    description: Request headless Chrome. Eligibility depends on the selected browser and host.
-    default: 'true'
   allow-download:
-    description: Permit provider-managed lazy model preparation. False requires a warm Chrome model or explicit native model file.
+    description: Permit provider-managed lazy model preparation. False requires an explicit native model file.
     default: 'true'
   jni-library:
     description: Native library for provider jni.
@@ -79,9 +72,6 @@ runs:
         BUILD_AI_PROMPT_FILE: ${{ inputs.prompt-file }}
         BUILD_AI_BUILD_LOG: ${{ inputs.build-log }}
         BUILD_AI_BUILD_OUTCOME: ${{ inputs.build-outcome }}
-        BUILD_AI_CHROME_BIN: ${{ inputs.chrome-bin }}
-        BUILD_AI_CHROME_PROFILE: ${{ inputs.chrome-profile }}
-        BUILD_AI_HEADLESS: ${{ inputs.headless }}
         BUILD_AI_ALLOW_DOWNLOAD: ${{ inputs.allow-download }}
         BUILD_AI_JNI_LIBRARY: ${{ inputs.jni-library }}
         BUILD_AI_LLAMA_BIN: ${{ inputs.llama-bin }}
