@@ -224,9 +224,21 @@ public final class StandaloneMain {
         if (!"jni".equals(provider)) {
             rejectOptions(options, "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir");
         }
-        if ("chrome".equals(provider) || "gemini".equals(provider)) {
+        if ("chrome".equals(provider) || "gemini".equals(provider) || "bridge".equals(provider)) {
             rejectOptions(options, "--model-bytes", "--offline", "--model-follow-redirects",
                     "--model-download-timeout-seconds", "--model-max-bytes");
+        }
+        if (!"bridge".equals(provider)) {
+            rejectOptions(options, "--bridge-url", "--bridge-token-file");
+        }
+        if ("bridge".equals(provider)) {
+            rejectOptions(options, "--model-url", "--model-sha256", "--model-cache-dir", "--llama-bin", "--jni-lib",
+                    "--context-tokens", "--threads", "--gpu-layers", "--compute-backend", "--device-backend",
+                    "--device", "--tier", "--fast-model", "--reasoning-model", "--frontier-model",
+                    "--thinking-level", "--api-key-env", "--list-devices");
+            return new ChatBridgeBackend(
+                    URI.create(options.getOrDefault("--bridge-url", ChatBridgeBackend.DEFAULT_SERVICE.toString())),
+                    options.getOrDefault("--model", ChatBridgeBackend.DEFAULT_MODEL), bridgeToken(options));
         }
         if ("chrome".equals(provider)) {
             rejectOptions(options, "--model", "--llama-bin", "--jni-lib", "--context-tokens", "--threads",
@@ -286,8 +298,20 @@ public final class StandaloneMain {
                 yield new LlamaCppJniBackend(jniLibrary(options), model, context, threads, layers,
                         options.getOrDefault("--compute-backend", "auto"));
             }
-            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni, gemini or chrome)");
+            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni, gemini, chrome or bridge)");
         };
+    }
+
+    /** The bearer token for the chat bridge, or empty when no token file is named. Never echoed. */
+    private static String bridgeToken(Map<String, String> options) throws IOException {
+        if (!options.containsKey("--bridge-token-file")) return "";
+        Path file = Path.of(required(options, "--bridge-token-file"));
+        if (!Files.isRegularFile(file) || Files.size(file) > 8192) {
+            throw new IllegalArgumentException("--bridge-token-file must name a regular file of at most 8 KiB");
+        }
+        String token = Files.readString(file, StandardCharsets.US_ASCII).strip();
+        if (token.isEmpty()) throw new IllegalArgumentException("--bridge-token-file is empty");
+        return token;
     }
 
     private static Path jniLibrary(Map<String, String> options) throws IOException {
@@ -547,7 +571,8 @@ public final class StandaloneMain {
                 "--workspace", "--agent-max-calls", "--chrome-bin", "--chrome-profile", "--chrome-headless",
                 "--chrome-download", "--chrome-status", "--chrome-prepare",
                 "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir", "--model-bytes", "--offline",
-                "--model-follow-redirects", "--model-download-timeout-seconds", "--model-max-bytes");
+                "--model-follow-redirects", "--model-download-timeout-seconds", "--model-max-bytes",
+                "--bridge-url", "--bridge-token-file");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String option = args[i];
