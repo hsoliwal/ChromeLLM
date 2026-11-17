@@ -2,7 +2,7 @@
 
 ChromeLLM provides an independent Java 21 model runtime with explicit local CLI/JNI and hosted Gemini providers. It has no browser code: the installed-Chrome provider, the WebMCP browser adapter and the chat bridge to a Chrome-served model were removed on 2026-11-17. Historical fork attribution remains in LICENSE, NOTICE, THIRD_PARTY.md and Git history.
 
-- [standalone/](standalone/README.md) is a separately built JDK-only Java 21 module using `java.base`, `java.net.http` and `jdk.httpserver`. Select local llama.cpp through CLI/JNI, **Gemini 4 Hydrogen through the Gemini API**. Native inference can explicitly select the existing **Dawn/WebGPU provider in llama.cpp**.
+- [standalone/](standalone/README.md) is a separately built JDK-only Java 21 module using `java.base` and `java.net.http`. Select local llama.cpp through CLI/JNI, **Gemini 4 Hydrogen through the Gemini API**. Native inference can explicitly select the existing **Dawn/WebGPU provider in llama.cpp**.
 - `src/main/java/io/synexia/chromellm/` owns separate diffusion/GPU/vision/video/media functionality; the diffusion CLI no longer calls Chrome.
 - `native/` and the root CMake build contain media JNI adapters; `standalone/native/` contains the independent llama.cpp JNI library with a test-only synthetic backend.
 

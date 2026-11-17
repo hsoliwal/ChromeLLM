@@ -189,10 +189,10 @@ and inventory checks; it does not assert a distributable license closure.
 A real distribution CI run must supply the reviewed source-derived notices.
 Successful packaging and loading do not imply model or physical GPU inference.
 
-The current optional installed-Chrome Java provider's Apache-2.0 notice and
+The removed installed-Chrome Java provider's Apache-2.0 notice and
 license are retained in `licenses/ChromeLLM/standalone/NOTICE.md` and
 `licenses/ChromeLLM/LICENSES/Apache-2.0.txt`, so the bundled THIRD_PARTY links
-remain usable. This preserves current attribution; the native archive does
+remain usable. This preserves historical attribution; the native archive does
 not include Chrome, Chrome model assets, or that provider's Java classes.
 
 ## Distributable runtime and downloaded model tests
