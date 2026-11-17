@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Explicit provider selection for local, hosted or chat-bridge inference and bounded stdio sessions. */
+/** Explicit provider selection for local or hosted inference and bounded stdio sessions. */
 public final class StandaloneMain {
     private StandaloneMain() { }
 
@@ -209,21 +209,9 @@ public final class StandaloneMain {
         if (!"jni".equals(provider)) {
             rejectOptions(options, "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir");
         }
-        if ("gemini".equals(provider) || "bridge".equals(provider)) {
+        if ("gemini".equals(provider)) {
             rejectOptions(options, "--model-bytes", "--offline", "--model-follow-redirects",
                     "--model-download-timeout-seconds", "--model-max-bytes");
-        }
-        if (!"bridge".equals(provider)) {
-            rejectOptions(options, "--bridge-url", "--bridge-token-file");
-        }
-        if ("bridge".equals(provider)) {
-            rejectOptions(options, "--model-url", "--model-sha256", "--model-cache-dir", "--llama-bin", "--jni-lib",
-                    "--context-tokens", "--threads", "--gpu-layers", "--compute-backend", "--device-backend",
-                    "--device", "--tier", "--fast-model", "--reasoning-model", "--frontier-model",
-                    "--thinking-level", "--api-key-env", "--list-devices");
-            return new ChatBridgeBackend(
-                    URI.create(options.getOrDefault("--bridge-url", ChatBridgeBackend.DEFAULT_SERVICE.toString())),
-                    options.getOrDefault("--model", ChatBridgeBackend.DEFAULT_MODEL), bridgeToken(options));
         }
         if ("gemini".equals(provider)) {
             rejectOptions(options, "--model-url", "--model-sha256", "--model-cache-dir");
@@ -274,20 +262,8 @@ public final class StandaloneMain {
                 yield new LlamaCppJniBackend(jniLibrary(options), model, context, threads, layers,
                         options.getOrDefault("--compute-backend", "auto"));
             }
-            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni, gemini or bridge)");
+            default -> throw new IllegalArgumentException("unknown backend (expected cli, jni or gemini)");
         };
-    }
-
-    /** The bearer token for the chat bridge, or empty when no token file is named. Never echoed. */
-    private static String bridgeToken(Map<String, String> options) throws IOException {
-        if (!options.containsKey("--bridge-token-file")) return "";
-        Path file = Path.of(required(options, "--bridge-token-file"));
-        if (!Files.isRegularFile(file) || Files.size(file) > 8192) {
-            throw new IllegalArgumentException("--bridge-token-file must name a regular file of at most 8 KiB");
-        }
-        String token = Files.readString(file, StandardCharsets.US_ASCII).strip();
-        if (token.isEmpty()) throw new IllegalArgumentException("--bridge-token-file is empty");
-        return token;
     }
 
     private static Path jniLibrary(Map<String, String> options) throws IOException {
@@ -489,8 +465,7 @@ public final class StandaloneMain {
                 "--agent-max-steps", "--agent-max-context-bytes", "--agent-max-tool-result-bytes",
                 "--workspace", "--agent-max-calls",
                 "--jni-url", "--jni-sha256", "--jni-bytes", "--jni-cache-dir", "--model-bytes", "--offline",
-                "--model-follow-redirects", "--model-download-timeout-seconds", "--model-max-bytes",
-                "--bridge-url", "--bridge-token-file");
+                "--model-follow-redirects", "--model-download-timeout-seconds", "--model-max-bytes");
         Map<String, String> options = new HashMap<>();
         for (int i = 0; i < args.length; i += 2) {
             String option = args[i];

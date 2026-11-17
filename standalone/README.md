@@ -1,28 +1,10 @@
 # ChromeLLM standalone Java 21 inference
 
-The module has no third-party Java runtime dependency. It uses the JDK modules `java.base`, `java.net.http` and `jdk.httpserver`. Select the local llama.cpp CLI/JNI, hosted Gemini API, or local chat-bridge provider explicitly. The module has no browser code; Dawn is an optional native compute dependency for local WebGPU inference.
+The module has no third-party Java runtime dependency. It uses the JDK modules `java.base`, `java.net.http` and `jdk.httpserver`. Select the local llama.cpp CLI/JNI or hosted Gemini API provider explicitly. The module has no browser code; Dawn is an optional native compute dependency for local WebGPU inference.
 
 For optional analysis around a project build, use the reusable
 [pre-build and post-build GitHub Action](BUILD_AI_ACTION.md). It invokes this
 same Java CLI, records advice separately, and preserves the actual build result.
-
-## A local chat-completions bridge
-
-Select `--backend bridge` to send the prompt to an OpenAI-compatible `chat/completions` endpoint on this machine, for example a bridge in front of the Chrome on-device model that a running Chrome already serves. This is the way to reach that model when Chrome will not provision it in a dedicated profile: Chrome removes the on-device model from a profile whose volume lacks the free space its download needs, even when the weights are already present.
-
-```sh
-java -cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
-  io.synexia.chromellm.standalone.StandaloneMain \
-  --backend bridge --bridge-url http://127.0.0.1:11435/v1/ \
-  --bridge-token-file /path/to/bridge.token --model chrome-gemini-nano \
-  --prompt-file prompt.txt --max-tokens 256 --timeout-seconds 120
-```
-
-- `--bridge-url` defaults to `http://127.0.0.1:11435/v1/`. Only a loopback `http` URL (`127.0.0.1`, `[::1]` or `localhost`) whose path ends with `/` is accepted, so the prompt does not leave the machine; the request goes to `<url>chat/completions`.
-- `--bridge-token-file` names a file holding the bearer token (at most 4096 printable ASCII characters, surrounding whitespace ignored). Without it no `Authorization` header is sent.
-- `--model` defaults to `chrome-gemini-nano`.
-- The request is one non-streaming message with `max_tokens` from `--max-tokens`. The reply text is `choices[0].message.content`. A non-2xx status, an `error` object, no choices or blank text is an error. Error messages never carry the token, the response body or the transport cause. The response is read up to 4 MiB.
-- The backend never falls back to another provider. The model-download, llama.cpp, JNI and Gemini options are refused with it.
 
 ## Opt-in lazy local model artifacts
 

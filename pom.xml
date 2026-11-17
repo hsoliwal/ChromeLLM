@@ -30,9 +30,9 @@
          The engine needs Java 21 or newer. The launcher is the first of: chromellm.java, the environment
          variable CHROMELLM_JAVA_HOME, the Java that runs Maven when it is 21 or newer, JAVA_HOME_21_X64,
          JAVA21_HOME.
-         The bridge provider (the default) sends prompts to the local OpenAI-compatible chat bridge; give its
-         token file in chromellm.backend.args with the bridge-token-file option. Further provider
-         options go in chromellm.backend.args as option value pairs.
+         The cli provider (the default) runs a local llama.cpp executable; name it and a GGUF model in
+         chromellm.backend.args with the llama-bin and model options. Further provider options go in
+         chromellm.backend.args as option value pairs.
          The post-build step is bound to verify, so it runs only when the module built. After a failed build, run
          it on its own with the saved log:
            mvn -l build.log verify
@@ -49,7 +49,7 @@
       <properties>
         <chromellm.jar>${user.home}/.m2/repository/io/synexia/chromellm/chromellm-standalone/0.1.0-SNAPSHOT/chromellm-standalone-0.1.0-SNAPSHOT.jar</chromellm.jar>
         <chromellm.java></chromellm.java>
-        <chromellm.backend>bridge</chromellm.backend>
+        <chromellm.backend>cli</chromellm.backend>
         <chromellm.backend.args></chromellm.backend.args>
         <chromellm.maxTokens>512</chromellm.maxTokens>
         <chromellm.timeoutSeconds>120</chromellm.timeoutSeconds>
