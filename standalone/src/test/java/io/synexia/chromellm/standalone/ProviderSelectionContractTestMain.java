@@ -146,7 +146,7 @@ public final class ProviderSelectionContractTestMain {
                     "--llama-bin", executable.toString()), Map.of()).close();
             throw new AssertionError("chrome selected a backend");
         } catch (IllegalArgumentException refused) {
-            check(refused.getMessage().contains("unknown backend (expected cli, jni, gemini or bridge)"));
+            check(refused.getMessage().contains("unknown backend (expected cli, jni or gemini)"));
         } finally {
             Files.deleteIfExists(model);
         }
