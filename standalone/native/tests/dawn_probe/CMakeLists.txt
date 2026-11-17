@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(chromellm_dawn_package_probe LANGUAGES CXX)
-find_package(Dawn REQUIRED CONFIG)
+find_package(Dawn REQUIRED CONFIG PATH_SUFFIXES lib64/cmake/Dawn lib/cmake/Dawn)
 if(NOT TARGET dawn::webgpu_dawn)
   message(FATAL_ERROR "Pinned Dawn package does not export dawn::webgpu_dawn")
 endif()
