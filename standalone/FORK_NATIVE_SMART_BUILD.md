@@ -183,8 +183,9 @@ checks. Cross-platform compatibility is established by each platform's runtime j
 
 ## Maven profile combinations
 
-The ordinary `mvn -f standalone/pom.xml verify` runs Java and fixed browser-script
-contracts using JDK 21, Maven and Node.js 22, without native or model provisioning.
+The ordinary `mvn -f standalone/pom.xml verify` runs Java contracts using JDK 21
+and Maven, without native or model provisioning. It does not require Node.js or
+a browser installation.
 Dependency resolution follows Maven's normal online/offline policy.
 Its Java contract suite also verifies the fork-source pin and inference recipe;
 no native library or model is required by those offline test fixtures.
@@ -254,7 +255,8 @@ synthetic JNI, and all CPU matrix jobs pass. It includes raw native assets for
 `jniUrl`, complete ZIP bundles with notices and platform requirements, the tested
 Java JAR, and `runtime-manifest.properties`. Native source repository/commit can be
 selected explicitly; private sources require the configured `NATIVE_SOURCE_TOKEN`.
-The separate Dawn test and opt-in installed-Chrome test retain their own jobs.
+The separate native Dawn tests retain their own jobs. The installed-Chrome provider
+and its browser tests have been removed.
 CPU success makes no claim about WebGPU execution or generated-code quality.
 
 ## Review-only outputs and source identities

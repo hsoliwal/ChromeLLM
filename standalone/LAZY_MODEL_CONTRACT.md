@@ -32,8 +32,8 @@ explicit `--jni-cache-dir` and never treats a downloaded archive as a native JAR
 URLs must use HTTPS without credentials or fragments. SHA-256 pins contain 64 hex
 digits. Length pins must be positive and bounded to 64 GiB. Partial descriptors,
 contradictory local/remote selections, invalid compute policies, and invalid numeric
-parameters are rejected before acquisition. Hosted Gemini and installed-Chrome
-providers reject these native acquisition options.
+parameters are rejected before acquisition. The hosted Gemini provider rejects
+these native acquisition options; the installed-Chrome provider has been removed.
 
 The explicitly configured cache directory is created on first online acquisition if
 necessary. No implicit user-home location is chosen for URL artifacts. Direct internal

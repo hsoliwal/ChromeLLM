@@ -1,6 +1,14 @@
 # SPDX-License-Identifier: MIT
 cmake_minimum_required(VERSION 3.22)
+# Check explicit targets before project(), and toolchain-selected targets after.
+if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  message(FATAL_ERROR "ChromeLLM builds native JNI runtimes; Emscripten/browser targets are unsupported")
+endif()
 project(chromellm_native_build LANGUAGES NONE)
+
+if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  message(FATAL_ERROR "ChromeLLM builds native JNI runtimes; Emscripten/browser targets are unsupported")
+endif()
 
 include(ExternalProject)
 
@@ -22,7 +30,7 @@ set(CHROMELLM_NATIVE_STAGE "${CMAKE_BINARY_DIR}/stage" CACHE PATH "Native artifa
 set(CHROMELLM_BUILD_CONFIGURATION "Release" CACHE STRING "Native build configuration")
 set(CHROMELLM_BUILD_PARALLEL "2" CACHE STRING "Maximum native compile jobs")
 set(CHROMELLM_LLAMA_REVISION "650ac3739d993e1d425f2d5db3c4205b3606cc30" CACHE STRING "Pinned llama.cpp fork commit")
-set(CHROMELLM_DAWN_REVISION "783c427ce925698f4ef9b5699d8c5a17da90486f" CACHE STRING "Pinned Dawn fork commit")
+set(CHROMELLM_DAWN_REVISION "e1fc79e8f039ccf730f1e40b679e070b2667cb49" CACHE STRING "Pinned native Dawn fork commit")
 
 if(NOT CHROMELLM_BUILD_PARALLEL MATCHES "^[1-9][0-9]*$")
   message(FATAL_ERROR "CHROMELLM_BUILD_PARALLEL must be a positive integer")
@@ -102,7 +110,6 @@ if(CHROMELLM_WEBGPU AND NOT dawn_prefix)
       -DBUILD_SHARED_LIBS:BOOL=OFF
       -DDAWN_BUILD_TESTS:BOOL=OFF
       -DDAWN_BUILD_SAMPLES:BOOL=OFF
-      -DDAWN_BUILD_NODE_BINDINGS:BOOL=OFF
       -DDAWN_BUILD_PROTOBUF:BOOL=OFF
       -DDAWN_USE_GLFW:BOOL=OFF
       -DDAWN_USE_X11:BOOL=OFF

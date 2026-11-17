@@ -29,9 +29,6 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - name: Offline pinned archive and cache regressions
         shell: bash
         run: |

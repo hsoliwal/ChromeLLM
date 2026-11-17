@@ -39,9 +39,6 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - run: mvn -B -ntp -f standalone/pom.xml verify
       - name: Verify the optional pre-build and post-build action contract
         if: runner.os == 'Linux'
@@ -102,7 +99,11 @@ jobs:
           test ! -e standalone/target/fork-native/CMakeCache.txt
       - name: Verify JDK-only runtime modules
         shell: bash
-        run: test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar | tr -d '\r')" = java.base,java.net.http,jdk.httpserver
+        run: |
+          test "$(jdeps --print-module-deps standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar | tr -d '\r')" = java.base,java.net.http
+          java --limit-modules java.base,java.net.http \
+            --module-path standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+            --add-modules io.synexia.chromellm.standalone --validate-modules
   jni-synthetic:
     strategy:
       fail-fast: false
@@ -129,9 +130,6 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - name: Reject legacy embedded browser runtime files
         run: |
           git ls-files -- runtime reference webmcp scripts/build_runner.ps1 scripts/m3_rebuild_runner.py src/main/java/io/synexia/chromellm/chrome standalone/src/main/java/io/synexia/chromellm/standalone/ChromeAiBackend.java .github/workflows/webmcp.yml .github/workflows/build-with-ai.yml .github/workflows/chromellm-build-advice.yml | tee /tmp/legacy-browser-tracked.txt
@@ -194,9 +192,6 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - uses: actions/checkout@v4
         with:
           repository: ggml-org/llama.cpp
@@ -279,9 +274,6 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - uses: actions/cache@v4
         with:
           path: ~/.cache/chromellm
@@ -343,9 +335,6 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - name: Check out exact public llama.cpp source for the CPU test
         uses: actions/checkout@v4
         with:
@@ -457,9 +446,6 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: standalone/pom.xml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
