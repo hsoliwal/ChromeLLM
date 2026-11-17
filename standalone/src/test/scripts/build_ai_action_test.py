@@ -50,6 +50,11 @@ class BuildAiActionTest(unittest.TestCase):
         self.packet.write_text("Check the changed cache ownership contract.\n", encoding="utf-8")
         self.log = self.root / "build.log"
         self.log.write_text("[ERROR] ExampleTest failed: expected 2, actual 3\n", encoding="utf-8")
+        self.llama = self.root / "llama fixture"
+        self.llama.write_bytes(b"llama fixture")
+        self.llama.chmod(0o700)
+        self.model = self.root / "model fixture.gguf"
+        self.model.write_bytes(b"model fixture")
         self.capture = self.root / "captured.json"
         self.output = self.root / "outputs"
         self.summary = self.root / "summary"
@@ -67,8 +72,9 @@ class BuildAiActionTest(unittest.TestCase):
             "BUILD_AI_PHASE": "pre-build",
             "BUILD_AI_JAR": str(self.jar),
             "BUILD_AI_JAR_SHA256": hashlib.sha256(self.jar.read_bytes()).hexdigest(),
-            "BUILD_AI_PROVIDER": "chrome",
-            "BUILD_AI_CHROME_PROFILE": str(self.root / "dedicated profile"),
+            "BUILD_AI_PROVIDER": "cli",
+            "BUILD_AI_LLAMA_BIN": str(self.llama),
+            "BUILD_AI_MODEL": str(self.model),
             "BUILD_AI_PROMPT_FILE": str(self.packet),
         })
 
@@ -95,9 +101,9 @@ class BuildAiActionTest(unittest.TestCase):
         library.chmod(0o700)
         model = self.root / "model fixture.gguf"
         model.write_bytes(b"model fixture")
-        return {"BUILD_AI_PROVIDER": provider, "BUILD_AI_CHROME_PROFILE": "",
-                "BUILD_AI_MODEL": str(model),
-                "BUILD_AI_JNI_LIBRARY" if provider == "jni" else "BUILD_AI_LLAMA_BIN": str(library)}
+        options = {"BUILD_AI_PROVIDER": provider, "BUILD_AI_MODEL": str(model), "BUILD_AI_LLAMA_BIN": ""}
+        options["BUILD_AI_JNI_LIBRARY" if provider == "jni" else "BUILD_AI_LLAMA_BIN"] = str(library)
+        return options
 
     def test_pre_build_uses_verified_jar_and_existing_cli(self):
         result, outputs, props = self.run_action()
@@ -106,8 +112,8 @@ class BuildAiActionTest(unittest.TestCase):
         self.assertEqual("not-run", props["build.outcome"])
         args = self.arguments()["argv"]
         self.assertEqual(["-cp", str(self.jar), "io.synexia.chromellm.standalone.StandaloneMain"], args[:3])
-        self.assertEqual("chrome", args[args.index("--backend") + 1])
-        self.assertEqual("true", args[args.index("--chrome-download") + 1])
+        self.assertEqual("cli", args[args.index("--backend") + 1])
+        self.assertEqual(str(self.llama), args[args.index("--llama-bin") + 1])
         advice = Path(outputs["advice-file"]).read_bytes()
         self.assertEqual(hashlib.sha256(advice).hexdigest(), props["advice.sha256"])
         self.assertEqual("", result.stdout)
@@ -152,11 +158,13 @@ class BuildAiActionTest(unittest.TestCase):
         self.assertFalse(self.capture.exists())
 
     def test_shell_metacharacters_stay_in_one_argument(self):
-        value = str(self.root / 'chrome;$(touch unexpected) "quoted"')
-        result, _, _ = self.run_action(BUILD_AI_CHROME_BIN=value)
-        self.assertEqual(0, result.returncode)
+        model = self.root / 'model;$(touch unexpected) "quoted"'
+        model.write_bytes(b"model fixture")
+        value = str(model)
+        result, _, _ = self.run_action(BUILD_AI_MODEL=value)
+        self.assertEqual(0, result.returncode, result.stderr)
         args = self.arguments()["argv"]
-        self.assertEqual(value, args[args.index("--chrome-bin") + 1])
+        self.assertEqual(value, args[args.index("--model") + 1])
         self.assertFalse((ROOT / "unexpected").exists())
 
     def test_untrusted_advice_is_not_a_workflow_command(self):
@@ -166,11 +174,11 @@ class BuildAiActionTest(unittest.TestCase):
         self.assertNotIn(value, result.stdout + result.stderr + self.summary.read_text())
         self.assertIn(value, Path(outputs["advice-file"]).read_text())
 
-    def test_warm_only_chrome_flag_is_forwarded(self):
-        result, _, _ = self.run_action(BUILD_AI_ALLOW_DOWNLOAD="false")
-        self.assertEqual(0, result.returncode)
-        args = self.arguments()["argv"]
-        self.assertEqual("false", args[args.index("--chrome-download") + 1])
+    def test_removed_chrome_provider_is_refused_without_fallback(self):
+        result, _, _ = self.run_action(BUILD_AI_PROVIDER="chrome")
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("provider must be jni or cli", result.stderr + result.stdout)
+        self.assertFalse(self.capture.exists())
 
     def test_invalid_phase_is_refused(self):
         result, _, _ = self.run_action(BUILD_AI_PHASE="post-build\nstatus=completed")
@@ -216,7 +224,7 @@ class BuildAiActionTest(unittest.TestCase):
         args = self.arguments()["argv"]
         self.assertEqual("jni", args[args.index("--backend") + 1])
         self.assertIn("--jni-lib", args)
-        self.assertNotIn("--chrome-download", args)
+        self.assertNotIn("--llama-bin", args)
 
     def test_native_cli_selection_uses_existing_options(self):
         result, _, _ = self.run_action(**self.native_options("cli"))
@@ -240,7 +248,7 @@ class BuildAiActionTest(unittest.TestCase):
         self.assertFalse(self.capture.exists())
 
     def test_provider_specific_options_cannot_be_silently_ignored(self):
-        result, _, _ = self.run_action(BUILD_AI_MODEL=str(self.jar))
+        result, _, _ = self.run_action(BUILD_AI_JNI_LIBRARY=str(self.llama))
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(self.capture.exists())
 

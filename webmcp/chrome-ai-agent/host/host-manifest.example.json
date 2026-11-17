@@ -1,7 +1,0 @@
-{
-  "name": "io.synexia.m3_chrome_ai_agent",
-  "description": "Operator-approved read-only Maven repository inventory host",
-  "path": "/absolute/path/to/approved/launcher",
-  "type": "stdio",
-  "allowed_origins": ["chrome-extension://REPLACE_WITH_REAL_EXTENSION_ID/"]
-}
