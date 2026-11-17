@@ -73,6 +73,24 @@ Choose one Chrome profile per Maven invocation. `chromellm.chrome.profile`, `chr
 
 The existing standalone workflow includes a manual `run_chrome_ai` job restricted to the repository's `main` branch and a Linux self-hosted runner labelled `chrome-ai`. Configure repository variables `CHROME_BIN` and `CHROMELLM_CHROME_PROFILE`, with a prepared and eligible model in that dedicated profile. Public pull-request events cannot schedule this job. It runs real availability and inference commands, uploads their logs, and fails on an unavailable model or inference error. Passing portable fixtures or having an installed browser does not count as a live model pass.
 
+## A local chat-completions bridge
+
+Select `--backend bridge` to send the prompt to an OpenAI-compatible `chat/completions` endpoint on this machine, for example a bridge in front of the Chrome on-device model that a running Chrome already serves. This is the way to reach that model when Chrome will not provision it in a dedicated profile: Chrome removes the on-device model from a profile whose volume lacks the free space its download needs, even when the weights are already present.
+
+```sh
+java -cp standalone/target/chromellm-standalone-0.1.0-SNAPSHOT.jar \
+  io.synexia.chromellm.standalone.StandaloneMain \
+  --backend bridge --bridge-url http://127.0.0.1:11435/v1/ \
+  --bridge-token-file /path/to/bridge.token --model chrome-gemini-nano \
+  --prompt-file prompt.txt --max-tokens 256 --timeout-seconds 120
+```
+
+- `--bridge-url` defaults to `http://127.0.0.1:11435/v1/`. Only a loopback `http` URL (`127.0.0.1`, `[::1]` or `localhost`) whose path ends with `/` is accepted, so the prompt does not leave the machine; the request goes to `<url>chat/completions`.
+- `--bridge-token-file` names a file holding the bearer token (at most 4096 printable ASCII characters, surrounding whitespace ignored). Without it no `Authorization` header is sent.
+- `--model` defaults to `chrome-gemini-nano`.
+- The request is one non-streaming message with `max_tokens` from `--max-tokens`. The reply text is `choices[0].message.content`. A non-2xx status, an `error` object, no choices or blank text is an error. Error messages never carry the token, the response body or the transport cause. The response is read up to 4 MiB.
+- The backend never falls back to another provider. The model-download, llama.cpp, JNI, Gemini and Chrome options are refused with it.
+
 ## Opt-in lazy local model artifacts
 
 A local CLI or JNI backend may now select one **explicitly licensed, SHA-256-pinned HTTPS GGUF**

@@ -97,6 +97,17 @@
             </configuration>
           </execution>
           <execution>
+            <id>chat-bridge-contract-tests</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>java</goal>
+            </goals>
+            <configuration>
+              <mainClass>io.synexia.chromellm.standalone.ChatBridgeBackendContractTestMain</mainClass>
+              <classpathScope>test</classpathScope>
+            </configuration>
+          </execution>
+          <execution>
             <id>provider-selection-contract-tests</id>
             <phase>verify</phase>
             <goals>
