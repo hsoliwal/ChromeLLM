@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -216,12 +217,27 @@ public final class SmartBuildMain {
             ancestor = ancestor.getParent();
             if (ancestor == null) throw new IOException("model cache has no existing directory ancestor");
         }
-        if (!Files.isDirectory(ancestor, LinkOption.NOFOLLOW_LINKS) || !ancestor.toRealPath().equals(ancestor)) {
-            throw new IOException("model cache must not traverse symlinks");
-        }
+        verifyCacheDirectoryComponents(ancestor);
         Files.createDirectories(cache);
-        if (!Files.isDirectory(cache, LinkOption.NOFOLLOW_LINKS) || !cache.toRealPath().equals(cache)) {
-            throw new IOException("model cache must not traverse symlinks");
+        verifyCacheDirectoryComponents(cache);
+    }
+
+    /** Reject actual link components, not harmless canonical-path spelling changes. */
+    private static void verifyCacheDirectoryComponents(Path path) throws IOException {
+        Path current = path.getRoot();
+        if (current == null) throw new IOException("model cache must not traverse symlinks");
+        for (Path part : path) {
+            current = current.resolve(part);
+            BasicFileAttributes direct = Files.readAttributes(current, BasicFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS);
+            if (!direct.isDirectory() || direct.isSymbolicLink() || direct.isOther()) {
+                throw new IOException("model cache must not traverse symlinks");
+            }
+            BasicFileAttributes followed = Files.readAttributes(current, BasicFileAttributes.class);
+            if (direct.fileKey() != null && followed.fileKey() != null
+                    && !direct.fileKey().equals(followed.fileKey())) {
+                throw new IOException("model cache must not traverse symlinks");
+            }
         }
     }
 
