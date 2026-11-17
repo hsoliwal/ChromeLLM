@@ -136,11 +136,13 @@ mvn -f standalone/pom.xml -Pnative \
   -Dchromellm.native.backend=webgpu verify
 ```
 
-This builds and installs the pinned Dawn source first, then builds the existing
-GGML WebGPU provider and JNI bridge against it. Dawn's own dependency fetcher
-uses the selected checkout's dependency definitions. Optional browser windowing,
-samples, tests, Node bindings and command-line shader tools are excluded from
-this runtime build.
+This builds and installs the pinned native Dawn fork first, then builds the existing
+GGML WebGPU provider and JNI bridge against it. The pinned fork has removed its
+browser, Node and wire source trees. Dawn's own dependency fetcher uses that
+checkout's native dependency definitions. Window-system integration, samples,
+tests and command-line shader tools are disabled for this compute runtime build.
+Both native build entry points reject Emscripten/browser targets. The Java and
+native test suites do not require Node.js or a browser installation.
 
 Use `-Dchromellm.dawn.source=/path/to/dawn` for an existing source tree, or
 `-Dchromellm.dawn.prefix=/path/to/dawn/install` for an installed CMake package.
@@ -469,7 +471,7 @@ The JNI provider supports decoder-only text models. It uses one model handle per
 
 The existing `ggml-webgpu` provider in [synexia-llmcpp](https://github.com/hsoliwal/synexia-llmcpp/tree/650ac3739d993e1d425f2d5db3c4205b3606cc30/ggml/src/ggml-webgpu) consumes the native `dawn::webgpu_dawn` library exported by [Dawn](https://github.com/hsoliwal/dawn). ChromeLLM reuses that provider through its existing JNI bridge. It does not load Chrome-managed DLLs or model assets.
 
-Build and install a compatible Dawn checkout using its [CMake instructions](https://github.com/hsoliwal/dawn/blob/783c427ce925698f4ef9b5699d8c5a17da90486f/docs/quickstart-cmake.md), with `DAWN_ENABLE_INSTALL=ON`. Then supply the installed Dawn package and a local llama.cpp source checkout:
+Build and install a compatible native Dawn checkout using its [CMake instructions](https://github.com/hsoliwal/dawn/blob/e1fc79e8f039ccf730f1e40b679e070b2667cb49/docs/quickstart-cmake.md), with `DAWN_ENABLE_INSTALL=ON`. Then supply the installed Dawn package and a local llama.cpp source checkout:
 
 ```sh
 cmake -S standalone/native -B standalone/native/build-webgpu \

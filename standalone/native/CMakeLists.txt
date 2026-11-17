@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.20)
+# Reject explicit browser targets before generator/compiler setup, then check
+# again after project() has loaded a caller-supplied toolchain.
+if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  message(FATAL_ERROR "ChromeLLM builds native JNI runtimes; Emscripten/browser targets are unsupported")
+endif()
 project(chromellm_llama_jni LANGUAGES CXX)
+if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  message(FATAL_ERROR "ChromeLLM builds native JNI runtimes; Emscripten/browser targets are unsupported")
+endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # The bridge uses JNI headers and the running JVM, never AWT. Older CMake
@@ -298,6 +306,20 @@ endif()
 if(CHROMELLM_SYNTHETIC_TEST)
   include(CTest)
   if(BUILD_TESTING)
+    # The independent native entry remains usable with CMake 3.20; the
+    # superbuild exercised by this additional regression requires 3.22.
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.22")
+      add_test(NAME native-build-boundary
+        COMMAND ${CMAKE_COMMAND}
+          "-DCHROMELLM_NATIVE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+          "-DCHROMELLM_TEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/native-build-boundary-test"
+          "-DCHROMELLM_TEST_GENERATOR=${CMAKE_GENERATOR}"
+          "-DCHROMELLM_TEST_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+          "-DCHROMELLM_TEST_GENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+          "-DCHROMELLM_TEST_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+          "-DCHROMELLM_TEST_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+          -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/native_build_boundary/CMakeLists.txt")
+    endif()
     add_test(NAME external-library-discovery
       COMMAND ${CMAKE_COMMAND}
         "-DCHROMELLM_NATIVE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
