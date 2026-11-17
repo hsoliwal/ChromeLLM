@@ -127,6 +127,7 @@ public final class SmartBuildContractTestMain {
             offlineCacheHit(root, target);
             canonicalWorkspaceAliases(root);
             onlineCacheAdmission(root, target);
+            windowsCachePathCaseAlias(root, target);
             lazyModelOptions(root, target);
             lazyRecipe(root, target);
             offlineModels(root, target);
@@ -309,6 +310,14 @@ public final class SmartBuildContractTestMain {
             rejectIo(() -> SmartBuildMain.run(Path.of("online-admission.properties"), root,
                     target, Map.of(), forbidden));
             check(!Files.exists(real.resolve("nested")), "cache ancestor alias received writes before refusal");
+            Path existing = Files.createDirectory(real.resolve("existing"));
+            Files.writeString(root.resolve("online-admission.properties"),
+                    recipe.replace("rejected-online-cache/nested", "cache-alias/existing"));
+            rejectIo(() -> SmartBuildMain.run(Path.of("online-admission.properties"), root,
+                    target, Map.of(), forbidden));
+            try (var files = Files.list(existing)) {
+                check(files.findAny().isEmpty(), "existing symlink ancestor admitted cache writes");
+            }
             Files.delete(alias);
         } catch (UnsupportedOperationException | FileSystemException unavailable) {
             System.out.println("online-cache symbolic-link fixture unavailable: " + unavailable);
@@ -316,6 +325,41 @@ public final class SmartBuildContractTestMain {
         check(opened.get() == 0, "rejected cache admission performed provider work");
     }
 
+
+    /** Windows may resolve the same physical directory under a different case spelling. */
+    private static void windowsCachePathCaseAlias(Path root, Path target) throws Exception {
+        if (!System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win")) return;
+        Path spelling = Path.of(root.toString().toUpperCase(java.util.Locale.ROOT));
+        if (spelling.toString().equals(root.toString())) return;
+        try {
+            if (!Files.isSameFile(root, spelling)) return;
+        } catch (IOException unavailable) {
+            System.out.println("case alias not available: " + unavailable);
+            return;
+        }
+        Path cache = spelling.resolve("case-spelling-model-cache");
+        Files.writeString(root.resolve("windows-cache-alias.properties"), String.join("\n",
+                "promptFile=prompt.txt", "backend=jni", "jniLib=/explicit/chromellm-jni",
+                "modelUrl=https://github.com/hsoliwal/ChromeLLM/releases/download/pinned/weights.bin",
+                "modelSha256=" + "a".repeat(64), "modelCacheDir=" + propertyPath(cache),
+                "computeBackend=cpu", "gpuLayers=0") + "\n");
+        AtomicInteger calls = new AtomicInteger();
+        SmartBuildMain.ProviderFactory provider = (options, environment) -> {
+            check(Files.isDirectory(cache, LinkOption.NOFOLLOW_LINKS),
+                    "Windows case alias rejected a non-link cache directory");
+            calls.incrementAndGet();
+            return new ModelBackend() {
+                public String id() { return "llama.cpp-jni"; }
+                public ModelResponse infer(ModelRequest request) {
+                    return new ModelResponse("case alias candidate", id(), hash(request.prompt()));
+                }
+            };
+        };
+        Path output = SmartBuildMain.run(Path.of("windows-cache-alias.properties"), root,
+                target, Map.of(), provider);
+        check(calls.get() == 1 && Files.readString(output).equals("case alias candidate"),
+                "valid Windows cache spelling alias changed smart-build behavior");
+    }
 
     private static void lazyModelOptions(Path root, Path target) throws Exception {
         Path cache = root.resolve("lazy-options-cache");
