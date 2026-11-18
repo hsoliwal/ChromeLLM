@@ -449,6 +449,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Reject unpinned supplied native checkouts offline
+        run: python standalone/native/tests/native_superbuild_source_pin_test.py
       - name: Check out the exact native implementation
         uses: actions/checkout@v4
         with:
