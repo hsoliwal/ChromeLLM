@@ -132,14 +132,14 @@ jobs:
           cache-dependency-path: standalone/pom.xml
       - name: Reject legacy embedded browser runtime files
         run: |
-          git ls-files -- runtime reference webmcp scripts/build_runner.ps1 scripts/m3_rebuild_runner.py src/main/java/io/synexia/chromellm/chrome standalone/src/main/java/io/synexia/chromellm/standalone/ChromeAiBackend.java .github/workflows/webmcp.yml .github/workflows/build-with-ai.yml .github/workflows/chromellm-build-advice.yml | tee /tmp/legacy-browser-tracked.txt
+          git ls-files -- runtime reference webmcp scripts/build_runner.ps1 scripts/m3_rebuild_runner.py src/main/java/io/synexia/chromellm/chrome standalone/src/main/java/io/synexia/chromellm/standalone/ChromeAiBackend.java standalone/src/main/java/io/synexia/chromellm/standalone/ChatBridgeBackend.java standalone/src/main/java/io/synexia/chromellm/standalone/ChromeModelBackend.java .github/workflows/webmcp.yml .github/workflows/build-with-ai.yml .github/workflows/chromellm-build-advice.yml | tee /tmp/legacy-browser-tracked.txt
           test ! -s /tmp/legacy-browser-tracked.txt
           test ! -e docs/OPENAI_COMPAT_API.md
           test ! -e docs/M3_REBUILD_AND_DISTILLATION.md
           test ! -e '关键数据.md'
       - name: Reject browser APIs in production Java and build action
         run: |
-          if git grep -nE 'ChromeAiBackend|ChromeDevTools|ChromeProcess|document\.modelContext|chrome\.(runtime|tabs|scripting)|--backend chrome' -- src/main/java standalone/src/main/java .github/actions/build-ai; then
+          if git grep -nE 'ChromeAiBackend|ChromeDevTools|ChromeProcess|ChatBridgeBackend|ChromeModelBackend|WebMcpBridge|document\.modelContext|chrome\.(runtime|tabs|scripting)|--backend[ =](chrome|bridge)|--chrome-base' -- src/main/java standalone/src/main/java .github/actions/build-ai; then
             echo 'Browser-dependent source reintroduced into ChromeLLM' >&2
             exit 1
           fi
