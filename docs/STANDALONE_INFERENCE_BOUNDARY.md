@@ -1,164 +1,73 @@
 <!-- SPDX-FileCopyrightText: 2026 Hitesh Soliwal and Contributors -->
-
-> **Historical snapshot, not a runnable Chrome integration:** ChromeLLM draft PR #19 removes the old ChromeML/Dawn, Node and PowerShell execution files. Current text inference uses a separate llama.cpp JNI backend (see [START_HERE](START_HERE.md)). The legacy architectures, links and verification counts below are retained solely for provenance; do not follow them as build instructions. Real GGUF inference remains to be qualified.
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-# ChromeLLM: standalone inference architecture
 
-**Status:** draft architecture contract; not a completed standalone runtime.
-**Product owner:** `hsoliwal/ChromeLLM`. **Canonical recipe/evidence owner:**
-private `hsoliwal/com.synexia`. **Java SDK owner:** `hsoliwal/M3jdk21`.
+# ChromeLLM: browser-free standalone inference boundary
 
-## Decision and the irreversible split
+**Status:** Implemented browser-removal boundary; local and hosted provider contracts exist. Actual model/GPU/platform qualification is separate from source-level acceptance.
 
-ChromeLLM must diverge from Chrome and ultimately run as an independent
-local inference product. Chrome's built-in `LanguageModel` and `Summarizer`
-APIs remain optional providers, never permanent owners of the core contract,
-source handling, Java/JNI interface, model lifecycle, receipts or deployment.
+**Product owner:** [hsoliwal/ChromeLLM](https://github.com/hsoliwal/ChromeLLM).
+**Canonical Maven/OpenRewrite recipe and provenance owner:** [hsoliwal/com.synexia](https://github.com/hsoliwal/com.synexia).
+**Downstream Java receiver:** [hsoliwal/M3jdk21](https://github.com/hsoliwal/M3jdk21), subject to independent tests.
 
-There are TWO separate milestones. **Browser/UI independence** means a native
-process can infer without a Chrome tab, extension or browser window; it may
-still need ChromeML/Dawn libraries and separately supplied licensed model
-assets. **Runtime/model independence** means a portable, separately licensed
-engine and model/tokenizer/config run on a machine with no Chrome installation,
-ChromeML DLLs, browser profiles or Chrome-managed model assets. The second
-milestone is the actual standalone product acceptance. Neither follows from
-source compilation or a fake-model smoke test.
+This document describes the current source after [ChromeLLM PRs #84](https://github.com/hsoliwal/ChromeLLM/pull/84), [#85](https://github.com/hsoliwal/ChromeLLM/pull/85), [#95](https://github.com/hsoliwal/ChromeLLM/pull/95) and [Dawn PR #25](https://github.com/hsoliwal/dawn/pull/25). Earlier proposals involving Chrome Prompt/Summarizer APIs, a Node/PowerShell ChromeML runner, Chrome-served chat, and WebMCP page adapters are **retired**. They remain available in Git history for source attribution and audit, **not as runnable instructions or supported providers**.
 
-## Existing source owners to extend
+## Active providers
 
-- `runtime/chromeml_api_server.cjs`: Node loopback HTTP adapter; converts
-  supported chat requests, queues jobs and invokes the Windows PowerShell
-  runner. Its OpenAI-compatible routes are a subset, not the whole API.
-- `runtime/ChromeMLBareRunner.cpp`: Windows native process using compatible
-  ChromeML/Dawn runtime assets and an externally supplied model. A separable
-  process is not, by itself, an independent model runtime.
-- Java/JNA/JNI diffusion and FFmpeg/OpenCV media code are independent
-  workloads, not evidence of an independently trained text or image model.
-- Synexia [PR #14186](https://github.com/hsoliwal/com.synexia/pull/14186)
-  already has the sealed `synexia.atom-pattern-lld.v1` generation contract
-  and `engine.generateCodeCandidate` seam. Reuse them, not another parser,
-  atomizer/patternizer, source writer or recipe scheduler.
-- M3JDK21 [PR #2108](https://github.com/hsoliwal/M3jdk21/pull/2108)
-  contains a draft `com.m3.llm` module with browser/native summary and
-  extraction APIs. Its `CPU/GPU/APU` enum names compute devices, not providers.
+The [standalone Java 21 module](../standalone/src/main/java/module-info.java) exports `io.synexia.chromellm.standalone` and uses JDK modules `java.base` and `java.net.http`. [StandaloneMain](../standalone/src/main/java/io/synexia/chromellm/standalone/StandaloneMain.java) requires an explicit backend when deviating from the default CLI backend; its provider choices are:
 
-## Dependency direction
+| Selection | Execution boundary | Required inputs |
+| --- | --- | --- |
+| `--backend cli` (default) | `LlamaCppCliBackend` launches a configured local llama.cpp executable | Executable and lawfully supplied GGUF model |
+| `--backend jni` | `LlamaCppJniBackend` uses an explicit JNI library and in-process native llama.cpp | JNI library and licensed GGUF model; optional native Dawn/WebGPU device selection |
+| `--backend gemini` | `GeminiApiBackend` uses the hosted Gemini API through Java HTTP | Explicit API credentials and network access; **not** offline |
+
+`--backend chrome` and `--backend bridge` are rejected. The removed Chrome executable/profile/DevTools/ChromeML options do not belong to any active provider. No silent fallback from one provider to another, implicit browser launch, or unapproved model substitution is permitted.
+
+The local MCP **stdio** server, agent and workspace tools are process integrations, not browser WebMCP. The separate root [media/diffusion project](../pom.xml) retains its Java/JNA/JNI, OpenCL, OpenCV and FFmpeg functionality without a Chrome dependency. Neither a Java-only build nor a synthetic native test establishes correct trained-model inference.
+
+## Dependency and ownership direction
 
 ```text
-Java / JNI / CLI / SWT / browser PWA / local HTTP client
-                         |
-               versioned inference request
-                         |
-                 provider-neutral SPI
-        +----------------+----------------+
-        |                |                |
- Chrome Prompt API   ChromeML native   Portable local engine
- optional browser    ChromeML assets   independent licensed model
-        +----------------+----------------+
-                         |
-                 CPU / GPU / APU
-                         |
-              bounded candidate + receipt
-                         |
-         Synexia canonical recipe qualification
-                         |
-    accepted result-only ChromeLLM / M3JDK21 product
+CLI / embedded Java API / bounded MCP stdio / configured agent
+                              |
+                        ModelBackend
+                         /    |    \
+                llama CLI  llama JNI  Gemini API
+                    |         |           |
+             licensed GGUF  C++/JNI    Java HTTPS
+                              |
+                      optional native
+                       Dawn/WebGPU
 ```
 
-ChromeLLM's installed runtime MUST NOT require Synexia or Chrome's browser
-globals to function. Synexia exclusively owns Maven/OpenRewrite recipes,
-source-atom/pattern catalogues, source mutation, test fixtures, execution
-and qualification. Product repositories may receive only executed,
-qualified result-only postimages, passive recipe/source receipts and
-product-owned tests. No product repository hosts a recipe engine.
+The native Dawn fork implements the WebGPU C/C++ API for local GPU backends. **WebGPU, WGSL and Tint are not browser dependencies.** The browser-specific Dawn queue-copy extension was removed; standard native texture upload, command-encoder copies and external-texture support are intentionally retained.
 
-## Proposed stable protocol: `chromellm.inference.v1`
+## Contract, source seals and admission
 
-Define a versioned provider-neutral contract that works over Java/JNI,
-loopback HTTP, stdio or an in-process native boundary. Its draft shapes:
+The existing request/response contract is [ModelRequest](../standalone/src/main/java/io/synexia/chromellm/standalone/ModelRequest.java), [ModelResponse](../standalone/src/main/java/io/synexia/chromellm/standalone/ModelResponse.java) and [ModelBackend](../standalone/src/main/java/io/synexia/chromellm/standalone/ModelBackend.java). Work involving code generation and M3JDK21 receipt promotion must additionally preserve:
 
-- **ProviderId**: `CHROME_BUILT_IN_PROMPT_API`, `CHROMEML_NATIVE`,
-  `PORTABLE_LOCAL`. Selection is explicit. Never silently select another
-  provider, retry generation, call a cloud model or substitute weights.
-- **ComputeBackend**: CPU, GPU or APU, recorded independently of provider
-  identity. Report actual device execution rather than requested execution.
-- **Capabilities**: available text/media modalities, language versions,
-  structured JSON/schema support, max context/output sizes, offline mode,
-  user activation/model-download requirements, hardware and cancellation
-  support. Refuse unsupported capabilities before generation.
-- **ModelManifest**: exact model/runtime ID and version; tokenizer/config/
-  checkpoint digest(s) where present; origin, license, redistribution rights
-  and compatible ABI. A pathname/hash does not establish a license.
-- **InferenceRequest**: protocol and request IDs, selected provider/model/
-  device, immutable manifest digest, prompt/schema and SHA-256, output bound,
-  request deadline/cancellation, and explicit permissions. A source-code
-  request additionally binds one source path, source SHA-256 or checked
-  `ABSENT`, frozen interface, canonical LLD SHA-256, recipe ID, and
-  atomization/patternization receipt identities.
-- **InferenceResult**: bounded candidate text/JSON, uncertainties,
-  completion/error classification, exact source/request/artifact digests,
-  provider/runtime/model identity, generation-call count, and optional
-  actually measured token/time/resource counters. No invented metrics or
-  unsigned model attestation.
+- Explicit provider, model, runtime and compute-device identities; distinguish requested GPU execution from measured device execution.
+- Immutable source path and SHA-256 (or an explicitly checked `ABSENT` state), frozen Java interface/LLD digest, recipe identity, provenance and license status.
+- Bounded prompt/input/output, deadlines, cancellation and cleanup; deterministic refusal on unsupported capabilities, drift, invalid schemas and partial results.
+- The existing Synexia **one-generation-call per sealed file candidate** rule. A new deliberate request can start a new run; failed or partial output does not authorize hidden retry, source writes or provider fallback.
+- Code generation outputs remain `HOLD_UNVERIFIED` and non-promotable until canonical Maven/OpenRewrite recipe execution, drift/fixed-point verification, compile/JUnit/JNI/ABI behavior tests and recipient-gated review.
 
-Opening a model session or explicitly downloading permissible assets is NOT
-a code-generation invocation. For a reviewed atomized/patternized Java LLD,
-one selected file permits **exactly one model generation call** for one
-implementation proposal. The Java interface is deterministic, frozen and
-not model-editable. Unsupported schema, invalid JSON, missing/changed hashes,
-resource exhaustion, cancelled requests and partial completions return HOLD
-without fallback or retry. A new explicit run receives a new request ID.
+Model inference is candidate data; it never grants shell/file-write authority. Model artifact caching must verify source, revision, digest, size, timeout and license conditions. Do not copy or redistribute Chrome-owned model weights, proprietary ChromeML binaries, browser profiles, cookies or credentials.
 
-All code generation is `HOLD_UNVERIFIED` with
-`sourceWriteAuthorized=false` and `promotionAuthorized=false` until
-actual canonical Synexia recipe execution plus Java 21 compiler/JUnit/ABI/
-JNI/behavior and receiving-product gates. A receipt hash proves identity
-consistency, not model execution or semantic equivalence.
+## Qualification matrix
 
-## Ordered admission gates
-
-| Stage | Work | Actual evidence before promotion |
+| Gate | What is required | Boundary of current claims |
 | --- | --- | --- |
-| 0 - SPI | Provider-neutral request, capability, response and receipt semantics | Contract tests, one-call/no-fallback, schema/drift/cancel refusals |
-| 1 - process split | Native ChromeML runner available without browser UI | Actual Windows native model inference, asset/ABI pins, child lifecycle |
-| 2 - independent model | Legally usable, independent local engine + weights/tokenizer | **No-Chrome-installed** real inference test, legal provenance |
-| 3 - portability | CPU baseline then optional GPU/APU across OS targets | Linux/Windows/macOS integration, device proof, memory/performance |
-| 4 - product receiving | M3JDK21 and ChromeLLM qualified runtime integration | Executed Synexia Maven/OpenRewrite recipe, fixed point/drift refusal, target-native checks |
+| Java module | Java 21 compilation, provider-selection contracts, `jdeps` closure | Module source and CI exist; check actual workflow conclusions |
+| Browser elimination | No retired runtime files, browser providers/options, Node/Chromium compile dependencies or WebMCP page adapter | Deleted source and negative CI gates; historical documentation is preserved through Git |
+| Native JNI | JNI symbol and lifecycle tests, bounded requests, native library loading/cleanup | Synthetic tests do not prove real GGUF inference |
+| Real licensed model | Exactly pinned model/runtime, actual inference, recorded output, deterministic repeat | Only an executed real-model workflow result can establish this |
+| GPU | Measured native Dawn/WebGPU execution, device/driver evidence and memory behavior | A successfully configured GPU backend is not a device-execution proof |
+| Platform | Windows/Linux/macOS executable evidence, optional Android where supported | A source checkout does not imply cross-platform parity |
+| M3JDK21 receiver | Reusable Synexia recipes, donor license/source hashes, receiver-side behavioral/ABI tests | No automatic promotion based on a ChromeLLM or Dawn merge |
 
-Do not turn an HTTP response, mock result, stock-JDK module image or source
-rebuild into claims of installed-product readiness. Retain open gates as
-PENDING and compare performance only when measured.
+Verify claims against the exact [standalone CI workflow](https://github.com/hsoliwal/ChromeLLM/actions/workflows/standalone-core.yml) and [native Dawn CI](https://github.com/hsoliwal/dawn/actions/workflows/native-source-boundary.yml); never interpret queued checks as passes.
 
-## Security and model rights
+## Maintained entry points
 
-The existing Node server permits wildcard CORS, does not use Authorization
-headers as authentication, and accepts some caller-controlled local media
-paths. Keep it loopback-only until real authentication, origin/path limits,
-resource policy and user permission have been implemented and tested. Model
-output has no authority to run shell commands or write source files. Bound
-subprocess input/output, cancellation and cleanup.
-
-Do not copy, redistribute, translate or commit Chrome/Gemini proprietary
-`weights.bin`, Chrome-owned DLLs, browser profiles, cookies or other restricted
-assets. Audit the already tracked native executable and DLL provenance before
-shipping binaries. Open native runtimes (e.g. potential llama.cpp or ONNX
-Runtime backends) and open-weight models are independent candidates only
-after exact tokenizer, checkpoint, ABI, model and license review.
-
-## Implementation order and source authority
-
-1. Refine/execute the existing Maven/OpenRewrite hash-pinned recipes in
-   Synexia against exact preimages, including a fixed-point and drift refusal.
-   Product code cannot be hand-patched to imitate a recipe output.
-2. Make the existing `generateCodeCandidate` seam provider-neutral without
-   changing the frozen LLD/Java-interface contract or one-call rule.
-3. Qualify ChromeML as a process provider using current explicit external
-   assets, and test cancellation, bounded output, source seals and cleanup.
-4. Admit a second independent licensed native engine/model and prove it
-   runs on a host with no Chrome/ChromeML installation.
-5. Export only qualified product postimages to ChromeLLM and M3JDK21,
-   preserving provenance and independently executing receiving tests.
-
-**Not established by this design record:** a working standalone model, legal
-right to redistribute Chrome weights/DLLs, live inference, full OS parity,
-M3JDK21 native integration, or performance gains.
+Use [START_HERE](START_HERE.md), the [current architecture](ARCHITECTURE_AND_PROJECTS.md), [standalone README](../standalone/README.md) and [ADR-0001](ADR-0001-BROWSER-INDEPENDENCE.md). The original draft protocol and ChromeML process-split milestones remain in the preceding revisions of this document for provenance only. Do not revive an abandoned browser route as an optional provider without a new explicit architectural decision.
