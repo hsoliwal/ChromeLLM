@@ -78,5 +78,26 @@ class NativeSourcePinTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode, result.stdout)
         self.assertIn("requires an immutable 40-character Git commit", result.stdout)
 
+class NativeDawnPinConsistencyTest(unittest.TestCase):
+    """No stale Dawn revision can survive in Maven, CMake, and consumer docs."""
+
+    def test_maven_cmake_documentation_revisions_are_equal(self):
+        root = Path(__file__).resolve().parents[3]
+        pom = (root / "standalone/pom.xml").read_text(encoding="utf-8")
+        cmake = (root / "standalone/native-superbuild/CMakeLists.txt").read_text(
+            encoding="utf-8")
+        readme = (root / "standalone/README.md").read_text(encoding="utf-8")
+        maven = re.search(
+            r"<chromellm\.dawn\.revision>([a-f0-9]{40})</chromellm\.dawn\.revision>", pom)
+        native = re.search(
+            r'set\(CHROMELLM_DAWN_REVISION "([a-f0-9]{40})"', cmake)
+        self.assertIsNotNone(maven, "Maven native Dawn pin is missing")
+        self.assertIsNotNone(native, "CMake native Dawn pin is missing")
+        self.assertEqual(maven.group(1), native.group(1))
+        self.assertIn(
+            "https://github.com/hsoliwal/dawn/blob/" + native.group(1)
+            + "/docs/quickstart-cmake.md", readme)
+
+
 if __name__ == "__main__":
     unittest.main()
