@@ -20,7 +20,7 @@ public final class ProviderSelectionContractTestMain {
         check(StandaloneMain.parse(new String[0]).isEmpty());
         // The browser provider is gone: its options are unknown and its name selects no backend.
         for (String option : new String[] {"--chrome-bin", "--chrome-profile", "--chrome-headless",
-                "--chrome-download", "--chrome-status", "--chrome-prepare"}) {
+                "--chrome-download", "--chrome-status", "--chrome-prepare", "--chrome-base", "--bridge-url"}) {
             try {
                 StandaloneMain.parse(new String[] {option, "true"});
                 throw new AssertionError("removed option accepted: " + option);
@@ -66,7 +66,7 @@ public final class ProviderSelectionContractTestMain {
         Path executable = Path.of(System.getProperty("java.home"), "bin",
                 System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java");
         try {
-            chromeIsNotABackend(executable, temp);
+            removedBrowserBackendsAreRejected(executable, temp);
             Files.writeString(prompt, "नमस्ते \uD83D\uDE42");
             check(StandaloneMain.readPrompt(prompt, true).equals("नमस्ते \uD83D\uDE42"));
             check(StandaloneMain.readPrompt(prompt, false).equals("नमस्ते \uD83D\uDE42"));
@@ -139,14 +139,18 @@ public final class ProviderSelectionContractTestMain {
         System.out.println("provider selection contract checks passed: " + checks);
     }
 
-    private static void chromeIsNotABackend(Path executable, Path temp) throws Exception {
+    private static void removedBrowserBackendsAreRejected(Path executable, Path temp) throws Exception {
         Path model = Files.writeString(temp.resolve("chrome-model.gguf"), "synthetic");
         try {
-            StandaloneMain.backend(Map.of("--backend", "chrome", "--model", model.toString(),
-                    "--llama-bin", executable.toString()), Map.of()).close();
-            throw new AssertionError("chrome selected a backend");
-        } catch (IllegalArgumentException refused) {
-            check(refused.getMessage().contains("unknown backend (expected cli, jni or gemini)"));
+            for (String removed : new String[] {"chrome", "bridge"}) {
+                try {
+                    StandaloneMain.backend(Map.of("--backend", removed, "--model", model.toString(),
+                            "--llama-bin", executable.toString()), Map.of()).close();
+                    throw new AssertionError(removed + " selected a backend");
+                } catch (IllegalArgumentException refused) {
+                    check(refused.getMessage().contains("unknown backend (expected cli, jni or gemini)"));
+                }
+            }
         } finally {
             Files.deleteIfExists(model);
         }
