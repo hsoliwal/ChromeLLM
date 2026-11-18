@@ -471,7 +471,7 @@ The JNI provider supports decoder-only text models. It uses one model handle per
 
 The existing `ggml-webgpu` provider in [synexia-llmcpp](https://github.com/hsoliwal/synexia-llmcpp/tree/650ac3739d993e1d425f2d5db3c4205b3606cc30/ggml/src/ggml-webgpu) consumes the native `dawn::webgpu_dawn` library exported by [Dawn](https://github.com/hsoliwal/dawn). ChromeLLM reuses that provider through its existing JNI bridge. It does not load Chrome-managed DLLs or model assets.
 
-Build and install a compatible native Dawn checkout using its [CMake instructions](https://github.com/hsoliwal/dawn/blob/21c27e6d8d79e047915d309b7363d6a1d3d622e2/docs/quickstart-cmake.md), with `DAWN_ENABLE_INSTALL=ON`. Then supply the installed Dawn package and a local llama.cpp source checkout:
+Build and install a compatible native Dawn checkout using its [CMake instructions](https://github.com/hsoliwal/dawn/blob/80e33a6a4c27cf316d54eae7587aa3ee3b9ecf59/docs/quickstart-cmake.md), with `DAWN_ENABLE_INSTALL=ON`. Then supply the installed Dawn package and a local llama.cpp source checkout:
 
 ```sh
 cmake -S standalone/native -B standalone/native/build-webgpu \

@@ -37,7 +37,7 @@
     <chromellm.dawn.licenses/>
     <chromellm.native.toolchain/>
     <chromellm.llama.revision>650ac3739d993e1d425f2d5db3c4205b3606cc30</chromellm.llama.revision>
-    <chromellm.dawn.revision>21c27e6d8d79e047915d309b7363d6a1d3d622e2</chromellm.dawn.revision>
+    <chromellm.dawn.revision>80e33a6a4c27cf316d54eae7587aa3ee3b9ecf59</chromellm.dawn.revision>
     <chromellm.native.os>${os.name}</chromellm.native.os>
     <chromellm.native.arch>${os.arch}</chromellm.native.arch>
     <chromellm.native.classifier>${chromellm.native.os}-${chromellm.native.arch}</chromellm.native.classifier>
