@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.HexFormat;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -39,6 +41,7 @@ public final class NativeBuildArtifactsContractTestMain {
             if (Files.exists(root.getParent().resolve("escape"))) throw new AssertionError("ZIP escaped");
             writeZip(zip, "pinned.tar.gz", bytes, true);
             reject(() -> NativeBuildArtifacts.unpackSingleZip(zip, output, "pinned.tar.gz", hash, 4));
+            testLargeGitStatus(root);
             System.out.println("native binary artifact contracts passed");
         } finally {
             try (var paths = Files.walk(root)) {
@@ -52,6 +55,44 @@ public final class NativeBuildArtifactsContractTestMain {
             zip.putNextEntry(new ZipEntry(name)); zip.write(bytes); zip.closeEntry();
             if (extra) { zip.putNextEntry(new ZipEntry("extra")); zip.write(0); zip.closeEntry(); }
         }
+    }
+
+    // Refuse a dirty worktree without waiting for the OS pipe buffer to drain.
+    private static void testLargeGitStatus(Path root) throws Exception {
+        Path source = Files.createDirectory(root.resolve("source-pin"));
+        Files.createDirectories(source.resolve("include"));
+        Files.createDirectories(source.resolve("ggml/include"));
+        for (String relative : List.of("CMakeLists.txt", "include/llama.h",
+                "ggml/include/ggml-backend.h")) {
+            Files.writeString(source.resolve(relative), "# fixture\n");
+        }
+        git(source, "init", "-q");
+        git(source, "config", "user.email", "fixture@invalid.test");
+        git(source, "config", "user.name", "Fixture");
+        git(source, "add", ".");
+        git(source, "commit", "-qm", "source-pin fixture");
+        String commit = git(source, "rev-parse", "HEAD");
+        ForkSourcePin.verify(source, commit);
+        reject(() -> ForkSourcePin.verify(source, "0".repeat(40)));
+        for (int i = 0; i < 1400; i++) {
+            Files.writeString(source.resolve("untracked-" + i + "-"
+                    + "x".repeat(60) + ".txt"), "");
+        }
+        long start = System.nanoTime();
+        reject(() -> ForkSourcePin.verify(source, commit));
+        if (TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - start) >= 10) {
+            throw new AssertionError("Git status output blocked process verification");
+        }
+    }
+
+    private static String git(Path root, String... arguments) throws Exception {
+        var command = new java.util.ArrayList<>(List.of("git", "-C", root.toString()));
+        command.addAll(List.of(arguments));
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8).strip();
+        if (process.waitFor() != 0) throw new IOException("Git fixture failed: " + output);
+        return output;
     }
 
     @FunctionalInterface interface Checked { void run() throws Exception; }

@@ -6,7 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** Verify the exact, locally supplied native source revision before CMake compiles it. */
 public final class ForkSourcePin {
@@ -44,13 +46,23 @@ public final class ForkSourcePin {
     private static String git(Path root, String... commands) throws Exception {
         var args = new java.util.ArrayList<>(List.of("git", "-C", root.toString()));
         args.addAll(List.of(commands));
-        Process process = new ProcessBuilder(args).redirectErrorStream(true).start();
+        return readProcessOutput(new ProcessBuilder(args).redirectErrorStream(true).start());
+    }
+
+    // Drain the process concurrently: Git can fill its stdout pipe with untracked filenames
+    // before exiting. Waiting for exit first would then deadlock until the timeout.
+    static String readProcessOutput(Process process) throws Exception {
+        var reader = Executors.newVirtualThreadPerTaskExecutor();
         try {
-            if (!process.waitFor(30, TimeUnit.SECONDS)) {
-                throw new IOException("native fork Git verification timed out");
+            var outputTask = reader.submit(() -> process.getInputStream().readNBytes(65537));
+            byte[] output;
+            try {
+                output = outputTask.get(30, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                throw new IOException("native fork Git verification timed out", e);
             }
-            byte[] output = process.getInputStream().readNBytes(65537);
-            if (output.length > 65536 || process.exitValue() != 0) {
+            if (output.length > 65536 || !process.waitFor(5, TimeUnit.SECONDS)
+                    || process.exitValue() != 0) {
                 throw new IOException("cannot verify local native fork with Git");
             }
             return new String(output, StandardCharsets.UTF_8).strip();
@@ -62,6 +74,8 @@ public final class ForkSourcePin {
             process.getInputStream().close();
             process.getOutputStream().close();
             process.getErrorStream().close();
+            reader.shutdownNow();
+            reader.awaitTermination(5, TimeUnit.SECONDS);
         }
     }
 }
