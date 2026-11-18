@@ -30,7 +30,7 @@ set(CHROMELLM_NATIVE_STAGE "${CMAKE_BINARY_DIR}/stage" CACHE PATH "Native artifa
 set(CHROMELLM_BUILD_CONFIGURATION "Release" CACHE STRING "Native build configuration")
 set(CHROMELLM_BUILD_PARALLEL "2" CACHE STRING "Maximum native compile jobs")
 set(CHROMELLM_LLAMA_REVISION "650ac3739d993e1d425f2d5db3c4205b3606cc30" CACHE STRING "Pinned llama.cpp fork commit")
-set(CHROMELLM_DAWN_REVISION "e1fc79e8f039ccf730f1e40b679e070b2667cb49" CACHE STRING "Pinned native Dawn fork commit")
+set(CHROMELLM_DAWN_REVISION "e926dd15299ba7ef75747e6e57a5fe6ef447092e" CACHE STRING "Pinned native Dawn fork commit")
 
 if(NOT CHROMELLM_BUILD_PARALLEL MATCHES "^[1-9][0-9]*$")
   message(FATAL_ERROR "CHROMELLM_BUILD_PARALLEL must be a positive integer")
