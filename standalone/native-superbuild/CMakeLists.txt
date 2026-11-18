@@ -57,6 +57,17 @@ function(chromellm_source name repository revision supplied out_path out_depende
     if(NOT EXISTS "${source}/CMakeLists.txt")
       message(FATAL_ERROR "${name} source checkout has no CMakeLists.txt: ${source}")
     endif()
+    # Verify the supplied checkout without fetching or mutating it.
+    find_package(Git REQUIRED)
+    execute_process(
+      COMMAND "${GIT_EXECUTABLE}" -C "${source}" rev-parse --verify HEAD
+      RESULT_VARIABLE source_status
+      OUTPUT_VARIABLE source_head
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+    if(NOT source_status EQUAL 0 OR NOT source_head STREQUAL revision)
+      message(FATAL_ERROR "${name} source HEAD does not match pinned revision ${revision} (found '${source_head}')")
+    endif()
     set(${out_dependency} "" PARENT_SCOPE)
   else()
     set(source "${CMAKE_BINARY_DIR}/sources/${name}-${revision}")
