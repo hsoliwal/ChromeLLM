@@ -143,6 +143,21 @@ jobs:
             echo 'Browser-dependent source reintroduced into ChromeLLM' >&2
             exit 1
           fi
+      - name: Reject obsolete browser inference guidance in active documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract=docs/STANDALONE_INFERENCE_BOUNDARY.md
+          test -f "$contract"
+          grep -qF '# ChromeLLM: browser-free standalone inference boundary' "$contract"
+          grep -qF '## Active providers' "$contract"
+          for provider in '--backend cli' '--backend jni' '--backend gemini'; do
+            grep -qF -- "$provider" "$contract"
+          done
+          if grep -nE 'CHROME_BUILT_IN_PROMPT_API|CHROMEML_NATIVE|runtime/(chromeml_api_server\.cjs|ChromeMLBareRunner\.cpp)|The existing Node server permits wildcard CORS' "$contract"; then
+            echo 'Obsolete Chrome/Node runtime design reintroduced into active documentation' >&2
+            exit 1
+          fi
       - name: Maven synthetic native build, packaging and CTest regressions
         run: mvn -B -ntp -f standalone/pom.xml -Pnative-synthetic verify
       - name: Verify relocated fixture archive with a fresh Java consumer
