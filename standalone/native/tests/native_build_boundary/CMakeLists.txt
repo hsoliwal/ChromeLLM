@@ -31,6 +31,10 @@ function(run expected)
     if(status EQUAL 0 OR NOT "${output}\n${error}" MATCHES "Emscripten/browser targets")
       message(FATAL_ERROR "Browser target did not fail at the native boundary: ${ARGN}\n${output}\n${error}")
     endif()
+  elseif(expected STREQUAL "PIN_REFUSAL")
+    if(status EQUAL 0 OR NOT "${output}\n${error}" MATCHES "source HEAD does not match pinned revision")
+      message(FATAL_ERROR "Wrong source revision was not rejected: ${ARGN}\n${output}\n${error}")
+    endif()
   endif()
 endfunction()
 
@@ -76,13 +80,63 @@ endif()
 file(WRITE "${CMAKE_BINARY_DIR}/native-fixture.txt" "native compute stage; no inference\n")
 install(FILES "${CMAKE_BINARY_DIR}/native-fixture.txt" DESTINATION share)
 ]=])
+# Synthetic fixtures must have their own immutable source identity; never bypass
+# the production superbuild's exact Git HEAD validation or fetch source here.
+find_package(Git REQUIRED)
+function(chromellm_fixture_revision source out_revision)
+  execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${source}" init -q
+    RESULT_VARIABLE init_result ERROR_VARIABLE init_error)
+  if(NOT init_result EQUAL 0)
+    message(FATAL_ERROR "Could not initialize native test fixture: ${init_error}")
+  endif()
+  execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${source}" add -- CMakeLists.txt
+    RESULT_VARIABLE add_result ERROR_VARIABLE add_error)
+  if(NOT add_result EQUAL 0)
+    message(FATAL_ERROR "Could not stage native test fixture: ${add_error}")
+  endif()
+  execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${source}"
+      -c user.name=NativeFixture -c user.email=native-fixture@example.invalid
+      commit -qm "source-pinned native fixture"
+    RESULT_VARIABLE commit_result ERROR_VARIABLE commit_error)
+  if(NOT commit_result EQUAL 0)
+    message(FATAL_ERROR "Could not commit native test fixture: ${commit_error}")
+  endif()
+  execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${source}" rev-parse --verify HEAD
+    RESULT_VARIABLE head_result OUTPUT_VARIABLE head
+    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_VARIABLE head_error)
+  string(LENGTH "${head}" head_length)
+  if(NOT head_result EQUAL 0 OR NOT head_length EQUAL 40 OR NOT head MATCHES "^[0-9a-f]+$")
+    message(FATAL_ERROR "Native test fixture must have an exact 40-hex Git HEAD: ${head_error}")
+  endif()
+  set(${out_revision} "${head}" PARENT_SCOPE)
+endfunction()
+chromellm_fixture_revision("${fixture}/llama" fixture_llama_revision)
+chromellm_fixture_revision("${fixture}/dawn" fixture_dawn_revision)
+
+# Verify both source-pinning refusals before running positive native staging.
 set(build "${CHROMELLM_TEST_BINARY_DIR}/native superbuild")
+run(PIN_REFUSAL "${CMAKE_COMMAND}" -S "${CHROMELLM_NATIVE_SOURCE_DIR}/../native-superbuild"
+  -B "${CHROMELLM_TEST_BINARY_DIR}/llama-pin-refusal" ${toolchain}
+  -DCHROMELLM_COMPUTE_BACKEND=webgpu -DCHROMELLM_FETCH_SOURCES=OFF
+  "-DCHROMELLM_LLAMA_SOURCE_DIR=${fixture}/llama"
+  "-DCHROMELLM_DAWN_SOURCE_DIR=${fixture}/dawn"
+  "-DCHROMELLM_LLAMA_REVISION=0000000000000000000000000000000000000000"
+  "-DCHROMELLM_DAWN_REVISION=${fixture_dawn_revision}")
+run(PIN_REFUSAL "${CMAKE_COMMAND}" -S "${CHROMELLM_NATIVE_SOURCE_DIR}/../native-superbuild"
+  -B "${CHROMELLM_TEST_BINARY_DIR}/dawn-pin-refusal" ${toolchain}
+  -DCHROMELLM_COMPUTE_BACKEND=webgpu -DCHROMELLM_FETCH_SOURCES=OFF
+  "-DCHROMELLM_LLAMA_SOURCE_DIR=${fixture}/llama"
+  "-DCHROMELLM_DAWN_SOURCE_DIR=${fixture}/dawn"
+  "-DCHROMELLM_LLAMA_REVISION=${fixture_llama_revision}"
+  "-DCHROMELLM_DAWN_REVISION=0000000000000000000000000000000000000000")
 run(PASS "${CMAKE_COMMAND}" -S "${CHROMELLM_NATIVE_SOURCE_DIR}/../native-superbuild"
   -B "${build}" ${toolchain} -DCHROMELLM_COMPUTE_BACKEND=webgpu
   -DCHROMELLM_FETCH_SOURCES=OFF "-DCHROMELLM_LLAMA_SOURCE_DIR=${fixture}/llama"
-  "-DCHROMELLM_DAWN_SOURCE_DIR=${fixture}/dawn")
+  "-DCHROMELLM_DAWN_SOURCE_DIR=${fixture}/dawn"
+  "-DCHROMELLM_LLAMA_REVISION=${fixture_llama_revision}"
+  "-DCHROMELLM_DAWN_REVISION=${fixture_dawn_revision}")
 run(PASS "${CMAKE_COMMAND}" --build "${build}" --target chromellm-dawn --config Release)
 if(NOT EXISTS "${build}/dawn-install/share/native-fixture.txt" OR EXISTS "${build}/sources")
   message(FATAL_ERROR "Native Dawn staging did not preserve the download-free source contract")
 endif()
-message(STATUS "Native build boundary: six browser refusals and native Dawn staging passed")
+message(STATUS "Native build boundary: six browser refusals, two source-pin refusals and native Dawn staging passed")
