@@ -62,7 +62,18 @@ public final class NativeDistributionTestMain {
                     set(JAVA_JVM_LIBRARY "${_chromellm_jvm}" CACHE FILEPATH "Selected JDK JVM library")
                   endif()
                 endif()
-                find_package(JNI REQUIRED)
+                # This relocatable test library only includes jni.h and is loaded
+                # by the real Java process below. JVM linking is not needed:
+                # keep JNI headers REQUIRED and the JVM library OPTIONAL here.
+                # The production native bridge still requires the JVM component.
+                if(CMAKE_VERSION VERSION_LESS "3.24")
+                  find_package(JNI REQUIRED)
+                else()
+                  find_package(JNI REQUIRED OPTIONAL_COMPONENTS JVM)
+                endif()
+                if(NOT JNI_INCLUDE_DIRS)
+                  message(FATAL_ERROR "JNI headers required for native distribution fixture")
+                endif()
                 include("%s/NativeDistribution.cmake")
                 chromellm_relocatable_libraries()
                 add_library(%s SHARED dependency.cpp)
