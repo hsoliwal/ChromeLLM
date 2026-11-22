@@ -10,6 +10,19 @@ if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# CMake's FindJNI may parse Windows JAVA_HOME backslashes as escape sequences
+# (e.g. \h). Normalize the supplied hint before JNI discovery; do not bypass
+# the required JVM component, or change the caller's actual source pin.
+if(WIN32)
+  if(DEFINED JAVA_HOME AND NOT JAVA_HOME STREQUAL "")
+    string(REPLACE "\\" "/" JAVA_HOME "${JAVA_HOME}")
+  endif()
+  if(DEFINED ENV{JAVA_HOME} AND NOT "$ENV{JAVA_HOME}" STREQUAL "")
+    string(REPLACE "\\" "/" _chromellm_jdk_home "$ENV{JAVA_HOME}")
+    set(ENV{JAVA_HOME} "${_chromellm_jdk_home}")
+  endif()
+endif()
+
 # The bridge uses JNI headers and the running JVM, never AWT. Older CMake
 # versions do not expose FindJNI components and retain full-JDK discovery.
 if(CMAKE_VERSION VERSION_LESS "3.24")

@@ -41,6 +41,7 @@ public final class NativeBuildArtifactsContractTestMain {
             if (Files.exists(root.getParent().resolve("escape"))) throw new AssertionError("ZIP escaped");
             writeZip(zip, "pinned.tar.gz", bytes, true);
             reject(() -> NativeBuildArtifacts.unpackSingleZip(zip, output, "pinned.tar.gz", hash, 4));
+            testReadOnlyTemporaryFile(root);
             testLargeGitStatus(root);
             System.out.println("native binary artifact contracts passed");
         } finally {
@@ -58,7 +59,17 @@ public final class NativeBuildArtifactsContractTestMain {
                 snapshot = paths.sorted(Comparator.reverseOrder()).toList();
             }
             try {
-                for (Path item : snapshot) Files.delete(item);
+                for (Path item : snapshot) {
+                    // Git objects are often DOS read-only on Windows, even after
+                    // the Git child process has exited. Touch only this temp tree.
+                    if (!Files.isSymbolicLink(item)) {
+                        var dos = Files.getFileAttributeView(item,
+                                java.nio.file.attribute.DosFileAttributeView.class,
+                                java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                        if (dos != null && dos.readAttributes().isReadOnly()) dos.setReadOnly(false);
+                    }
+                    Files.delete(item);
+                }
                 return;
             } catch (java.nio.file.AccessDeniedException |
                      java.nio.file.DirectoryNotEmptyException locked) {
@@ -66,6 +77,18 @@ public final class NativeBuildArtifactsContractTestMain {
                 Thread.sleep(100L * (attempt + 1));
             }
         }
+    }
+
+    private static void testReadOnlyTemporaryFile(Path root) throws Exception {
+        if (!System.getProperty("os.name", "").startsWith("Windows")) return;
+        Path file = Files.createFile(root.resolve("readonly-object-fixture"));
+        var dos = Files.getFileAttributeView(file,
+                java.nio.file.attribute.DosFileAttributeView.class,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        if (dos == null) throw new AssertionError("Windows DOS file attributes unavailable");
+        dos.setReadOnly(true);
+        deleteFixtureTree(file);
+        if (Files.exists(file)) throw new AssertionError("read-only fixture survived cleanup");
     }
 
     private static void writeZip(Path path, String name, byte[] bytes, boolean extra) throws IOException {
