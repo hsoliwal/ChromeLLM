@@ -44,8 +44,26 @@ public final class NativeBuildArtifactsContractTestMain {
             testLargeGitStatus(root);
             System.out.println("native binary artifact contracts passed");
         } finally {
+            deleteFixtureTree(root);
+        }
+    }
+
+    // Close directory enumeration handles before deleting temporary Git objects
+    // (required on Windows). Retry only transient locks; never ignore a leak.
+    private static void deleteFixtureTree(Path root) throws Exception {
+        for (int attempt = 0; attempt < 10; attempt++) {
+            if (!Files.exists(root)) return;
+            List<Path> snapshot;
             try (var paths = Files.walk(root)) {
-                for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path);
+                snapshot = paths.sorted(Comparator.reverseOrder()).toList();
+            }
+            try {
+                for (Path item : snapshot) Files.delete(item);
+                return;
+            } catch (java.nio.file.AccessDeniedException |
+                     java.nio.file.DirectoryNotEmptyException locked) {
+                if (attempt == 9) throw locked;
+                Thread.sleep(100L * (attempt + 1));
             }
         }
     }
