@@ -33,8 +33,15 @@ file(WRITE "${source}/probe.cpp" [=[
 int main(int argc, char** argv) {
   if (argc != 2) return 2;
 #if defined(_WIN32)
-  auto library = LoadLibraryExA(argv[1], nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
-  if (!library) return 3;
+  // Resolve only from the relocated DLL's own directory and Windows system
+  // directories; never search the caller's CWD or PATH for injected DLLs.
+  auto library = LoadLibraryExA(argv[1], nullptr,
+      LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+  if (!library) {
+    std::fprintf(stderr, "LoadLibraryExA failed with Win32 error %lu\n",
+                 static_cast<unsigned long>(GetLastError()));
+    return 3;
+  }
   auto answer = reinterpret_cast<int(*)()>(GetProcAddress(library, "package_answer"));
 #else
   auto library = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);

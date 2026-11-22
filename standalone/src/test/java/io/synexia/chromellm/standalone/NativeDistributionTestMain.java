@@ -53,6 +53,15 @@ public final class NativeDistributionTestMain {
         Files.writeString(source.resolve("CMakeLists.txt"), """
                 cmake_minimum_required(VERSION 3.21)
                 project(distribution_fixture LANGUAGES CXX)
+                # The fixture needs JNI headers. On macOS FindJNI may not infer
+                # libjvm.dylib from a selected Temurin JDK even when it exists.
+                # Supply the exact local JVM library as a hint; still require JNI.
+                if(APPLE AND NOT JAVA_JVM_LIBRARY AND DEFINED ENV{JAVA_HOME})
+                  set(_chromellm_jvm "$ENV{JAVA_HOME}/lib/server/libjvm.dylib")
+                  if(EXISTS "${_chromellm_jvm}")
+                    set(JAVA_JVM_LIBRARY "${_chromellm_jvm}" CACHE FILEPATH "Selected JDK JVM library")
+                  endif()
+                endif()
                 find_package(JNI REQUIRED)
                 include("%s/NativeDistribution.cmake")
                 chromellm_relocatable_libraries()
