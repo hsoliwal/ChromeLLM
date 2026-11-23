@@ -31,12 +31,25 @@ file(WRITE "${source}/probe.cpp" [=[
 #include <dlfcn.h>
 #endif
 int main(int argc, char** argv) {
-  if (argc != 2) return 2;
 #if defined(_WIN32)
-  auto library = LoadLibraryExA(argv[1], nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
-  if (!library) return 3;
+  if (argc != 4) return 2;
+  // Resolve only from the relocated DLL's own directory and Windows system
+  // directories; never search the caller's CWD or PATH for injected DLLs.
+  // Match the manifest's dependency-first loadOrder. Every DLL has already
+  // passed native manifest and SHA-256 verification before this relocation probe.
+  HMODULE library = nullptr;
+  for (int index = 1; index != 4; ++index) {
+    library = LoadLibraryExA(argv[index], nullptr,
+        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+    if (!library) {
+      std::fprintf(stderr, "LoadLibraryExA failed for %s, Win32 error %lu\n",
+                   argv[index], static_cast<unsigned long>(GetLastError()));
+      return 3;
+    }
+  }
   auto answer = reinterpret_cast<int(*)()>(GetProcAddress(library, "package_answer"));
 #else
+  if (argc != 2) return 2;
   auto library = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
   if (!library) { std::fprintf(stderr, "%s\n", dlerror()); return 3; }
   auto answer = reinterpret_cast<int(*)()>(dlsym(library, "package_answer"));
@@ -152,7 +165,12 @@ file(RENAME "${build}/package_leaf-hidden" "${build}/package_leaf")
 foreach(directory package_leaf package_middle chromellm_llama_jni)
   file(RENAME "${build}/${directory}" "${build}/${directory}-hidden")
 endforeach()
-run(PASS "${probe}" "${resource}/${root_name}")
+if(WIN32)
+  run(PASS "${probe}" "${resource}/${leaf_name}"
+    "${resource}/${middle_name}" "${resource}/${root_name}")
+else()
+  run(PASS "${probe}" "${resource}/${root_name}")
+endif()
 run(REFUSE "${CMAKE_COMMAND}" --install "${build}" --config Release --prefix "${stage}" --component ChromeLLMNative)
 file(READ "${resource}/manifest.properties" retained_manifest)
 if(NOT manifest STREQUAL retained_manifest)

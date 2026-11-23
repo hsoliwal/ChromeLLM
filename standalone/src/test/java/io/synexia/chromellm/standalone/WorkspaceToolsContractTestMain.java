@@ -219,7 +219,9 @@ public final class WorkspaceToolsContractTestMain {
     }
 
     private static void directoryIterationFailure(Path root) throws Exception {
-        Path selected = root.resolve("basic");
+        // The workspace constructor resolves its root; the reflected guard needs
+        // the same canonical path (macOS may expose /var through /private/var).
+        Path selected = root.resolve("basic").toRealPath();
         Object tools = workspace(selected);
         Class<?> owner = tools.getClass();
         Class<?> directoryClass = Class.forName(owner.getName() + "$Directory");

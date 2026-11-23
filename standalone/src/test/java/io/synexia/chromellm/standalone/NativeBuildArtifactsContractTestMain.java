@@ -41,13 +41,54 @@ public final class NativeBuildArtifactsContractTestMain {
             if (Files.exists(root.getParent().resolve("escape"))) throw new AssertionError("ZIP escaped");
             writeZip(zip, "pinned.tar.gz", bytes, true);
             reject(() -> NativeBuildArtifacts.unpackSingleZip(zip, output, "pinned.tar.gz", hash, 4));
+            testReadOnlyTemporaryFile(root);
             testLargeGitStatus(root);
             System.out.println("native binary artifact contracts passed");
         } finally {
+            deleteFixtureTree(root);
+        }
+    }
+
+    // Close directory enumeration handles before deleting temporary Git objects
+    // (required on Windows). Retry only transient locks; never ignore a leak.
+    private static void deleteFixtureTree(Path root) throws Exception {
+        for (int attempt = 0; attempt < 10; attempt++) {
+            if (!Files.exists(root)) return;
+            List<Path> snapshot;
             try (var paths = Files.walk(root)) {
-                for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path);
+                snapshot = paths.sorted(Comparator.reverseOrder()).toList();
+            }
+            try {
+                for (Path item : snapshot) {
+                    // Git objects are often DOS read-only on Windows, even after
+                    // the Git child process has exited. Touch only this temp tree.
+                    if (!Files.isSymbolicLink(item)) {
+                        var dos = Files.getFileAttributeView(item,
+                                java.nio.file.attribute.DosFileAttributeView.class,
+                                java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                        if (dos != null && dos.readAttributes().isReadOnly()) dos.setReadOnly(false);
+                    }
+                    Files.delete(item);
+                }
+                return;
+            } catch (java.nio.file.AccessDeniedException |
+                     java.nio.file.DirectoryNotEmptyException locked) {
+                if (attempt == 9) throw locked;
+                Thread.sleep(100L * (attempt + 1));
             }
         }
+    }
+
+    private static void testReadOnlyTemporaryFile(Path root) throws Exception {
+        if (!System.getProperty("os.name", "").startsWith("Windows")) return;
+        Path file = Files.createFile(root.resolve("readonly-object-fixture"));
+        var dos = Files.getFileAttributeView(file,
+                java.nio.file.attribute.DosFileAttributeView.class,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        if (dos == null) throw new AssertionError("Windows DOS file attributes unavailable");
+        dos.setReadOnly(true);
+        deleteFixtureTree(file);
+        if (Files.exists(file)) throw new AssertionError("read-only fixture survived cleanup");
     }
 
     private static void writeZip(Path path, String name, byte[] bytes, boolean extra) throws IOException {
