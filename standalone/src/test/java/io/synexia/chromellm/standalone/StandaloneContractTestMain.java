@@ -385,6 +385,38 @@ public final class StandaloneContractTestMain {
         check(LlamaCppCliBackend.completionTool(List.of("/opt/llama/llama-completion")), "completion binary");
         check(!LlamaCppCliBackend.completionTool(List.of("/opt/llama/llama-cli")), "chat CLI");
         check(!LlamaCppCliBackend.completionTool(List.of("java", "-cp", "x", "Fake")), "test launcher");
+        String frame = "\nbuild      : pinned\nmodel      : fixture\nmodalities : text\n"
+                + "\navailable commands:\n  /exit or Ctrl+C     stop or exit\n\n> " + prompt + "\n";
+        String footer = "\n\nExiting...\n";
+        check(LlamaCppCliBackend.reply(frame + "Fix it." + footer, prompt).equals("Fix it."),
+                "framed chat CLI exit footer is not model output");
+        check(LlamaCppCliBackend.reply((frame + "Fix it." + footer).replace("\n", "\r\n"), prompt)
+                .equals("Fix it."), "framed Windows CLI exit footer");
+        check(LlamaCppCliBackend.reply(frame + "Fix it.\n[end of text]" + footer, prompt).equals("Fix it."),
+                "end-of-text marker before framed CLI footer");
+        check(LlamaCppCliBackend.reply(frame + "\u001B[32mFix it.\u001B[0m" + footer, prompt).equals("Fix it."),
+                "ANSI formatting does not hide framed terminal delimiter");
+        check(LlamaCppCliBackend.reply(frame + footer, prompt).isEmpty(), "UI-only output is empty");
+        check(LlamaCppCliBackend.reply("Answer" + footer, prompt).equals("Answer\n\nExiting..."),
+                "unframed model suffix is retained");
+        check(LlamaCppCliBackend.reply("> " + prompt + "\nAnswer" + footer, prompt)
+                .equals("Answer\n\nExiting..."), "echo alone does not establish CLI terminal framing");
+        check(LlamaCppCliBackend.reply(frame.replace("model      : fixture\n", "") + "Answer" + footer, prompt)
+                .equals("Answer\n\nExiting..."), "incomplete UI header does not establish terminal framing");
+        check(LlamaCppCliBackend.reply(frame + "Answer" + footer, prompt, true).equals("Answer\n\nExiting..."),
+                "completion output retains an otherwise matching suffix");
+        check(LlamaCppCliBackend.reply(frame + "Say Exiting... here." + footer, prompt).equals("Say Exiting... here."),
+                "inline model text is preserved");
+        check(LlamaCppCliBackend.reply(frame + "Answer\n\nExiting..." + footer, prompt)
+                .equals("Answer\n\nExiting..."), "only terminal UI footer is removed, preserving model-authored suffix");
+        check(LlamaCppCliBackend.reply(frame + "Answer\nExiting...\n", prompt).equals("Answer\nExiting..."),
+                "single-line model suffix is not the terminal delimiter");
+        check(LlamaCppCliBackend.reply(frame + "Answer\n\nExiting...", prompt).equals("Answer\n\nExiting..."),
+                "unterminated candidate suffix is preserved");
+        String terminalPrompt = prompt + "\n\nExiting...";
+        String echoOnly = frame.substring(0, frame.indexOf("> ")) + "> " + terminalPrompt + "\n";
+        check(LlamaCppCliBackend.reply(echoOnly, terminalPrompt).isEmpty(),
+                "a terminal phrase inside the echoed prompt is not a footer");
     }
 
     private static void check(boolean condition) {

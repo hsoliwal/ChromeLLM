@@ -36,6 +36,7 @@ public final class LlamaCppCliBackend implements ModelBackend {
     private static final List<String> COMPLETION_FLAGS = List.of("--no-display-prompt", "--simple-io", "--single-turn");
     private static final Pattern ANSI_ESCAPE = Pattern.compile("\u001B\\[[0-?]*[ -/]*[@-~]");
     private static final String END_OF_TEXT = "[end of text]";
+    private static final String CHAT_EXIT = "\n\nExiting...\n";
     private static final String ECHO_MARK = "> ";
     private final List<String> launcher;
     private final Path model;
@@ -114,7 +115,7 @@ public final class LlamaCppCliBackend implements ModelBackend {
                     .onMalformedInput(CodingErrorAction.REPORT)
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(output)).toString();
-            text = reply(text, request.prompt());
+            text = reply(text, request.prompt(), completionTool(launcher));
             if (text.isEmpty()) {
                 throw new IOException("llama.cpp CLI produced no candidate text");
             }
@@ -243,13 +244,32 @@ public final class LlamaCppCliBackend implements ModelBackend {
      * Output without an echo (llama-completion) keeps all of its text.
      */
     static String reply(String raw, String prompt) {
+        return reply(raw, prompt, false);
+    }
+
+    static String reply(String raw, String prompt, boolean completion) {
         String text = ANSI_ESCAPE.matcher(raw).replaceAll("").replace("\r\n", "\n");
         String echo = ECHO_MARK + prompt.replace("\r\n", "\n").strip();
         int at = text.indexOf(echo); // the first echo: a reply that quotes the prompt keeps its quote
+        // The current chat CLI prints this terminal delimiter outside generation.
+        // Require its ordered UI header before the request echo, not just words
+        // at the end of model text. Completion tools and unframed text keep it.
+        if (!completion && at >= 0 && text.endsWith(CHAT_EXIT)
+                && text.length() - CHAT_EXIT.length() >= at + echo.length() && chatUiHeader(text, at)) {
+            text = text.substring(0, text.length() - CHAT_EXIT.length());
+        }
         if (at >= 0) text = text.substring(at + echo.length());
         text = text.strip();
         if (text.endsWith(END_OF_TEXT)) text = text.substring(0, text.length() - END_OF_TEXT.length());
         return text.strip();
+    }
+
+    private static boolean chatUiHeader(String text, int echo) {
+        int build = text.indexOf("\nbuild      : ");
+        int model = text.indexOf("\nmodel      : ", build + 1);
+        int modalities = text.indexOf("\nmodalities : ", model + 1);
+        int commands = text.indexOf("\navailable commands:\n  /exit or Ctrl+C     stop or exit\n", modalities + 1);
+        return build >= 0 && model > build && modalities > model && commands > modalities && commands < echo;
     }
 
     private static byte[] awaitProcess(Process process, long deadline)

@@ -116,7 +116,7 @@ def main():
     native_cache.mkdir()
     model_cache.mkdir()
     prompt = work / "prompt.txt"
-    prompt.write_text(PROMPT, encoding="utf-8")
+    prompt.write_bytes(PROMPT.encode("utf-8"))
 
     certificate, key = work / "server.crt", work / "server.key"
     subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
