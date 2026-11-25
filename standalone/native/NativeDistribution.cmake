@@ -42,20 +42,35 @@ set(search_directories \"${runtime_directories}\")
 if(NOT EXISTS \"\${bridge}\")
   message(FATAL_ERROR \"Missing native bridge: \${bridge}\")
 endif()
-file(GET_RUNTIME_DEPENDENCIES LIBRARIES \"\${bridge}\"
-  DIRECTORIES \${search_directories}
-  RESOLVED_DEPENDENCIES_VAR dependencies UNRESOLVED_DEPENDENCIES_VAR unresolved
-  PRE_EXCLUDE_REGEXES \"api-ms-.*\" \"ext-ms-.*\"
-  POST_EXCLUDE_REGEXES \"^(/lib|/lib64|/usr/lib|/usr/lib64)(/[^/]+)?/(libc|libm|libdl|libpthread|librt|libstdc[+][+]|libgcc_s)[.]so([.][0-9]+)*$\" \"^(/lib|/lib64|/usr/lib|/usr/lib64)(/[^/]+)?/ld-linux[^/]*[.]so([.][0-9]+)*$\"
-    \"^/usr/lib/[^/]+[.]dylib$\" \"^/System/Library/.*\")
-if(unresolved)
-  message(FATAL_ERROR \"Unresolved native runtime libraries: \${unresolved}\")
-endif()
 set(system_dlls kernel32.dll kernelbase.dll ntdll.dll advapi32.dll bcrypt.dll crypt32.dll
   gdi32.dll user32.dll ole32.dll oleaut32.dll rpcrt4.dll secur32.dll shell32.dll shlwapi.dll
   userenv.dll version.dll winmm.dll ws2_32.dll ucrtbase.dll msvcrt.dll vcruntime140.dll
   vcruntime140_1.dll msvcp140.dll msvcp140_1.dll msvcp140_2.dll msvcp140_atomic_wait.dll
   msvcp140_codecvt_ids.dll combase.dll cfgmgr32.dll imm32.dll powrprof.dll setupapi.dll)
+# Approved Windows system DLLs are the platform boundary: they are never packaged, and their
+# private OS imports (optional, SKU- and runner-image-specific components) are not walked.
+# Direct imports of any other DLL must still resolve and are checked below.
+set(system_dll_excludes \"\")
+if(WIN32)
+  # Match only <drive>:<sep>Windows<sep>System32<sep><approved dll>, where <sep> is a real path
+  # separator: GetSystemDirectory() returns backslashes and the import name is joined with '/'.
+  string(ASCII 92 backslash)
+  set(separator \"[/\${backslash}]\")
+  foreach(system_dll IN LISTS system_dlls)
+    string(REPLACE \".\" \"[.]\" system_dll_pattern \"\${system_dll}\")
+    list(APPEND system_dll_excludes
+      \"^[A-Za-z]:\${separator}[Ww][Ii][Nn][Dd][Oo][Ww][Ss]\${separator}[Ss][Yy][Ss][Tt][Ee][Mm]32\${separator}\${system_dll_pattern}$\")
+  endforeach()
+endif()
+file(GET_RUNTIME_DEPENDENCIES LIBRARIES \"\${bridge}\"
+  DIRECTORIES \${search_directories}
+  RESOLVED_DEPENDENCIES_VAR dependencies UNRESOLVED_DEPENDENCIES_VAR unresolved
+  PRE_EXCLUDE_REGEXES \"api-ms-.*\" \"ext-ms-.*\"
+  POST_EXCLUDE_REGEXES \"^(/lib|/lib64|/usr/lib|/usr/lib64)(/[^/]+)?/(libc|libm|libdl|libpthread|librt|libstdc[+][+]|libgcc_s)[.]so([.][0-9]+)*$\" \"^(/lib|/lib64|/usr/lib|/usr/lib64)(/[^/]+)?/ld-linux[^/]*[.]so([.][0-9]+)*$\"
+    \"^/usr/lib/[^/]+[.]dylib$\" \"^/System/Library/.*\" \${system_dll_excludes})
+if(unresolved)
+  message(FATAL_ERROR \"Unresolved native runtime libraries: \${unresolved}\")
+endif()
 set(owned_dependencies \"\")
 foreach(library IN LISTS dependencies)
   file(REAL_PATH \"\${library}\" resolved_library)
@@ -64,7 +79,9 @@ foreach(library IN LISTS dependencies)
   if(WIN32 AND runtime_path MATCHES \"/windows/system32/\" AND runtime_name IN_LIST system_dlls)
     continue()
   endif()
-  set(producer_root \"${CMAKE_BINARY_DIR}\")
+  # file(REAL_PATH) canonicalizes the library (Windows 8.3 names such as RUNNER~1, macOS
+  # /var -> /private/var); canonicalize the producer root the same way before comparing.
+  file(REAL_PATH \"${CMAKE_BINARY_DIR}\" producer_root)
   cmake_path(IS_PREFIX producer_root \"\${resolved_library}\" NORMALIZE owned_library)
   if(NOT owned_library)
     message(FATAL_ERROR \"Unsupported external native runtime dependency: \${library}; supply a separately qualified source-linked runtime\")
