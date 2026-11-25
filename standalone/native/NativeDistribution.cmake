@@ -42,20 +42,31 @@ set(search_directories \"${runtime_directories}\")
 if(NOT EXISTS \"\${bridge}\")
   message(FATAL_ERROR \"Missing native bridge: \${bridge}\")
 endif()
-file(GET_RUNTIME_DEPENDENCIES LIBRARIES \"\${bridge}\"
-  DIRECTORIES \${search_directories}
-  RESOLVED_DEPENDENCIES_VAR dependencies UNRESOLVED_DEPENDENCIES_VAR unresolved
-  PRE_EXCLUDE_REGEXES \"api-ms-.*\" \"ext-ms-.*\"
-  POST_EXCLUDE_REGEXES \"^(/lib|/lib64|/usr/lib|/usr/lib64)(/[^/]+)?/(libc|libm|libdl|libpthread|librt|libstdc[+][+]|libgcc_s)[.]so([.][0-9]+)*$\" \"^(/lib|/lib64|/usr/lib|/usr/lib64)(/[^/]+)?/ld-linux[^/]*[.]so([.][0-9]+)*$\"
-    \"^/usr/lib/[^/]+[.]dylib$\" \"^/System/Library/.*\")
-if(unresolved)
-  message(FATAL_ERROR \"Unresolved native runtime libraries: \${unresolved}\")
-endif()
 set(system_dlls kernel32.dll kernelbase.dll ntdll.dll advapi32.dll bcrypt.dll crypt32.dll
   gdi32.dll user32.dll ole32.dll oleaut32.dll rpcrt4.dll secur32.dll shell32.dll shlwapi.dll
   userenv.dll version.dll winmm.dll ws2_32.dll ucrtbase.dll msvcrt.dll vcruntime140.dll
   vcruntime140_1.dll msvcp140.dll msvcp140_1.dll msvcp140_2.dll msvcp140_atomic_wait.dll
   msvcp140_codecvt_ids.dll combase.dll cfgmgr32.dll imm32.dll powrprof.dll setupapi.dll)
+# Approved Windows system DLLs are the platform boundary: they are never packaged, and their
+# private OS imports (optional, SKU- and runner-image-specific components) are not walked.
+# Direct imports of any other DLL must still resolve and are checked below.
+set(system_dll_excludes \"\")
+if(WIN32)
+  foreach(system_dll IN LISTS system_dlls)
+    string(REPLACE \".\" \"[.]\" system_dll_pattern \"\${system_dll}\")
+    list(APPEND system_dll_excludes
+      \"[^A-Za-z0-9][Ww][Ii][Nn][Dd][Oo][Ww][Ss][^A-Za-z0-9][Ss][Yy][Ss][Tt][Ee][Mm]32[^A-Za-z0-9]\${system_dll_pattern}$\")
+  endforeach()
+endif()
+file(GET_RUNTIME_DEPENDENCIES LIBRARIES \"\${bridge}\"
+  DIRECTORIES \${search_directories}
+  RESOLVED_DEPENDENCIES_VAR dependencies UNRESOLVED_DEPENDENCIES_VAR unresolved
+  PRE_EXCLUDE_REGEXES \"api-ms-.*\" \"ext-ms-.*\"
+  POST_EXCLUDE_REGEXES \"^(/lib|/lib64|/usr/lib|/usr/lib64)(/[^/]+)?/(libc|libm|libdl|libpthread|librt|libstdc[+][+]|libgcc_s)[.]so([.][0-9]+)*$\" \"^(/lib|/lib64|/usr/lib|/usr/lib64)(/[^/]+)?/ld-linux[^/]*[.]so([.][0-9]+)*$\"
+    \"^/usr/lib/[^/]+[.]dylib$\" \"^/System/Library/.*\" \${system_dll_excludes})
+if(unresolved)
+  message(FATAL_ERROR \"Unresolved native runtime libraries: \${unresolved}\")
+endif()
 set(owned_dependencies \"\")
 foreach(library IN LISTS dependencies)
   file(REAL_PATH \"\${library}\" resolved_library)
