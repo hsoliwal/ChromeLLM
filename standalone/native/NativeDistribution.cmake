@@ -75,7 +75,9 @@ foreach(library IN LISTS dependencies)
   if(WIN32 AND runtime_path MATCHES \"/windows/system32/\" AND runtime_name IN_LIST system_dlls)
     continue()
   endif()
-  set(producer_root \"${CMAKE_BINARY_DIR}\")
+  # file(REAL_PATH) canonicalizes the library (Windows 8.3 names such as RUNNER~1, macOS
+  # /var -> /private/var); canonicalize the producer root the same way before comparing.
+  file(REAL_PATH \"${CMAKE_BINARY_DIR}\" producer_root)
   cmake_path(IS_PREFIX producer_root \"\${resolved_library}\" NORMALIZE owned_library)
   if(NOT owned_library)
     message(FATAL_ERROR \"Unsupported external native runtime dependency: \${library}; supply a separately qualified source-linked runtime\")
