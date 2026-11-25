@@ -52,10 +52,14 @@ set(system_dlls kernel32.dll kernelbase.dll ntdll.dll advapi32.dll bcrypt.dll cr
 # Direct imports of any other DLL must still resolve and are checked below.
 set(system_dll_excludes \"\")
 if(WIN32)
+  # Match only <drive>:<sep>Windows<sep>System32<sep><approved dll>, where <sep> is a real path
+  # separator: GetSystemDirectory() returns backslashes and the import name is joined with '/'.
+  string(ASCII 92 backslash)
+  set(separator \"[/\${backslash}]\")
   foreach(system_dll IN LISTS system_dlls)
     string(REPLACE \".\" \"[.]\" system_dll_pattern \"\${system_dll}\")
     list(APPEND system_dll_excludes
-      \"[^A-Za-z0-9][Ww][Ii][Nn][Dd][Oo][Ww][Ss][^A-Za-z0-9][Ss][Yy][Ss][Tt][Ee][Mm]32[^A-Za-z0-9]\${system_dll_pattern}$\")
+      \"^[A-Za-z]:\${separator}[Ww][Ii][Nn][Dd][Oo][Ww][Ss]\${separator}[Ss][Yy][Ss][Tt][Ee][Mm]32\${separator}\${system_dll_pattern}$\")
   endforeach()
 endif()
 file(GET_RUNTIME_DEPENDENCIES LIBRARIES \"\${bridge}\"
