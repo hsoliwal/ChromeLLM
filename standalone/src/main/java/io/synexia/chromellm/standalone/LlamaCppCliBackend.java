@@ -6,6 +6,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryNotEmptyException;
@@ -15,11 +16,13 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Browser-free llama.cpp CLI adapter. The executable and licensed GGUF model are external. */
@@ -37,6 +40,7 @@ public final class LlamaCppCliBackend implements ModelBackend {
     private static final Pattern ANSI_ESCAPE = Pattern.compile("\u001B\\[[0-?]*[ -/]*[@-~]");
     private static final String END_OF_TEXT = "[end of text]";
     private static final String CHAT_EXIT = "\n\nExiting...\n";
+    private static final int CHAT_ECHO_BYTES = 500;
     private static final String ECHO_MARK = "> ";
     private final List<String> launcher;
     private final Path model;
@@ -111,11 +115,7 @@ public final class LlamaCppCliBackend implements ModelBackend {
             checkInterrupted();
             Process process = processScope.start(request, promptFile);
             byte[] output = awaitProcess(process, deadline);
-            String text = StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(output)).toString();
-            text = reply(text, request.prompt(), completionTool(launcher));
+            String text = reply(output, request.prompt(), completionTool(launcher));
             if (text.isEmpty()) {
                 throw new IOException("llama.cpp CLI produced no candidate text");
             }
@@ -238,6 +238,65 @@ public final class LlamaCppCliBackend implements ModelBackend {
         return file.equals("llama-completion") || file.equals("llama-completion.exe");
     }
 
+    /** Decode only after removing an exactly recognized byte-truncated chat UI echo. */
+    static String reply(byte[] raw, String prompt, boolean completion) throws CharacterCodingException {
+        byte[] framed = completion ? null : truncatedChatReply(raw, prompt.getBytes(StandardCharsets.UTF_8));
+        String text = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(framed == null ? raw : framed)).toString();
+        if (framed == null) return reply(text, prompt, completion);
+        text = normalizeUi(text);
+        if (text.endsWith(CHAT_EXIT)) text = text.substring(0, text.length() - CHAT_EXIT.length());
+        return cleanReply(text);
+    }
+
+    private static byte[] truncatedChatReply(byte[] raw, byte[] prompt) {
+        if (prompt.length <= CHAT_ECHO_BYTES) return null;
+        // The pinned chat UI displays the first 500 bytes, which can split UTF-8.
+        // ISO-8859-1 is a lossless byte view here, never a model-text decoder.
+        String byteView = new String(raw, StandardCharsets.ISO_8859_1);
+        String text = normalizeUi(byteView);
+        String echo = normalizeUi("\n" + ECHO_MARK
+                + new String(prompt, 0, CHAT_ECHO_BYTES, StandardCharsets.ISO_8859_1)
+                + " ... (truncated)\n");
+        int at = text.indexOf(echo);
+        if (at < 0 || !chatUiHeader(text, at)) return null;
+        // Preserve the original candidate bytes. Removing ANSI before strict UTF-8
+        // decoding could otherwise join invalid byte fragments into a valid character.
+        return Arrays.copyOfRange(raw, originalUiBoundary(byteView, at + echo.length()), raw.length);
+    }
+
+    /** Map an ANSI/CRLF-normalized UI boundary back to its original byte-view offset. */
+    private static int originalUiBoundary(String raw, int normalizedOffset) {
+        Matcher ansi = ANSI_ESCAPE.matcher(raw);
+        boolean control = ansi.find();
+        int visible = 0;
+        for (int at = 0; at < raw.length();) {
+            if (control && at == ansi.start()) {
+                at = ansi.end();
+                control = ansi.find();
+                continue;
+            }
+            char value = raw.charAt(at++);
+            if (value == '\r') {
+                // ANSI is removed before CRLF normalization, including controls
+                // between a carriage return and its following line feed.
+                while (control && at == ansi.start()) {
+                    at = ansi.end();
+                    control = ansi.find();
+                }
+                if (at < raw.length() && raw.charAt(at) == '\n') at++;
+            }
+            if (++visible == normalizedOffset) return at;
+        }
+        throw new IllegalArgumentException("normalized UI boundary is outside native stdout");
+    }
+
+    private static String normalizeUi(String text) {
+        return ANSI_ESCAPE.matcher(text).replaceAll("").replace("\r\n", "\n");
+    }
+
     /**
      * The model's reply from raw stdout: ANSI escapes removed, CRLF normalised, everything up to and including
      * the chat CLI's echoed prompt ("> " + prompt) dropped, and llama.cpp's trailing "[end of text]" removed.
@@ -248,7 +307,7 @@ public final class LlamaCppCliBackend implements ModelBackend {
     }
 
     static String reply(String raw, String prompt, boolean completion) {
-        String text = ANSI_ESCAPE.matcher(raw).replaceAll("").replace("\r\n", "\n");
+        String text = normalizeUi(raw);
         String echo = ECHO_MARK + prompt.replace("\r\n", "\n").strip();
         int at = text.indexOf(echo); // the first echo: a reply that quotes the prompt keeps its quote
         // The current chat CLI prints this terminal delimiter outside generation.
@@ -259,6 +318,10 @@ public final class LlamaCppCliBackend implements ModelBackend {
             text = text.substring(0, text.length() - CHAT_EXIT.length());
         }
         if (at >= 0) text = text.substring(at + echo.length());
+        return cleanReply(text);
+    }
+
+    private static String cleanReply(String text) {
         text = text.strip();
         if (text.endsWith(END_OF_TEXT)) text = text.substring(0, text.length() - END_OF_TEXT.length());
         return text.strip();
