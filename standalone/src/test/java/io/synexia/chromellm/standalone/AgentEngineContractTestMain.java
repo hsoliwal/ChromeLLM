@@ -26,6 +26,8 @@ public final class AgentEngineContractTestMain {
         duplicateCallsUseCanonicalArguments();
         numericNormalizationRejectsOverflow();
         receiptVerificationStopsTools();
+        lastModelTurnCannotDispatchTools();
+        providerIdentityMustRemainStable();
         resourceLimits();
         deadlineAndInterruption();
         registryAndImmutableArguments();
@@ -159,6 +161,7 @@ public final class AgentEngineContractTestMain {
         expect(IOException.class, () -> new AgentEngine(calls, List.of(tool), e -> { })
                 .run("goal", 1, limits(16, 1, 65536, 32768, Duration.ofSeconds(2))));
         equal(1, calls.requests.size(), "model call budget is hard");
+        equal(0, tool.executed, "last model turn cannot execute a tool without an observation turn");
         Script initialContext = new Script("{\"type\":\"final\",\"text\":\"ok\"}");
         expect(IOException.class, () -> new AgentEngine(initialContext, List.of(), e -> { })
                 .run("goal", 1, limits(16, 8, 1, 32768, Duration.ofSeconds(2))));
@@ -194,6 +197,58 @@ public final class AgentEngineContractTestMain {
         equal(8, defaults().maxModelCalls(), "default model turns");
         equal(65536, defaults().maxContextChars(), "default context");
         equal(32768, defaults().maxToolOutputBytes(), "default output");
+    }
+
+    private static void lastModelTurnCannotDispatchTools() throws Exception {
+        List<String> order = new ArrayList<>();
+        List<AgentEngine.Event> events = new ArrayList<>();
+        Tool tool = new Tool("a", order);
+        Script single = new Script(plan(step("a", "{}")));
+        expect(IOException.class, () -> new AgentEngine(single, List.of(tool), events::add)
+                .run("goal", 1, limits(16, 1, 65536, 32768, Duration.ofSeconds(2))));
+        equal(List.of(), order, "last-turn plan invokes neither validation nor execution callbacks");
+        check(events.stream().noneMatch(event -> event.phase().startsWith("tool_")),
+                "last-turn refusal emits no tool events");
+        equal(1, single.requests.size(), "last-turn refusal does not retry inference");
+
+        Script multiple = new Script(plan(step("a", "{\"x\":1}")), plan(step("a", "{\"x\":2}")));
+        expect(IOException.class, () -> new AgentEngine(multiple, List.of(tool), event -> { })
+                .run("goal", 1, limits(16, 2, 65536, 32768, Duration.ofSeconds(2))));
+        equal(List.of("validate:a", "execute:a"), order, "only observable earlier-turn tool executes");
+        equal(1, tool.executed, "later final-turn plan has no effects");
+        equal(2, multiple.requests.size(), "multiple plans stop at the declared turn limit");
+
+        Script finalOnly = new Script("{\"type\":\"final\",\"text\":\"done\"}");
+        AgentEngine.Result finalResult = new AgentEngine(finalOnly, List.of(), event -> { })
+                .run("goal", 1, limits(16, 1, 65536, 32768, Duration.ofSeconds(2)));
+        equal("done", finalResult.answer(), "final decision is accepted on the last permitted call");
+        equal(0, finalResult.toolCalls(), "last-turn final result needs no tool");
+    }
+
+    private static void providerIdentityMustRemainStable() throws Exception {
+        Script changedBeforeRun = new Script("{\"type\":\"final\",\"text\":\"done\"}");
+        AgentEngine engine = new AgentEngine(changedBeforeRun, List.of(), event -> { });
+        changedBeforeRun.identity = "replacement";
+        expect(IOException.class, () -> engine.run("goal", 1, defaults()));
+        equal(0, changedBeforeRun.requests.size(), "provider changed after registration never infers");
+
+        for (boolean staleReceipt : List.of(false, true)) {
+            List<String> order = new ArrayList<>();
+            Tool tool = new Tool("a", order);
+            Script changesDuringCall = new Script(plan(step("a", "{}")));
+            changesDuringCall.changeIdentity = true;
+            changesDuringCall.staleIdentity = staleReceipt;
+            expect(IOException.class, () -> new AgentEngine(changesDuringCall, List.of(tool), event -> { })
+                    .run("goal", 1, defaults()));
+            equal(List.of(), order, "changed provider cannot validate or dispatch tools");
+            equal(1, changesDuringCall.requests.size(), "identity mismatch prevents a later model call");
+        }
+
+        Script changedByProgress = new Script("{\"type\":\"final\",\"text\":\"done\"}");
+        expect(IOException.class, () -> new AgentEngine(changedByProgress, List.of(), event -> {
+            if (event.phase().equals("model_start")) changedByProgress.identity = "replacement";
+        }).run("goal", 1, defaults()));
+        equal(0, changedByProgress.requests.size(), "progress callback cannot switch the inference provider");
     }
 
     private static void deadlineAndInterruption() throws Exception {
@@ -299,16 +354,20 @@ public final class AgentEngineContractTestMain {
     private static final class Script implements ModelBackend {
         final List<String> outputs;
         final List<ModelRequest> requests = new ArrayList<>();
-        boolean badProvider, badReceipt, closed;
+        boolean badProvider, badReceipt, closed, changeIdentity, staleIdentity;
+        String identity = "scripted";
         long delayMillis;
         Script(String... outputs) { this.outputs = List.of(outputs); }
-        public String id() { return "scripted"; }
+        public String id() { return identity; }
         public ModelResponse infer(ModelRequest request) throws IOException, InterruptedException {
             requests.add(request);
             if (delayMillis != 0) Thread.sleep(delayMillis);
             if (requests.size() > outputs.size()) throw new AssertionError("Unexpected model call");
+            String previousIdentity = identity;
+            if (changeIdentity) identity = "replacement";
             try {
-                return new ModelResponse(outputs.get(requests.size() - 1), badProvider ? "wrong" : id(),
+                return new ModelResponse(outputs.get(requests.size() - 1),
+                        badProvider ? "wrong" : staleIdentity ? previousIdentity : id(),
                         badReceipt ? "0".repeat(64) : sha(request.prompt()));
             } catch (java.security.NoSuchAlgorithmException impossible) { throw new AssertionError(impossible); }
             catch (Exception failure) { throw new IOException(failure); }
