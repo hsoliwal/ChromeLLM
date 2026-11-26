@@ -101,6 +101,7 @@ final class AgentEngine {
         if (maxTokens < 1 || maxTokens > 32768) throw new IllegalArgumentException("maxTokens must be in [1, 32768]");
         AgentDeadline deadline = AgentDeadline.start(limits.timeout());
         deadline.check();
+        verifyProvider();
         List<Event> events = new ArrayList<>();
         List<Object> history = new ArrayList<>();
         Set<String> used = new HashSet<>();
@@ -112,11 +113,12 @@ final class AgentEngine {
             String prompt = prompt(goal, history, limits.maxContextChars());
             deadline.check();
             emit(events, "model_start", "", deadline);
+            verifyProvider();
             ModelRequest request = new ModelRequest(prompt, maxTokens, deadline.remaining());
             modelCalls++;
             ModelResponse response = backend.infer(request);
             deadline.check();
-            if (response == null || !provider.equals(response.backendId())
+            if (response == null || !provider.equals(backend.id()) || !provider.equals(response.backendId())
                     || !sha256(prompt).equals(response.promptSha256())) {
                 throw new IOException("Agent provider or prompt receipt mismatch");
             }
@@ -134,6 +136,10 @@ final class AgentEngine {
             keys(message, Set.of("type", "steps"));
             if (!"plan".equals(message.get("type")) || !(message.get("steps") instanceof List<?> steps)
                     || steps.isEmpty()) throw protocol();
+            // Reserve a later inference turn to observe every dispatched tool result.
+            if (modelCalls == limits.maxModelCalls()) {
+                throw new IOException("Agent model call limit leaves no turn to observe tools");
+            }
             if (steps.size() > limits.maxSteps() - toolCalls) throw new IOException("Agent step limit exceeded");
             List<Call> validated = new ArrayList<>();
             Set<String> planned = new HashSet<>();
@@ -176,6 +182,11 @@ final class AgentEngine {
     }
 
     private record Call(String name, AgentTool tool, Map<String, Object> arguments, String signature) { }
+
+    /** A configured provider cannot change identity between or during model calls. */
+    private void verifyProvider() throws IOException {
+        if (!provider.equals(backend.id())) throw new IOException("Agent provider identity changed");
+    }
 
     private String prompt(String goal, List<Object> history, int maxChars) throws IOException {
         if (goal.length() > maxChars) throw new IOException("Agent context limit exceeded");

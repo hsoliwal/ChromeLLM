@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeoutException;
 
 /** No-model, no-network admission and MCP contract tests. */
 public final class AgentPlanContractTestMain {
@@ -67,6 +68,7 @@ public final class AgentPlanContractTestMain {
                 "x", 256, Duration.ofSeconds(10)));
         rejectIo(() -> AgentPlanner.plan(fake(new AtomicInteger(), "{\"steps\":[]}", false, false),
                 "x", 256, Duration.ofSeconds(10)));
+        planningHonorsDeadlineAndIdentity(candidate);
 
         String wire = String.join("\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"}}}",
@@ -90,6 +92,81 @@ public final class AgentPlanContractTestMain {
 
     private static Map<String, Object> step(String id) {
         return Map.of("id", id, "tool", "backend_status", "dependsOn", List.of(), "arguments", Map.of());
+    }
+
+    private static void planningHonorsDeadlineAndIdentity(String candidate) throws Exception {
+        ControlledProvider preinterrupted = new ControlledProvider(candidate);
+        Thread.currentThread().interrupt();
+        try {
+            rejectInterrupted(() -> AgentPlanner.plan(preinterrupted, "goal", 8, Duration.ofSeconds(2)));
+            check(Thread.currentThread().isInterrupted(), "preexisting interrupt is preserved");
+            check(preinterrupted.requests.isEmpty(), "preinterrupted planner never calls the provider");
+        } finally { Thread.interrupted(); }
+
+        ControlledProvider interruptedReply = new ControlledProvider(candidate);
+        interruptedReply.interrupt = true;
+        try {
+            rejectInterrupted(() -> AgentPlanner.plan(interruptedReply, "goal", 8, Duration.ofSeconds(2)));
+            check(Thread.currentThread().isInterrupted(), "provider interruption is preserved");
+            check(interruptedReply.requests.size() == 1, "interrupted reply cannot trigger another inference");
+        } finally { Thread.interrupted(); }
+
+        ControlledProvider slow = new ControlledProvider(candidate);
+        slow.delayMillis = 100;
+        try {
+            AgentPlanner.plan(slow, "goal", 8, Duration.ofMillis(40));
+            throw new AssertionError("late planner response was accepted");
+        } catch (TimeoutException expected) { checks++; }
+        check(slow.requests.size() == 1, "deadline test actually exercised one delayed provider reply");
+
+        for (boolean staleReceipt : List.of(false, true)) {
+            ControlledProvider switching = new ControlledProvider(candidate);
+            switching.changeIdentity = true;
+            switching.staleIdentity = staleReceipt;
+            rejectIo(() -> AgentPlanner.plan(switching, "goal", 8, Duration.ofSeconds(2)));
+            check(switching.requests.size() == 1, "identity change refuses candidate without retry");
+        }
+        for (String identity : new String[] {null, " "}) {
+            ControlledProvider invalid = new ControlledProvider(candidate);
+            invalid.identity = identity;
+            rejectIo(() -> AgentPlanner.plan(invalid, "goal", 8, Duration.ofSeconds(2)));
+            check(invalid.requests.isEmpty(), "invalid provider identity is refused before inference");
+        }
+
+        ControlledProvider stable = new ControlledProvider(candidate);
+        check(AgentPlanner.plan(stable, "goal", 8, Duration.ofSeconds(2)).steps().size() == 3,
+                "deadline admission preserves successful planning");
+        ModelRequest request = stable.requests.getFirst();
+        check(request.timeout().equals(Duration.ofSeconds(2)),
+                "single-call planner preserves the exact configured provider timeout");
+        check(request.maxTokens() == 8, "provider token limit remains unchanged");
+    }
+
+    private static final class ControlledProvider implements ModelBackend {
+        final String candidate;
+        final List<ModelRequest> requests = new ArrayList<>();
+        String identity = "controlled-provider";
+        boolean interrupt, changeIdentity, staleIdentity;
+        long delayMillis;
+        ControlledProvider(String candidate) { this.candidate = candidate; }
+        @Override public String id() { return identity; }
+        @Override public ModelResponse infer(ModelRequest request) throws InterruptedException {
+            requests.add(request);
+            if (delayMillis != 0) Thread.sleep(delayMillis);
+            if (interrupt) Thread.currentThread().interrupt();
+            String previousIdentity = identity;
+            if (changeIdentity) identity = "replacement-provider";
+            try {
+                String digest = java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                        .digest(request.prompt().getBytes(StandardCharsets.UTF_8)));
+                return new ModelResponse(candidate, staleIdentity ? previousIdentity : identity, digest);
+            } catch (java.security.NoSuchAlgorithmException impossible) { throw new AssertionError(impossible); }
+        }
+    }
+
+    private static void rejectInterrupted(Action action) throws Exception {
+        try { action.run(); throw new AssertionError("interrupted planner returned a candidate"); }
+        catch (InterruptedException expected) { checks++; }
     }
 
     private static ModelBackend fake(AtomicInteger calls, String response, boolean badId, boolean badDigest) {
