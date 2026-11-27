@@ -58,6 +58,21 @@ public final class LlamaCppJniBackend implements ModelBackend {
     }
 
     /**
+     * Open a local model with the installed platform artifact on one exactly observed
+     * backend/device pair from {@link #availableDevices()}. CPU selection requires zero
+     * GPU layers; GPU/IGPU selection requires positive layers. Missing or ambiguous devices
+     * fail without automatic substitution. The existing explicit-device constructor owns
+     * selection, native model lifetime and offload behavior.
+     */
+    public static LlamaCppJniBackend fromPackagedRuntimeOnDevice(Path model, int contextTokens,
+                                                               int threads, int gpuLayers,
+                                                               String backend, String device) throws IOException {
+        Objects.requireNonNull(model, "model");
+        return new LlamaCppJniBackend(NativeLibraryLoader.libraryPath(), model,
+                contextTokens, threads, gpuLayers, backend, device);
+    }
+
+    /**
      * Observe devices registered by the explicitly supplied JNI library. This does not load a model,
      * download plugins, or prove that a model or operation has executed on any device.
      */
