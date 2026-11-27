@@ -45,6 +45,10 @@ jobs:
           python-version: '3.12'
       - name: Verify exact native smoke prompt bytes and receipts
         run: python standalone/native/tests/lazy_runtime_smoke_test.py
+      - name: Verify downloaded-runtime identity and source-free consumer contracts
+        run: python -m unittest discover -s standalone/native/tests -p test_lazy_runtime_smoke.py -v
+      - name: Verify bounded native child ownership and cleanup
+        run: java -cp standalone/target/test-classes io.synexia.chromellm.standalone.NativeArtifactSmokeTestMain --lifecycle-self-test
       - name: Verify the optional pre-build and post-build action contract
         if: runner.os == 'Linux'
         run: python3 standalone/src/test/scripts/build_ai_action_test.py
@@ -457,6 +461,10 @@ jobs:
       NATIVE_SOURCE_COMMIT: ${{ inputs.native_commit || '889f2ec96deacbc2d8a9a67dbe181eaa43a2fb3b' }}
       RUNTIME_PLATFORM: ${{ matrix.platform }}
     steps:
+      - name: Preserve exact source bytes on every runner
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -521,6 +529,7 @@ jobs:
               output.write('chromellm.commit=' + os.environ['GITHUB_SHA'] + '\n')
               output.write('java.file=' + jar.name + '\n')
               output.write('java.sha256=' + hashlib.sha256(jar.read_bytes()).hexdigest() + '\n')
+              output.write('java.bytes=' + str(jar.stat().st_size) + '\n')
           PYTHON
       - uses: actions/upload-artifact@v4
         with:
@@ -538,9 +547,70 @@ jobs:
             standalone/target/lazy-runtime-*/result.properties
           retention-days: 7
 
+  native-runtime-consumer:
+    name: Downloaded Maven CPU runtime (${{ matrix.platform }})
+    needs: native-runtime
+    # Qualify available platform artifacts even if another producer failed.
+    # A missing artifact fails its own consumer; publication still requires all gates.
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux-x86_64
+          - os: windows-2022
+            platform: windows-x86_64
+          - os: macos-15
+            platform: macos-aarch64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Preserve exact source bytes on every runner
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download this run's exact platform runtime bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: chromellm-native-${{ matrix.platform }}
+          path: downloaded-runtime
+      - name: Execute the downloaded Java and JNI artifacts through a fresh Maven consumer
+        run: |
+          python standalone/native/tests/lazy_runtime_smoke.py \
+            --mode artifact-consumer \
+            --project standalone \
+            --package downloaded-runtime \
+            --expected-commit "$GITHUB_SHA" \
+            --expected-platform "${{ matrix.platform }}"
+      - name: Retain consumer commands, class origins and runtime checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromellm-runtime-consumer-tests-${{ matrix.platform }}
+          path: |
+            standalone/target/lazy-runtime-*/*.log
+            standalone/target/lazy-runtime-*/*.json
+            standalone/target/lazy-runtime-*/consumer/*.class-load*.log*
+            standalone/target/lazy-runtime-*/result.properties
+          retention-days: 7
+
   publish-runtime:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_runtime }}
-    needs: [java, jni-synthetic, real-model, real-cpu-smart-build, native-runtime]
+    needs: [java, jni-synthetic, real-model, real-cpu-smart-build, native-runtime, native-runtime-consumer]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -577,16 +647,19 @@ jobs:
               prefix = 'native.' + platform + '.'
               manifest.extend([prefix + 'file=' + asset, prefix + 'sha256=' + values['sha256'],
                                prefix + 'bytes=' + values['bytes']])
+              jar = bundle / values['java.file']
+              if jar.stat().st_size != int(values['java.bytes']) or hashlib.sha256(jar.read_bytes()).hexdigest() != values['java.sha256']:
+                  raise SystemExit('Downloaded Java artifact identity mismatch: ' + platform)
+              manifest.extend([prefix + 'java.sha256=' + values['java.sha256'],
+                               prefix + 'java.bytes=' + values['java.bytes']])
               if platform == 'linux-x86_64':
-                  jar = bundle / values['java.file']
-                  if hashlib.sha256(jar.read_bytes()).hexdigest() != values['java.sha256']:
-                      raise SystemExit('Downloaded Java artifact identity mismatch')
                   shutil.copy2(jar, release / jar.name)
-                  manifest.extend(['java.file=' + jar.name, 'java.sha256=' + values['java.sha256']])
+                  manifest.extend(['java.file=' + jar.name, 'java.sha256=' + values['java.sha256'],
+                                   'java.bytes=' + values['java.bytes']])
           (release / 'runtime-manifest.properties').write_text('\n'.join(manifest) + '\n')
           Path('release-notes.md').write_text(
               'CPU JNI runtimes and Java 21 runtime for ChromeLLM commit ' + os.environ['GITHUB_SHA'] + '.\n\n'
-              'Each platform passed source-pin checks, dependency inspection, real Maven HTTPS acquisition, '
+              'Each platform passed source-pin checks, dependency inspection, a separate downloaded-artifact Maven consumer with verified Java class origins, real Maven HTTPS acquisition, '
               'warm offline inference, corrupt-cache refusal, model receipts and native lifecycle checks.\n\n'
               'The ZIP bundles contain licenses, source identities and platform requirements. '
               'The raw native assets are for checksum-pinned jniUrl acquisition. '

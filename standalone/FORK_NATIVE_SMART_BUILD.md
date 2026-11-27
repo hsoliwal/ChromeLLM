@@ -249,15 +249,79 @@ server and runs a fresh Maven `-o` invocation against the caches. Missing native
 cache and same-size native corruption must fail; model integrity, backend receipts,
 repeat inference and close are checked by the existing real-model contracts.
 
-The matrix uploads runtime bundles and test logs as Actions artifacts. A manual run
-with `publish_runtime=true` publishes a commit-named prerelease only after the Java,
-synthetic JNI, and all CPU matrix jobs pass. It includes raw native assets for
+The matrix uploads runtime bundles and test logs as Actions artifacts. The separate
+`native-runtime-consumer` matrix then downloads each platform bundle from that same
+workflow run. It verifies the workflow/source commit, platform, native source
+identities, and both JNI and Java SHA-256 and byte counts before execution. Each
+consumer creates an empty Maven repository and a source-free receiving project,
+installs the exact downloaded Java JAR, and calls its existing `SmartBuildMain`
+through Maven. JVM class-load records prove that runtime classes came from that
+installed JAR. The consumer has no production source compilation or `target/classes`
+fallback. The established real-model test alone is compiled against the downloaded
+JAR for its final lifecycle checks.
+
+The consumer repeats cold HTTPS native/model acquisition, warm `mvn -o` inference,
+missing-native and same-size native/model corruption refusal, receipt checks and
+native close. Its Maven dependency repository is separate from the verified native
+and model caches. Bootstrap resolves the normal Maven execution/install plugins;
+the warm run uses those cached dependencies with Maven offline mode. Logs retain
+commands, artifact identities and bounded class-origin traces without TLS keys.
+
+A manual run with `publish_runtime=true` publishes a commit-named prerelease only
+after the Java, synthetic JNI, existing real-model and CPU producer gates, and all
+three downloaded-artifact consumer jobs pass. It includes raw native assets for
 `jniUrl`, complete ZIP bundles with notices and platform requirements, the tested
 Java JAR, and `runtime-manifest.properties`. Native source repository/commit can be
 selected explicitly; private sources require the configured `NATIVE_SOURCE_TOKEN`.
 The separate native Dawn tests retain their own jobs. The installed-Chrome provider
 and its browser tests have been removed.
 CPU success makes no claim about WebGPU execution or generated-code quality.
+
+
+### Try an uploaded bundle locally
+
+Use a successful `Standalone inference` run and its exact checked-out commit.
+The checkout must retain Git's exact source bytes, including line endings. For a
+fresh checkout, including on Windows:
+
+```sh
+git -c core.autocrlf=false -c core.eol=lf clone https://github.com/hsoliwal/ChromeLLM.git
+cd ChromeLLM
+git config core.autocrlf false
+git config core.eol lf
+git fetch origin FULL_40_HEX_WORKFLOW_COMMIT
+git checkout --detach FETCH_HEAD
+```
+
+Use the workflow's actual commit, which can be a pull-request merge commit. The
+native producer and consumer jobs set the byte-preserving policy before checkout
+on every runner. The verifier refuses changed source bytes.
+
+For example, on Linux x86_64, download the matching Actions artifact with GitHub
+CLI, then run the consumer from the ChromeLLM checkout:
+
+```sh
+gh run download RUN_ID --repo hsoliwal/ChromeLLM \
+  --name chromellm-native-linux-x86_64 --dir downloaded-runtime
+python standalone/native/tests/lazy_runtime_smoke.py \
+  --mode artifact-consumer --project standalone --package downloaded-runtime \
+  --expected-commit FULL_40_HEX_WORKFLOW_COMMIT --expected-platform linux-x86_64
+```
+
+Use `chromellm-native-windows-x86_64` / `windows-x86_64` on Windows, or
+`chromellm-native-macos-aarch64` / `macos-aarch64` on Apple Silicon. Java/Javac/
+Keytool 21, Maven, Git, OpenSSL and Python 3.12 must be available. `--mvn`, `--java`,
+`--javac` and `--keytool` can select explicit tool paths. The checkout and bundle
+commit must agree; the script also verifies the native owners and unchanged
+real-model test against Git. Normal consumer runs require `java.bytes` in the
+bundle manifest. For a historical bundle that predates that field, both
+`--expected-java-bytes` and `--expected-java-sha256` are required from independently
+recorded artifact identities; supplied pins must agree with the manifest and JAR.
+
+This path consumes the ordinary standalone Java runtime and the raw native library
+inside the Actions bundle. The `smart-native-download` classifier-JAR workflow
+remains a separate supported Maven route. An Actions artifact may be used before a
+commit-named runtime release has been published.
 
 ## Review-only outputs and source identities
 

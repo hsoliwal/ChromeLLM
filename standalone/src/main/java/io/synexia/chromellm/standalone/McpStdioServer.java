@@ -57,7 +57,9 @@ final class McpStdioServer {
 
     /** Workspace access is explicitly enabled by the process owner, never by a model argument. */
     static void serve(ModelBackend backend, InputStream input, OutputStream output, Path workspace) throws IOException {
-        serveTools(backend, input, output, workspace == null ? null : new WorkspaceTools(workspace).tools());
+        try (WorkspaceTools selected = workspace == null ? null : new WorkspaceTools(workspace)) {
+            serveTools(backend, input, output, selected == null ? null : selected.tools());
+        }
     }
 
     static void serveTools(ModelBackend backend, InputStream input, OutputStream output, List<AgentTool> tools)

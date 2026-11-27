@@ -59,13 +59,14 @@ public final class JniAgentContractTestMain {
         try {
             Files.writeString(model, "synthetic agent fixture, not model weights");
             Files.writeString(workspace.resolve("source.txt"), "agent-jni-observation नमस्ते\n");
-            try (var backend = new LlamaCppJniBackend(library, model, 4096, 2, 0, "cpu")) {
+            try (var backend = new LlamaCppJniBackend(library, model, 4096, 2, 0, "cpu");
+                 WorkspaceTools workspaceTools = new WorkspaceTools(workspace)) {
                 ModelResponse first = backend.infer(new ModelRequest("CHROMELLM_AGENT_FIXTURE", 512, Duration.ofSeconds(5)));
                 Object parsed = McpJson.parse(first.text());
                 if (!(parsed instanceof Map<?, ?> plan) || !"plan".equals(plan.get("type"))) {
                     throw new AssertionError("native fixture must produce the agent plan through JNI");
                 }
-                AgentEngine.Result result = new AgentEngine(backend, new WorkspaceTools(workspace).tools(), event -> { })
+                AgentEngine.Result result = new AgentEngine(backend, workspaceTools.tools(), event -> { })
                         .run("CHROMELLM_AGENT_FIXTURE", 512, AgentEngine.Limits.defaults(Duration.ofSeconds(10)));
                 if (!result.answer().equals("JNI agent result नमस्ते") || result.modelCalls() != 2 || result.toolCalls() != 1) {
                     throw new AssertionError("JNI agent must read the workspace and resume model inference");

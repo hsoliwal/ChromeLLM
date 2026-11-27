@@ -12,6 +12,7 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -21,10 +22,14 @@ import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.SecureDirectoryStream;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -36,7 +41,7 @@ import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
 /** Bounded, read-only source access for an explicitly selected workspace. */
-final class WorkspaceTools {
+final class WorkspaceTools implements AutoCloseable {
     private static final int FILE_BYTES = 1024 * 1024;
     private static final int READ_RESULT_BYTES = 32768;
     private static final long SCAN_BYTES = 16L * FILE_BYTES;
@@ -49,23 +54,132 @@ final class WorkspaceTools {
     private final Path root;
     private final List<Guard> rootGuards;
     private final boolean preferSecure;
+    private final boolean forceDirectoryIdentity;
     private final List<AgentTool> tools;
+    private final DirectoryIdentity rootIdentity;
+    private final Map<WatchKey, Integer> registrations = new IdentityHashMap<>();
+    private WatchService identityWatcher;
+    private volatile boolean closed;
 
     WorkspaceTools(Path root) throws IOException { this(root, true); }
 
     // The portable path is exercised on every platform rather than only on Windows CI.
     WorkspaceTools(Path selectedRoot, boolean preferSecure) throws IOException {
-        if (selectedRoot == null) throw new IOException("workspace root is required");
-        Path selected = selectedRoot.toAbsolutePath().normalize();
-        if (Files.isSymbolicLink(selected)) throw new IOException("workspace root is a symbolic link");
-        root = selected.toRealPath();
-        if (!Files.isDirectory(root, NOFOLLOW)) throw new IOException("workspace root is not a directory");
-        rootGuards = guards(root);
+        this(selectedRoot, preferSecure, false);
+    }
+
+    // Force the same identity path on providers with file keys for platform-independent tests.
+    WorkspaceTools(Path selectedRoot, boolean preferSecure, boolean forceDirectoryIdentity) throws IOException {
+        this(selectedRoot, preferSecure, forceDirectoryIdentity, null);
+    }
+
+    // Ownership of a supplied service transfers immediately, including constructor failures.
+    WorkspaceTools(Path selectedRoot, boolean preferSecure, boolean forceDirectoryIdentity,
+                   WatchService identityWatcher) throws IOException {
         this.preferSecure = preferSecure;
-        tools = List.of(new Tool("workspace.list"), new Tool("workspace.read"), new Tool("workspace.search"));
+        this.forceDirectoryIdentity = forceDirectoryIdentity;
+        this.identityWatcher = identityWatcher;
+        try {
+            if (selectedRoot == null) throw new IOException("workspace root is required");
+            Path selected = selectedRoot.toAbsolutePath().normalize();
+            if (Files.isSymbolicLink(selected)) throw new IOException("workspace root is a symbolic link");
+            root = selected.toRealPath();
+            if (!Files.isDirectory(root, NOFOLLOW)) throw new IOException("workspace root is not a directory");
+            rootGuards = guards(root);
+            rootIdentity = identity(root, rootGuards.getLast().attributes);
+            verifyRoot();
+            tools = List.of(new Tool("workspace.list"), new Tool("workspace.read"), new Tool("workspace.search"));
+        } catch (IOException | RuntimeException | Error failure) {
+            try { close(); } catch (IOException cleanup) { failure.addSuppressed(cleanup); }
+            throw failure;
+        }
     }
 
     List<AgentTool> tools() { return tools; }
+
+    @Override public synchronized void close() throws IOException {
+        if (closed) return;
+        closed = true;
+        registrations.clear();
+        if (identityWatcher != null) identityWatcher.close();
+    }
+
+    private void ensureOpen() throws IOException {
+        if (closed) throw new IOException("workspace tools are closed");
+    }
+
+    private void verifyRoot() throws IOException {
+        ensureOpen();
+        if (rootIdentity != null) rootIdentity.verify();
+        verifyGuards(rootGuards);
+    }
+
+    /** A registration identifies the directory object even when basic file keys are unavailable. */
+    private synchronized DirectoryIdentity identity(Path path, BasicFileAttributes attributes) throws IOException {
+        ensureOpen();
+        if (!forceDirectoryIdentity && attributes.fileKey() != null) return null;
+        if (identityWatcher == null) {
+            try { identityWatcher = root.getFileSystem().newWatchService(); }
+            catch (UnsupportedOperationException unavailable) {
+                throw new IOException("cannot verify workspace directory identity", unavailable);
+            }
+        }
+        WatchKey key = registerIdentity(path);
+        try {
+            same(attributes, directoryAttributes(path), false);
+            if (!key.isValid()) throw new IOException("workspace directory identity is unavailable");
+            registrations.merge(key, 1, Integer::sum);
+            return new DirectoryIdentity(path, key);
+        } catch (IOException | RuntimeException | Error failure) {
+            if (!registrations.containsKey(key)) key.cancel();
+            throw failure;
+        }
+    }
+
+    private WatchKey registerIdentity(Path path) throws IOException {
+        try {
+            // Events are not the identity oracle. Drain them in bounded batches so a
+            // long-lived session does not retain cancelled directory registrations.
+            for (int i = 0; i < SCAN_DEPTH; i++) {
+                WatchKey pending = identityWatcher.poll();
+                if (pending == null) break;
+                pending.pollEvents();
+                pending.reset();
+            }
+            return path.register(identityWatcher, StandardWatchEventKinds.ENTRY_CREATE,
+                    StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+        } catch (UnsupportedOperationException | ClosedWatchServiceException unavailable) {
+            throw new IOException("cannot verify workspace directory identity", unavailable);
+        }
+    }
+
+    private final class DirectoryIdentity implements AutoCloseable {
+        private final Path path;
+        private final WatchKey key;
+        private boolean released;
+        DirectoryIdentity(Path path, WatchKey key) { this.path = path; this.key = key; }
+        void verify() throws IOException {
+            synchronized (WorkspaceTools.this) {
+                ensureOpen();
+                if (released || !key.isValid()) throw new IOException("workspace directory identity is unavailable");
+                WatchKey current = registerIdentity(path);
+                if (current != key || !key.isValid()) {
+                    if (!registrations.containsKey(current)) current.cancel();
+                    throw new IOException("workspace directory identity changed during access");
+                }
+            }
+        }
+        @Override public void close() {
+            synchronized (WorkspaceTools.this) {
+                if (released) return;
+                released = true;
+                Integer count = registrations.get(key);
+                if (count == null) return; // The workspace already closed the service.
+                if (count == 1) { registrations.remove(key); key.cancel(); }
+                else registrations.put(key, count - 1);
+            }
+        }
+    }
 
     private final class Tool implements AgentTool {
         private final String name;
@@ -93,6 +207,7 @@ final class WorkspaceTools {
                             : name.equals("workspace.search") ? List.of("query") : List.of());
         }
         @Override public void validate(Map<String, Object> arguments) throws IOException {
+            ensureOpen();
             if (arguments == null) throw new IOException("tool arguments are required");
             Set<String> allowed = name.equals("workspace.read") ? Set.of("path", "startLine", "maxLines")
                     : name.equals("workspace.search") ? Set.of("path", "query", "maxResults") : Set.of("path", "maxResults");
@@ -384,10 +499,11 @@ final class WorkspaceTools {
     }
 
     private Directory openRoot() throws IOException {
-        verifyGuards(rootGuards);
+        verifyRoot();
         DirectoryStream<Path> stream = Files.newDirectoryStream(root);
+        Directory directory = null;
         try {
-            Directory directory = new Directory(root, stream, guards(root));
+            directory = new Directory(root, stream, guards(root));
             directory.verify();
             if (directory.secure != null) {
                 BasicFileAttributes opened = directory.secure.getFileAttributeView(BasicFileAttributeView.class).readAttributes();
@@ -395,7 +511,8 @@ final class WorkspaceTools {
             }
             return directory;
         } catch (IOException | RuntimeException | Error failure) {
-            try { stream.close(); } catch (IOException close) { failure.addSuppressed(close); }
+            try { if (directory == null) stream.close(); else directory.close(); }
+            catch (IOException close) { failure.addSuppressed(close); }
             throw failure;
         }
     }
@@ -423,20 +540,33 @@ final class WorkspaceTools {
         private final DirectoryStream<Path> stream;
         private final SecureDirectoryStream<Path> secure;
         private final List<Guard> identities;
+        private final DirectoryIdentity identity;
         private final boolean owned;
+        private boolean released;
         @SuppressWarnings("unchecked")
-        Directory(Path absolute, DirectoryStream<Path> stream, List<Guard> identities) {
-            this(absolute, stream, preferSecure && stream instanceof SecureDirectoryStream<?> ? (SecureDirectoryStream<Path>) stream : null, identities, true);
+        Directory(Path absolute, DirectoryStream<Path> stream, List<Guard> identities) throws IOException {
+            this(absolute, stream, identities, identity(absolute, identities.getLast().attributes));
         }
-        private Directory(Path absolute, DirectoryStream<Path> stream, SecureDirectoryStream<Path> secure, List<Guard> identities, boolean owned) {
+        @SuppressWarnings("unchecked")
+        private Directory(Path absolute, DirectoryStream<Path> stream, List<Guard> identities, DirectoryIdentity identity) {
+            this(absolute, stream, preferSecure && stream instanceof SecureDirectoryStream<?> ? (SecureDirectoryStream<Path>) stream : null,
+                    identities, identity, true);
+        }
+        private Directory(Path absolute, DirectoryStream<Path> stream, SecureDirectoryStream<Path> secure,
+                          List<Guard> identities, DirectoryIdentity identity, boolean owned) {
             this.absolute = absolute;
             this.stream = stream;
             this.secure = secure;
             this.identities = identities;
+            this.identity = identity;
             this.owned = owned;
         }
-        Directory borrow() { return new Directory(absolute, stream, secure, identities, false); }
-        void verify() throws IOException { verifyGuards(rootGuards); verifyGuards(identities); }
+        Directory borrow() { return new Directory(absolute, stream, secure, identities, identity, false); }
+        void verify() throws IOException {
+            verifyRoot();
+            if (identity != null) identity.verify();
+            verifyGuards(identities);
+        }
         BasicFileAttributes attributes(Path name) throws IOException {
             verify();
             BasicFileAttributes attributes = secure != null
@@ -448,15 +578,20 @@ final class WorkspaceTools {
         Directory child(Path name) throws IOException {
             BasicFileAttributes before = attributes(name);
             if (!before.isDirectory() || before.isSymbolicLink()) throw new IOException("workspace path is not a regular directory");
-            DirectoryStream<Path> child = secure != null ? secure.newDirectoryStream(name, NOFOLLOW) : Files.newDirectoryStream(absolute.resolve(name));
+            DirectoryIdentity selected = identity(absolute.resolve(name), before);
+            DirectoryStream<Path> child = null;
+            Directory result = null;
             try {
-                Directory result = new Directory(absolute.resolve(name), child, guards(absolute.resolve(name)));
+                child = secure != null ? secure.newDirectoryStream(name, NOFOLLOW) : Files.newDirectoryStream(absolute.resolve(name));
+                result = new Directory(absolute.resolve(name), child, guards(absolute.resolve(name)), selected);
                 if (result.secure != null) same(before, result.secure.getFileAttributeView(BasicFileAttributeView.class).readAttributes(), false);
                 else same(before, Files.readAttributes(result.absolute, BasicFileAttributes.class, NOFOLLOW), false);
                 result.verify();
                 return result;
             } catch (IOException | RuntimeException | Error failure) {
-                try { child.close(); } catch (IOException close) { failure.addSuppressed(close); }
+                try { if (result != null) result.close(); else if (child != null) child.close(); }
+                catch (IOException close) { failure.addSuppressed(close); }
+                finally { if (selected != null) selected.close(); }
                 throw failure;
             }
         }
@@ -470,7 +605,12 @@ final class WorkspaceTools {
                 throw failure;
             }
         }
-        @Override public void close() throws IOException { if (owned) stream.close(); }
+        @Override public void close() throws IOException {
+            if (!owned || released) return;
+            released = true;
+            try { stream.close(); }
+            finally { if (identity != null) identity.close(); }
+        }
     }
 
     private record Source(String text, int bytes) { }
