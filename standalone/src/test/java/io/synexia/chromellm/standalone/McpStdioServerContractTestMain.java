@@ -27,6 +27,7 @@ public final class McpStdioServerContractTestMain {
                 case "--numeric-recovery" -> argumentRecovery();
                 case "--response-budget" -> responseBudget();
                 case "--provider-failure" -> providerFailure();
+                case "--prompt-receipt" -> promptReceiptBinding();
                 case "--planning-recovery" -> planningRecovery();
                 case "--agent-recovery" -> agentRecovery();
                 case "--bounded-encoding-child" -> boundedEncodingChild();
@@ -42,7 +43,7 @@ public final class McpStdioServerContractTestMain {
                 inferCalls.incrementAndGet();
                 if (request.prompt().equals("explode")) throw new IOException("sensitive diagnostics");
                 check(request.maxTokens() > 0 && !request.timeout().isNegative(), "bad request defaults");
-                return new ModelResponse("reply: " + request.prompt(), id(), "0".repeat(64));
+                return new ModelResponse("reply: " + request.prompt(), id(), promptSha256(request.prompt()));
             }
         };
         String in = String.join("\n",
@@ -87,6 +88,7 @@ public final class McpStdioServerContractTestMain {
         argumentOrderAndCase();
         invalidEnvelopes();
         providerFailure();
+        promptReceiptBinding();
         planningRecovery();
         agentRecovery();
         responseBudget();
@@ -201,7 +203,7 @@ public final class McpStdioServerContractTestMain {
     private static void providerFailure() throws Exception {
         RecordingBackend provider = new RecordingBackend();
         List<String> failures = List.of("io-failure", "timeout-failure", "runtime-failure",
-                "null-response", "wrong-identity", "invalid-unicode", "oversized-response");
+                "null-response", "wrong-identity", "wrong-prompt", "invalid-unicode", "oversized-response");
         List<String> requests = new ArrayList<>();
         for (String failure : failures) {
             requests.add(infer(failure, "{\"prompt\":" + json(failure) + "}"));
@@ -216,6 +218,39 @@ public final class McpStdioServerContractTestMain {
             toolReply(replies.get(i * 2 + 1), "after-" + failures.get(i), false);
         }
         check(provider.requests.size() == requests.size(), "provider requests were duplicated or lost");
+    }
+
+    /** A provider's stale receipt must not become successful Maven advisory text. */
+    private static void promptReceiptBinding() throws Exception {
+        String first = "completed Maven compiler failure";
+        String unicode = "  नमस्ते é 🦙\r\nsecond line\t ";
+        List<String> prompts = List.of(first, unicode, unicode, unicode, unicode, first, unicode);
+        List<String> receipts = List.of(promptSha256(first), promptSha256(first),
+                promptSha256(unicode), promptSha256(unicode.strip()),
+                promptSha256(java.text.Normalizer.normalize(unicode, java.text.Normalizer.Form.NFD)),
+                "0".repeat(64), promptSha256(unicode));
+        List<String> observed = new ArrayList<>();
+        ModelBackend provider = new ModelBackend() {
+            @Override public String id() { return "synthetic-jni"; }
+            @Override public ModelResponse infer(ModelRequest request) {
+                int call = observed.size();
+                observed.add(request.prompt());
+                return new ModelResponse("candidate-" + call, id(), receipts.get(call));
+            }
+        };
+        List<String> requests = new ArrayList<>();
+        for (int i = 0; i < prompts.size(); i++) {
+            requests.add(infer("receipt-" + i, "{\"prompt\":" + json(prompts.get(i)) + "}"));
+        }
+        List<Map<?, ?>> replies = exchange(provider, requests);
+        check(observed.equals(prompts), "receipt validation changed or repeated an admitted prompt");
+        check(replies.size() == prompts.size(), "receipt refusal ended or desynchronized the stream");
+        for (int i = 0; i < replies.size(); i++) {
+            boolean rejected = i == 1 || i == 3 || i == 4 || i == 5;
+            toolReply(replies.get(i), "receipt-" + i, rejected);
+            check(json(replies.get(i)).contains("candidate-" + i) != rejected,
+                    "stale candidate was disclosed or a valid candidate was lost");
+        }
     }
 
     private static void planningRecovery() throws Exception {
@@ -479,12 +514,22 @@ public final class McpStdioServerContractTestMain {
                 case "timeout-failure" -> throw new TimeoutException("sensitive deadline diagnostics");
                 case "runtime-failure" -> throw new ArithmeticException("sensitive native adapter diagnostics");
                 case "null-response" -> null;
-                case "wrong-identity" -> new ModelResponse("text", "other", "0".repeat(64));
-                case "invalid-unicode" -> new ModelResponse("\ud800", id(), "0".repeat(64));
+                case "wrong-identity" -> new ModelResponse("text", "other", promptSha256(request.prompt()));
+                case "wrong-prompt" -> new ModelResponse("stale candidate", id(), "0".repeat(64));
+                case "invalid-unicode" -> new ModelResponse("\ud800", id(), promptSha256(request.prompt()));
                 case "oversized-response" -> new ModelResponse("x".repeat(StdioProtocol.MAX_RESPONSE_BYTES),
-                        id(), "0".repeat(64));
-                default -> new ModelResponse("reply: " + request.prompt(), id(), "0".repeat(64));
+                        id(), promptSha256(request.prompt()));
+                default -> new ModelResponse("reply: " + request.prompt(), id(), promptSha256(request.prompt()));
             };
+        }
+    }
+
+    private static String promptSha256(String prompt) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(prompt.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new AssertionError(impossible);
         }
     }
 
