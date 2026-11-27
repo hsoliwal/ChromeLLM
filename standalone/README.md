@@ -203,7 +203,25 @@ consume the Java artifact and the chosen native runtime, for example on Linux:
 Java callers can enumerate the installed runtime with
 `LlamaCppJniBackend.availableDevices()` or create the existing backend using
 `LlamaCppJniBackend.fromPackagedRuntime(modelPath, contextTokens, threads, gpuLayers)`.
-The existing constructors accepting an explicit JNI library path remain available.
+That factory retains automatic device selection. Use `fromPackagedRuntimeOnDevice`
+to select an exact backend/device pair returned by `availableDevices()`, using the
+same packaged runtime. For example, select an observed WebGPU device:
+
+```java
+var selected = LlamaCppJniBackend.availableDevices().stream()
+    .filter(device -> device.backend().equals("WebGPU") && device.gpu())
+    .findFirst().orElseThrow(() -> new IllegalStateException("WebGPU device unavailable"));
+try (var backend = LlamaCppJniBackend.fromPackagedRuntimeOnDevice(
+        modelPath, contextTokens, threads, 3, selected.backend(), selected.name())) {
+    ModelResponse response = backend.infer(request);
+}
+```
+
+CPU selection requires zero GPU layers; GPU or integrated-GPU selection requires
+a positive count. Missing or ambiguous pairs fail without selecting a substitute.
+The chosen device is an offload target; llama.cpp can still execute unsupported
+operations on the CPU. The existing constructors accepting an explicit JNI library
+path remain available.
 
 The CLI also resolves the installed native artifact when `--jni-lib` is omitted:
 

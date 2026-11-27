@@ -40,6 +40,11 @@ jobs:
           cache: maven
           cache-dependency-path: standalone/pom.xml
       - run: mvn -B -ntp -f standalone/pom.xml verify
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact native smoke prompt bytes and receipts
+        run: python standalone/native/tests/lazy_runtime_smoke_test.py
       - name: Verify the optional pre-build and post-build action contract
         if: runner.os == 'Linux'
         run: python3 standalone/src/test/scripts/build_ai_action_test.py
