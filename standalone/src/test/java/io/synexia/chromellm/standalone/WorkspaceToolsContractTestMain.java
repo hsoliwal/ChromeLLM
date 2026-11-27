@@ -6,8 +6,11 @@ package io.synexia.chromellm.standalone;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.ClosedWatchServiceException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchService;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,10 +22,12 @@ import java.util.concurrent.TimeoutException;
 /** Real-filesystem and independent sort/search-oracle checks; executable without test dependencies. */
 public final class WorkspaceToolsContractTestMain {
     private static int checks;
+    private static final List<AutoCloseable> ownedWorkspaces = new ArrayList<>();
     private WorkspaceToolsContractTestMain() { }
 
     public static void main(String[] ignored) throws Exception {
         Path root = Files.createTempDirectory("chromellm-workspace-");
+        Throwable primary = null;
         try {
             // Reflection allows the exact same test to demonstrate missing behavior on the baseline.
             Class.forName("io.synexia.chromellm.standalone.WorkspaceTools");
@@ -34,9 +39,15 @@ public final class WorkspaceToolsContractTestMain {
             portable(root);
             boundedOutput(root);
             directoryIterationFailure(root);
+            directoryIdentity(root);
+        } catch (Exception | Error failure) {
+            primary = failure;
+            throw failure;
         } finally {
-            try (var paths = Files.walk(root)) {
-                for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path);
+            try { cleanup(root); }
+            catch (Exception cleanup) {
+                if (primary == null) throw cleanup;
+                primary.addSuppressed(cleanup);
             }
         }
         System.out.println("workspace tool contract checks passed: " + checks);
@@ -180,7 +191,7 @@ public final class WorkspaceToolsContractTestMain {
         Files.writeString(child.resolve("source.txt"), "needle\nlast");
         var constructor = Class.forName("io.synexia.chromellm.standalone.WorkspaceTools").getDeclaredConstructor(Path.class, boolean.class);
         constructor.setAccessible(true);
-        Object tools = constructor.newInstance(dir, false);
+        Object tools = own(constructor.newInstance(dir, false));
         check(call(tools, "workspace.list", Map.of()).get("files").equals(List.of("folder/source.txt")), "portable list");
         check(((List<?>) call(tools, "workspace.search", Map.of("path", "folder", "query", "needle")).get("matches")).size() == 1, "portable search");
         check(call(tools, "workspace.read", Map.of("path", "folder/source.txt")).get("lines").equals(List.of("needle", "last")), "portable read");
@@ -267,8 +278,102 @@ public final class WorkspaceToolsContractTestMain {
         try {
             var constructor = Class.forName("io.synexia.chromellm.standalone.WorkspaceTools").getDeclaredConstructor(Path.class);
             constructor.setAccessible(true);
-            return constructor.newInstance(root);
+            return own(constructor.newInstance(root));
         } catch (InvocationTargetException ex) { throwCause(ex); return null; }
+    }
+
+    private static Object own(Object workspace) {
+        if (workspace instanceof AutoCloseable resource) ownedWorkspaces.add(resource);
+        return workspace;
+    }
+
+    private static Object identityWorkspace(Path root, WatchService service) throws Exception {
+        try {
+            var constructor = Class.forName("io.synexia.chromellm.standalone.WorkspaceTools")
+                    .getDeclaredConstructor(Path.class, boolean.class, boolean.class, WatchService.class);
+            constructor.setAccessible(true);
+            return own(constructor.newInstance(root, false, true, service));
+        } catch (InvocationTargetException ex) { throwCause(ex); return null; }
+    }
+
+    private static void directoryIdentity(Path root) throws Exception {
+        Path dir = Files.createDirectory(root.resolve("identity"));
+        Path folder = Files.createDirectory(dir.resolve("folder"));
+        Files.writeString(folder.resolve("source.txt"), "visible");
+        WatchService watcher = dir.getFileSystem().newWatchService();
+        Object tools = identityWorkspace(dir, watcher);
+        check(tools instanceof AutoCloseable, "workspace owns a closeable identity scope");
+        check(call(tools, "workspace.read", Map.of("path", "folder/source.txt")).get("lines")
+                .equals(List.of("visible")), "forced identity path reads sources on every platform");
+        Files.writeString(dir.resolve("new.txt"), "new content");
+        check(call(tools, "workspace.list", Map.of()).get("files").equals(List.of("folder/source.txt", "new.txt")),
+                "legitimate directory changes do not invalidate object identity");
+        try (AutoCloseable base = (AutoCloseable) invoke(tools, "openRoot");
+             AutoCloseable selected = (AutoCloseable) invoke(base, "child", Path.of("folder"))) {
+            Files.move(folder, dir.resolve("moved-folder"));
+            Files.createDirectory(folder);
+            Files.writeString(folder.resolve("replacement"), "untrusted");
+            identityFailure(() -> invoke(selected, "attributes", Path.of("replacement")));
+        }
+        // A new operation may access current children; the configured root itself remains pinned.
+        check(call(tools, "workspace.read", Map.of("path", "folder/replacement")).get("lines")
+                .equals(List.of("untrusted")), "closed child scope releases its registration");
+        Files.move(dir, root.resolve("identity-moved"));
+        Files.createDirectory(dir);
+        Files.writeString(dir.resolve("replacement"), "secret");
+        identityFailure(() -> call(tools, "workspace.list", Map.of()));
+        identityFailure(() -> call(tools, "workspace.read", Map.of("path", "replacement")));
+        ((AutoCloseable) tools).close();
+        ((AutoCloseable) tools).close();
+        check(true, "workspace close is idempotent");
+        fails(ClosedWatchServiceException.class, () -> watcher.poll());
+        fails(IOException.class, () -> call(tools, "workspace.list", Map.of()));
+        fails(IOException.class, () -> invoke(tool(tools, "workspace.read"), "validate", Map.of("path", "replacement")));
+
+        WatchService invalidated = root.getFileSystem().newWatchService();
+        Object invalidatedTools = identityWorkspace(root.resolve("basic"), invalidated);
+        root.resolve("basic").register(invalidated, StandardWatchEventKinds.ENTRY_CREATE).cancel();
+        fails(IOException.class, () -> call(invalidatedTools, "workspace.list", Map.of()));
+        ((AutoCloseable) invalidatedTools).close();
+        fails(ClosedWatchServiceException.class, () -> invalidated.poll());
+
+        WatchService failed = root.getFileSystem().newWatchService();
+        fails(IOException.class, () -> identityWorkspace(root.resolve("missing-constructor-root"), failed));
+        fails(ClosedWatchServiceException.class, () -> failed.poll());
+        WatchService unavailable = root.getFileSystem().newWatchService();
+        unavailable.close();
+        fails(IOException.class, () -> identityWorkspace(root.resolve("basic"), unavailable));
+    }
+
+    private static void identityFailure(Checked action) throws Exception {
+        try { action.run(); }
+        catch (IOException failure) {
+            check(failure.getMessage().contains("directory identity"), "retained registration rejects the replacement");
+            return;
+        }
+        throw new AssertionError("replacement directory retained its old object identity");
+    }
+
+    private static void cleanup(Path root) throws Exception {
+        Exception failure = null;
+        for (AutoCloseable workspace : ownedWorkspaces.reversed()) {
+            try { workspace.close(); }
+            catch (Exception close) {
+                if (failure == null) failure = close;
+                else failure.addSuppressed(close);
+            }
+        }
+        ownedWorkspaces.clear();
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                try { Files.delete(path); }
+                catch (IOException cleanup) {
+                    if (failure == null) failure = cleanup;
+                    else failure.addSuppressed(cleanup);
+                }
+            }
+        }
+        if (failure != null) throw failure;
     }
     private static List<?> toolList(Object tools) throws Exception { return (List<?>) invoke(tools, "tools"); }
     private static Object tool(Object tools, String name) throws Exception {

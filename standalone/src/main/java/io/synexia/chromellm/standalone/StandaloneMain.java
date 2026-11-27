@@ -51,61 +51,63 @@ public final class StandaloneMain {
             return;
         }
         Path workspace = agentWorkspace(options);
-        List<AgentTool> workspaceTools = workspace == null ? null : new WorkspaceTools(workspace).tools();
-        if (flag(options, "--mcp-stdio")) {
-            if (flag(options, "--stdio") || flag(options, "--list-devices")
-                    || options.containsKey("--prompt-file")) {
-                throw new IllegalArgumentException("MCP stdio requires its own exclusive session mode");
+        try (WorkspaceTools selectedWorkspace = workspace == null ? null : new WorkspaceTools(workspace)) {
+            List<AgentTool> workspaceTools = selectedWorkspace == null ? null : selectedWorkspace.tools();
+            if (flag(options, "--mcp-stdio")) {
+                if (flag(options, "--stdio") || flag(options, "--list-devices")
+                        || options.containsKey("--prompt-file")) {
+                    throw new IllegalArgumentException("MCP stdio requires its own exclusive session mode");
+                }
+                AgentSession.Limits sessionLimits = options.containsKey("--agent-endpoint")
+                        ? agentLimits(options) : AgentSession.Limits.defaults();
+                try (CodingAgentTools selectedTools = options.containsKey("--agent-endpoint")
+                             ? agentTools(options, System.getenv()) : null;
+                     ModelBackend backend = backend(options, System.getenv());
+                     FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
+                    McpStdioServer.serve(backend, System.in, output, workspaceTools,
+                            selectedTools == null ? List.of() : selectedTools.tools(), sessionLimits);
+                }
+                return;
             }
-            AgentSession.Limits sessionLimits = options.containsKey("--agent-endpoint")
-                    ? agentLimits(options) : AgentSession.Limits.defaults();
-            try (CodingAgentTools selectedTools = options.containsKey("--agent-endpoint")
-                         ? agentTools(options, System.getenv()) : null;
-                 ModelBackend backend = backend(options, System.getenv());
-                 FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
-                McpStdioServer.serve(backend, System.in, output, workspaceTools,
-                        selectedTools == null ? List.of() : selectedTools.tools(), sessionLimits);
+            if (flag(options, "--list-devices")) {
+                if (!"jni".equals(options.getOrDefault("--backend", "jni"))) {
+                    throw new IllegalArgumentException("device listing requires the JNI backend");
+                }
+                for (LlamaCppJniBackend.Device device : LlamaCppJniBackend.availableDevices(jniLibrary(options))) {
+                    System.out.println(field(device.backend()) + "\t" + field(device.name()) + "\t"
+                            + device.type() + "\t" + field(device.description()));
+                }
+                return;
             }
-            return;
-        }
-        if (flag(options, "--list-devices")) {
-            if (!"jni".equals(options.getOrDefault("--backend", "jni"))) {
-                throw new IllegalArgumentException("device listing requires the JNI backend");
+            if (flag(options, "--stdio")) {
+                if (options.containsKey("--prompt-file")) {
+                    throw new IllegalArgumentException("stdio requests supply their own prompts");
+                }
+                try (ModelBackend backend = backend(options, System.getenv());
+                     FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
+                    // PrintStream suppresses pipe failures; binary framing needs the original IOException.
+                    StdioProtocol.serve(backend, System.in, output);
+                }
+                return;
             }
-            for (LlamaCppJniBackend.Device device : LlamaCppJniBackend.availableDevices(jniLibrary(options))) {
-                System.out.println(field(device.backend()) + "\t" + field(device.name()) + "\t"
-                        + device.type() + "\t" + field(device.description()));
+            Path promptFile = Path.of(required(options, "--prompt-file"));
+            if (!Files.isRegularFile(promptFile)) {
+                throw new IllegalArgumentException("prompt file does not exist");
             }
-            return;
-        }
-        if (flag(options, "--stdio")) {
-            if (options.containsKey("--prompt-file")) {
-                throw new IllegalArgumentException("stdio requests supply their own prompts");
-            }
-            try (ModelBackend backend = backend(options, System.getenv());
-                 FileOutputStream output = new FileOutputStream(FileDescriptor.out)) {
-                // PrintStream suppresses pipe failures; binary framing needs the original IOException.
-                StdioProtocol.serve(backend, System.in, output);
-            }
-            return;
-        }
-        Path promptFile = Path.of(required(options, "--prompt-file"));
-        if (!Files.isRegularFile(promptFile)) {
-            throw new IllegalArgumentException("prompt file does not exist");
-        }
-        ModelRequest request = new ModelRequest(
-                readPrompt(promptFile, "gemini".equals(options.get("--backend"))),
-                Integer.parseInt(options.getOrDefault("--max-tokens",
-                        flag(options, "--agent") ? "1024" : "gemini".equals(options.get("--backend")) ? "32768" : "512")),
-                Duration.ofSeconds(Long.parseLong(options.getOrDefault("--timeout-seconds", "120"))));
-        AgentEngine.Limits limits = flag(options, "--agent") ? agentLimits(options, request.timeout()) : null;
-        try (ModelBackend backend = backend(options, System.getenv())) {
-            if (limits == null) {
-                System.out.print(backend.infer(request).text());
-            } else {
-                AgentEngine agent = new AgentEngine(backend, workspaceTools, event ->
-                        System.err.println("agent " + event.sequence() + " " + event.phase() + " " + event.tool()));
-                System.out.print(agent.run(request.prompt(), request.maxTokens(), limits).answer());
+            ModelRequest request = new ModelRequest(
+                    readPrompt(promptFile, "gemini".equals(options.get("--backend"))),
+                    Integer.parseInt(options.getOrDefault("--max-tokens",
+                            flag(options, "--agent") ? "1024" : "gemini".equals(options.get("--backend")) ? "32768" : "512")),
+                    Duration.ofSeconds(Long.parseLong(options.getOrDefault("--timeout-seconds", "120"))));
+            AgentEngine.Limits limits = flag(options, "--agent") ? agentLimits(options, request.timeout()) : null;
+            try (ModelBackend backend = backend(options, System.getenv())) {
+                if (limits == null) {
+                    System.out.print(backend.infer(request).text());
+                } else {
+                    AgentEngine agent = new AgentEngine(backend, workspaceTools, event ->
+                            System.err.println("agent " + event.sequence() + " " + event.phase() + " " + event.tool()));
+                    System.out.print(agent.run(request.prompt(), request.maxTokens(), limits).answer());
+                }
             }
         }
     }
