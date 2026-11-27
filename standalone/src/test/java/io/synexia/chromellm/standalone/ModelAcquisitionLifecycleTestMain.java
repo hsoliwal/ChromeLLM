@@ -369,7 +369,7 @@ public final class ModelAcquisitionLifecycleTestMain {
                 inferenceEntered.countDown();
                 try {
                     awaitUninterruptibly(inferenceRelease);
-                    return new ModelResponse("fixture", id(), "0".repeat(64));
+                    return new ModelResponse("fixture", id(), promptSha256(request.prompt()));
                 } finally {
                     active.set(false);
                 }
@@ -636,6 +636,15 @@ public final class ModelAcquisitionLifecycleTestMain {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(BYTES));
     }
 
+    private static String promptSha256(String prompt) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(prompt.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
     private static void assertNoStage(Path directory) throws IOException {
         try (var files = Files.list(directory)) {
             check(files.noneMatch(path -> path.getFileName().toString().endsWith(".part")),
@@ -724,7 +733,7 @@ public final class ModelAcquisitionLifecycleTestMain {
         @Override public String id() { return "llama.cpp-cli"; }
         @Override public ModelResponse infer(ModelRequest request) {
             inferences.incrementAndGet();
-            return new ModelResponse("fixture", id(), "0".repeat(64));
+            return new ModelResponse("fixture", id(), promptSha256(request.prompt()));
         }
         @Override public void close() { closes.incrementAndGet(); }
     }

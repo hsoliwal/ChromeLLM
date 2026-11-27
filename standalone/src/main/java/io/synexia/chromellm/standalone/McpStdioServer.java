@@ -13,8 +13,11 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -184,18 +187,20 @@ final class McpStdioServer {
         }
         int maxTokens;
         int timeoutSeconds;
+        byte[] promptBytes;
         try {
             maxTokens = integer(arguments, "maxTokens", 512, 1, 32768);
             timeoutSeconds = integer(arguments, "timeoutSeconds", 120, 1, 3600);
-            StdioProtocol.encode(prompt, StdioProtocol.MAX_PROMPT_BYTES);
+            promptBytes = StdioProtocol.encode(prompt, StdioProtocol.MAX_PROMPT_BYTES);
         } catch (IOException | IllegalArgumentException invalid) {
             return encoded(error(id, -32602, "Invalid inference arguments"));
         }
         try {
             ModelResponse result = backend.infer(new ModelRequest(prompt, maxTokens,
                     Duration.ofSeconds(timeoutSeconds)));
-            if (result == null || !backend.id().equals(result.backendId())) {
-                throw new IOException("invalid selected backend identity");
+            if (result == null || !backend.id().equals(result.backendId())
+                    || !promptSha256(promptBytes).equals(result.promptSha256())) {
+                throw new IOException("invalid selected backend or prompt receipt");
             }
             String response = encoded(success(id, toolResult(result.text(), false)));
             return response;
@@ -204,6 +209,15 @@ final class McpStdioServer {
         } catch (InterruptedException interruption) {
             Thread.currentThread().interrupt();
             return encoded(success(id, toolResult("Model inference interrupted", true)));
+        }
+    }
+
+    /** Bind candidate text to the exact admitted UTF-8 prompt, before MCP success is published. */
+    private static String promptSha256(byte[] prompt) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(prompt));
+        } catch (NoSuchAlgorithmException impossibleOnJava21) {
+            throw new IllegalStateException("SHA-256 unavailable", impossibleOnJava21);
         }
     }
 
