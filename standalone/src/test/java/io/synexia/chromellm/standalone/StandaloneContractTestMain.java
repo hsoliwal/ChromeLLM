@@ -2,6 +2,7 @@
 package io.synexia.chromellm.standalone;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.IOException;
@@ -11,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.CharacterCodingException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -65,6 +67,7 @@ public final class StandaloneContractTestMain {
                 cleanupFailure(backend, temp, false);
                 outputContracts(backend, temp);
                 replyContracts();
+                truncatedReplyContracts();
             }
             reject(() -> new LlamaCppCliBackend(launcher, model, temp, "--unsafe", 16));
             reject(() -> new LlamaCppCliBackend(launcher, model, temp, "WebGPU0", -2));
@@ -385,6 +388,143 @@ public final class StandaloneContractTestMain {
         check(LlamaCppCliBackend.completionTool(List.of("/opt/llama/llama-completion")), "completion binary");
         check(!LlamaCppCliBackend.completionTool(List.of("/opt/llama/llama-cli")), "chat CLI");
         check(!LlamaCppCliBackend.completionTool(List.of("java", "-cp", "x", "Fake")), "test launcher");
+        String frame = "\nbuild      : pinned\nmodel      : fixture\nmodalities : text\n"
+                + "\navailable commands:\n  /exit or Ctrl+C     stop or exit\n\n> " + prompt + "\n";
+        String footer = "\n\nExiting...\n";
+        check(LlamaCppCliBackend.reply(frame + "Fix it." + footer, prompt).equals("Fix it."),
+                "framed chat CLI exit footer is not model output");
+        check(LlamaCppCliBackend.reply((frame + "Fix it." + footer).replace("\n", "\r\n"), prompt)
+                .equals("Fix it."), "framed Windows CLI exit footer");
+        check(LlamaCppCliBackend.reply(frame + "Fix it.\n[end of text]" + footer, prompt).equals("Fix it."),
+                "end-of-text marker before framed CLI footer");
+        check(LlamaCppCliBackend.reply(frame + "\u001B[32mFix it.\u001B[0m" + footer, prompt).equals("Fix it."),
+                "ANSI formatting does not hide framed terminal delimiter");
+        check(LlamaCppCliBackend.reply(frame + footer, prompt).isEmpty(), "UI-only output is empty");
+        check(LlamaCppCliBackend.reply("Answer" + footer, prompt).equals("Answer\n\nExiting..."),
+                "unframed model suffix is retained");
+        check(LlamaCppCliBackend.reply("> " + prompt + "\nAnswer" + footer, prompt)
+                .equals("Answer\n\nExiting..."), "echo alone does not establish CLI terminal framing");
+        check(LlamaCppCliBackend.reply(frame.replace("model      : fixture\n", "") + "Answer" + footer, prompt)
+                .equals("Answer\n\nExiting..."), "incomplete UI header does not establish terminal framing");
+        check(LlamaCppCliBackend.reply(frame + "Answer" + footer, prompt, true).equals("Answer\n\nExiting..."),
+                "completion output retains an otherwise matching suffix");
+        check(LlamaCppCliBackend.reply(frame + "Say Exiting... here." + footer, prompt).equals("Say Exiting... here."),
+                "inline model text is preserved");
+        check(LlamaCppCliBackend.reply(frame + "Answer\n\nExiting..." + footer, prompt)
+                .equals("Answer\n\nExiting..."), "only terminal UI footer is removed, preserving model-authored suffix");
+        check(LlamaCppCliBackend.reply(frame + "Answer\nExiting...\n", prompt).equals("Answer\nExiting..."),
+                "single-line model suffix is not the terminal delimiter");
+        check(LlamaCppCliBackend.reply(frame + "Answer\n\nExiting...", prompt).equals("Answer\n\nExiting..."),
+                "unterminated candidate suffix is preserved");
+        String terminalPrompt = prompt + "\n\nExiting...";
+        String echoOnly = frame.substring(0, frame.indexOf("> ")) + "> " + terminalPrompt + "\n";
+        check(LlamaCppCliBackend.reply(echoOnly, terminalPrompt).isEmpty(),
+                "a terminal phrase inside the echoed prompt is not a footer");
+    }
+
+    /** Exact native UI byte framing must never relax UTF-8 validation of candidate text. */
+    private static void truncatedReplyContracts() throws Exception {
+        String header = "\nbuild      : pinned\nmodel      : fixture\nmodalities : text\n"
+                + "\navailable commands:\n  /exit or Ctrl+C     stop or exit\n";
+        String footer = "\n\nExiting...\n";
+        String longPrompt = "x".repeat(501);
+        byte[] answer = "Review the failing goal.".getBytes(StandardCharsets.UTF_8);
+        byte[] transcript = chatTranscript(header, longPrompt, answer, footer);
+        check(LlamaCppCliBackend.reply(transcript, longPrompt, false).equals("Review the failing goal."),
+                "501-byte prompt uses the exact native truncation frame");
+        String boundary = "x".repeat(500);
+        check(LlamaCppCliBackend.reply(chatTranscript(header, boundary, answer, footer), boundary, false)
+                .equals("Review the failing goal."), "500-byte prompt retains the full-echo boundary");
+        check(LlamaCppCliBackend.reply((header + "\n> " + longPrompt + "\nAnswer" + footer)
+                .getBytes(StandardCharsets.UTF_8), longPrompt, false).equals("Answer"),
+                "a CLI with a full long echo keeps its existing behavior");
+        String unicode = "x".repeat(499) + "🦙 finish";
+        byte[] unicodeTranscript = chatTranscript(header, unicode, "नमस्ते 🦙".getBytes(StandardCharsets.UTF_8), footer);
+        check(LlamaCppCliBackend.reply(unicodeTranscript, unicode, false).equals("नमस्ते 🦙"),
+                "a proven UI echo can split UTF-8 while the candidate remains strictly decoded");
+        String threeByte = "x".repeat(498) + "€ finish";
+        check(LlamaCppCliBackend.reply(chatTranscript(header, threeByte, answer, footer), threeByte, false)
+                .equals("Review the failing goal."), "two bytes of a three-byte echo character are not candidate bytes");
+        String multiByte = "é".repeat(251);
+        check(LlamaCppCliBackend.reply(chatTranscript(header, multiByte, answer, footer), multiByte, false)
+                .equals("Review the failing goal."), "truncation counts UTF-8 bytes rather than Java characters");
+        String spaced = " \t" + "x".repeat(500) + "\n";
+        check(LlamaCppCliBackend.reply(chatTranscript(header, spaced, answer, footer), spaced, false)
+                .equals("Review the failing goal."), "byte-derived echo preserves prompt boundary whitespace");
+        String multiline = "line\n".repeat(101);
+        byte[] windows = new String(chatTranscript(header, multiline, answer, footer), StandardCharsets.UTF_8)
+                .replace("\n", "\r\n").getBytes(StandardCharsets.UTF_8);
+        check(LlamaCppCliBackend.reply(windows, multiline, false).equals("Review the failing goal."),
+                "Windows CRLF output preserves the byte-derived prompt echo");
+        byte[] coloredWindows = new String(transcript, StandardCharsets.UTF_8)
+                .replace("\n", "\r\u001B[0m\n").getBytes(StandardCharsets.UTF_8);
+        check(LlamaCppCliBackend.reply(coloredWindows, longPrompt, false).equals("Review the failing goal."),
+                "controls between CR and LF preserve the original candidate boundary");
+        String crlfPrompt = "line\r\n".repeat(100);
+        check(LlamaCppCliBackend.reply(chatTranscript(header, crlfPrompt, answer, footer), crlfPrompt, false)
+                .equals("Review the failing goal."), "CRLF input is counted before UI normalization");
+        check(LlamaCppCliBackend.reply(chatTranscript("\u001B[32m" + header + "\u001B[0m", longPrompt,
+                "\u001B[1mAnswer\u001B[0m".getBytes(StandardCharsets.UTF_8), footer), longPrompt, false)
+                .equals("Answer"), "ANSI controls retain framed truncation recognition");
+        String quoted = "You wrote:\n> " + longPrompt + "\nKeep this quotation.";
+        check(LlamaCppCliBackend.reply(chatTranscript(header, longPrompt, quoted.getBytes(StandardCharsets.UTF_8), footer),
+                longPrompt, false).equals(quoted), "model-authored full prompt quote survives one UI echo removal");
+        check(LlamaCppCliBackend.reply(chatTranscript(header, longPrompt,
+                "Answer\n\nExiting...".getBytes(StandardCharsets.UTF_8), footer), longPrompt, false)
+                .equals("Answer\n\nExiting..."), "truncated UI removes exactly one terminal footer");
+        check(LlamaCppCliBackend.reply(chatTranscript(header, longPrompt, answer, ""), longPrompt, false)
+                .equals("Review the failing goal."), "recognized echo does not require a footer to preserve text");
+        check(LlamaCppCliBackend.reply(chatTranscript(header, longPrompt, answer, "\n\nExiting..."), longPrompt, false)
+                .equals("Review the failing goal.\n\nExiting..."), "unterminated model suffix remains model text");
+        check(LlamaCppCliBackend.reply(chatTranscript(header, longPrompt, new byte[0], footer), longPrompt, false)
+                .isEmpty(), "truncated UI-only output is not a candidate");
+        for (byte[] unframed : List.of(chatTranscript("", longPrompt, answer, footer),
+                chatTranscript(header.replace("model      : fixture\n", ""), longPrompt, answer, footer))) {
+            check(LlamaCppCliBackend.reply(unframed, longPrompt, false)
+                    .equals(new String(unframed, StandardCharsets.UTF_8).strip()),
+                    "unproven UI frame cannot remove a truncated quotation");
+        }
+        check(LlamaCppCliBackend.reply(transcript, longPrompt, true)
+                .equals(new String(transcript, StandardCharsets.UTF_8).strip()),
+                "completion output never uses chat truncation framing");
+        String mismatch = new String(transcript, StandardCharsets.UTF_8).replace(" ... (truncated)", " ... (shortened)");
+        check(LlamaCppCliBackend.reply(mismatch.getBytes(StandardCharsets.UTF_8), longPrompt, false).equals(mismatch.strip()),
+                "literal native truncation terminator is required");
+        String noNewline = new String(transcript, StandardCharsets.UTF_8).replace(" ... (truncated)\n", " ... (truncated)");
+        check(LlamaCppCliBackend.reply(noNewline.getBytes(StandardCharsets.UTF_8), longPrompt, false).equals(noNewline.strip()),
+                "truncation terminator must end at its native newline boundary");
+        check(LlamaCppCliBackend.reply(transcript, "y" + longPrompt.substring(1), false)
+                .equals(new String(transcript, StandardCharsets.UTF_8).strip()), "wrong input prefix is never an echo");
+        malformedReply(chatTranscript(header, longPrompt, new byte[] {(byte) 0xff}, footer), longPrompt, false);
+        malformedReply(chatTranscript(header, longPrompt, new byte[] {(byte) 0xe2, (byte) 0x82}, footer), longPrompt, false);
+        malformedReply(chatTranscript(header, longPrompt,
+                new byte[] {(byte) 0xc2, 0x1b, '[', '3', '1', 'm', (byte) 0xa9}, footer), longPrompt, false);
+        malformedReply(chatTranscript(header, longPrompt,
+                new byte[] {(byte) 0xe2, 0x1b, '[', '0', 'm', (byte) 0x82, (byte) 0xac}, footer), longPrompt, false);
+        malformedReply(unicodeTranscript, unicode, true);
+        malformedReply(chatTranscript("", unicode, answer, footer), unicode, false);
+        malformedReply(unicodeTranscript, "y" + unicode.substring(1), false);
+    }
+
+    /** Reference transcript for pinned llama.cpp cli-ui.h user_turn.echo. */
+    private static byte[] chatTranscript(String header, String prompt, byte[] candidate, String footer) {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        output.writeBytes((header + "\n> ").getBytes(StandardCharsets.UTF_8));
+        byte[] input = prompt.getBytes(StandardCharsets.UTF_8);
+        output.write(input, 0, Math.min(input.length, 500));
+        output.writeBytes((input.length > 500 ? " ... (truncated)\n" : "\n").getBytes(StandardCharsets.UTF_8));
+        output.writeBytes(candidate);
+        output.writeBytes(footer.getBytes(StandardCharsets.UTF_8));
+        return output.toByteArray();
+    }
+
+    private static void malformedReply(byte[] transcript, String prompt, boolean completion) throws Exception {
+        try {
+            LlamaCppCliBackend.reply(transcript, prompt, completion);
+            throw new AssertionError("malformed candidate or unproven UI bytes were accepted");
+        } catch (CharacterCodingException expected) {
+            checks++;
+        }
     }
 
     private static void check(boolean condition) {
